@@ -13,12 +13,14 @@ return new class extends Migration
     {
         Schema::create('cache', function (Blueprint $table) {
             $table->string('key')->primary();
+            $table->unsignedBigInteger('tenant_id');
             $table->mediumText('value');
             $table->integer('expiration');
         });
 
         Schema::create('cache_locks', function (Blueprint $table) {
             $table->string('key')->primary();
+            $table->unsignedBigInteger('tenant_id');
             $table->string('owner');
             $table->integer('expiration');
         });
