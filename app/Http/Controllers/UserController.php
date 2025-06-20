@@ -292,7 +292,7 @@ class UserController extends Controller
                 'user_id' => $user->id,
                 'tenant_id' => $tenantId,
             ]);
-            return response()->json(['message' => 'User deleted successfully.'], 204);
+            return response()->noContent();
         } catch (\Throwable $e) {
             Log::error('Error deleting user', [
                 'user_id' => $user->id,
