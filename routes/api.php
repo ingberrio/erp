@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\TenantController;
-use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 
@@ -39,10 +38,4 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // CRUD de permisos
     Route::apiResource('permissions', PermissionController::class);
-
-    // CRUD de productos solo para admin|manager
-    Route::middleware('role:admin|manager')->group(function () {
-        Route::apiResource('products', ProductController::class);
-    });
-
 });
