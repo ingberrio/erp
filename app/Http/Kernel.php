@@ -33,6 +33,7 @@ class Kernel extends HttpKernel
 
         'api' => [
             'identify.tenant',
+            'settenant.permissions',
             // Aquí puedes agregar rate limiting si quieres:
             // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
@@ -55,6 +56,7 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         // Tu middleware multiempresa:
         'identify.tenant' => \App\Http\Middleware\IdentifyTenant::class,
+        'settenant.permissions' => \App\Http\Middleware\SetTenantForPermissions::class,
         // Otros middlewares personalizados...
     ];
 }
