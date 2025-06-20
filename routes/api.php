@@ -5,13 +5,16 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\TenantController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\PermissionController;
 
-// Rutas públicas (no requieren autenticación)
+// Rutas públicas: NO requieren tenant ni autenticación
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login',    [AuthController::class, 'login']);
 
-// Rutas protegidas (requieren token Sanctum)
-Route::middleware('auth:sanctum')->group(function () {
+// Rutas protegidas: requieren autenticación y TENANT
+Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // Info del usuario autenticado
     Route::get('/user', function (Request $request) {
@@ -21,9 +24,25 @@ Route::middleware('auth:sanctum')->group(function () {
     // Cerrar sesión
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // CRUD de usuarios solo dentro de su tenant
+    // CRUD de usuarios (filtrados por tenant)
     Route::apiResource('users', UserController::class);
 
-    // CRUD de tenants (empresas)
+    // CRUD de empresas (tenants)
     Route::apiResource('tenants', TenantController::class);
+
+    // CRUD de roles
+    Route::apiResource('roles', RoleController::class);
+
+    // Endpoint para asignar permisos a un rol (edición masiva)
+    Route::post('roles/{role}/permissions', [RoleController::class, 'setPermissions'])
+         ->name('roles.setPermissions');
+
+    // CRUD de permisos
+    Route::apiResource('permissions', PermissionController::class);
+
+    // CRUD de productos solo para admin|manager
+    Route::middleware('role:admin|manager')->group(function () {
+        Route::apiResource('products', ProductController::class);
+    });
+
 });

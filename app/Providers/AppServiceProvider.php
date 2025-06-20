@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Spatie\Permission\Models\Role; // Import Spatie's Role model
+use App\Scopes\TenantScope; // Import your TenantScope
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +22,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Role::addGlobalScope(new TenantScope);//
     }
 }
