@@ -26,7 +26,7 @@ import RolesPermisosCrud from "./components/RolesPermisosCrud";
 // --- Configuración Global de Axios ---
 // Esta instancia de Axios será utilizada por todos los componentes.
 // Configurar baseURL y headers comunes aquí.
-const api = axios.create({
+export const api = axios.create({ // Exportar 'api' para que otros componentes puedan usarla
   baseURL: "http://127.0.0.1:8000/api", // Reemplaza con la URL base de tu API Laravel
   headers: {
     "Accept": "application/json",
@@ -71,15 +71,22 @@ export default function App() {
   const [appLoading, setAppLoading] = useState(true);
 
   // --- Funciones para actualizar el estado y localStorage ---
-  // Estas funciones se pasarán a LoginComponent
+  // Estas funciones se pasarán a LoginComponent y se encargarán de sincronizar Axios
   const updateToken = (newToken) => {
     setTokenState(newToken);
     localStorage.setItem("token", newToken);
+    // Llama a setGlobalAxiosHeaders para que el token se aplique inmediatamente
+    // tenantId puede ser null en este punto si user aún no se ha seteado,
+    // pero se actualizará en updateUser o la llamada a /user
+    setGlobalAxiosHeaders(newToken, user?.tenant_id);
   };
 
   const updateUser = (newUser) => {
     setUserState(newUser);
     localStorage.setItem("user", JSON.stringify(newUser));
+    // Llama a setGlobalAxiosHeaders para que el tenantId se aplique inmediatamente
+    // Asegúrate de usar el token actual (del estado) y el tenant_id del nuevo usuario
+    setGlobalAxiosHeaders(token, newUser?.tenant_id);
   };
 
   // --- Manejador de Logout ---
@@ -90,6 +97,7 @@ export default function App() {
     localStorage.removeItem("user"); // También limpiar el objeto de usuario
     setGlobalAxiosHeaders(null, null); // Limpiar los headers globales de Axios
     // Aquí puedes añadir una redirección a la página de login si usas react-router-dom
+    // Por ejemplo: navigate('/login');
   };
 
   // --- useEffect para cargar y validar sesión al montar la aplicación ---
@@ -118,6 +126,7 @@ export default function App() {
     }
 
     // Configura los headers de Axios globalmente con lo que tengamos (incluso si es null al principio)
+    // Esto es crucial para que la llamada a '/user' se haga con el token si existe.
     setGlobalAxiosHeaders(initialToken, initialTenantId);
 
     if (initialToken && initialTenantId) {
@@ -131,6 +140,7 @@ export default function App() {
           localStorage.setItem("user", JSON.stringify(fetchedUser)); // Guarda la info de usuario fresca
 
           // Asegúrate de que los headers globales de Axios estén correctos con el tenant_id fresco
+          // (Puede que ya lo estén si initialTenantId era correcto, pero lo confirmamos)
           setGlobalAxiosHeaders(initialToken, fetchedUser.tenant_id);
           setAppLoading(false); // La aplicación ha terminado de cargar
         })
@@ -176,14 +186,15 @@ export default function App() {
 
   // --- Contenido principal de la aplicación (después de autenticación exitosa) ---
   let mainContent = null;
-  const currentTenantId = user?.tenant_id; // Asegúrate de usar el tenant_id del usuario cargado
+  // Ya no necesitas 'currentTenantId' aquí, los componentes hijos usarán la 'api' global
+  // const currentTenantId = user?.tenant_id; // <-- ELIMINADO/NO NECESARIO EN ESTA LÓGICA
 
   if (activeMenu === "empresas") {
-    // Pasar el token y el tenantId del estado de App
-    mainContent = <EmpresasCrud token={token} tenantId={currentTenantId} />;
+    // Ya no es necesario pasar token y tenantId como props a EmpresasCrud
+    mainContent = <EmpresasCrud />;
   } else if (activeMenu === "usuarios") {
-    // Pasar el token y el tenantId del estado de App
-    mainContent = <RolesPermisosCrud token={token} tenantId={currentTenantId} />;
+    // Ya no es necesario pasar token y tenantId como props a RolesPermisosCrud
+    mainContent = <RolesPermisosCrud />;
   }
 
   return (
