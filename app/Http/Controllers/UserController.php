@@ -193,31 +193,32 @@ class UserController extends Controller
     }
 
     // In App\Http\Controllers\UserController.php, inside destroy method
-    public function destroy(Request $request, User $user)
+    // Your new (working) destroy method:
+    public function destroy(Request $request, $id) // Changed from User $user to $id
     {
-        Log::debug('UserController@destroy: Start', [
-            'user_id_param' => $user->id,
-            'user_tenant_id_param' => $user->tenant_id,
-            'header_tenant_id' => $request->header('X-Tenant-ID'),
-        ]);
-
-        $tenantId = (int) $request->header('X-Tenant-ID'); // Cast to int for strict comparison
-
-        Log::debug('UserController@destroy: Tenant ID Check', [
-            'is_tenantId_null' => ($tenantId === null),
-            'is_user_tenant_id_mismatch' => ($user->tenant_id !== $tenantId),
-            'check_result' => (!$tenantId || $user->tenant_id !== $tenantId)
-        ]);
-
-        if (!$tenantId || $user->tenant_id !== $tenantId) {
-            Log::error('UserController@destroy: Tenant Mismatch Error', [
-                'user_id' => $user->id,
-                'user_tenant_id' => $user->tenant_id,
-                'header_tenant_id' => $tenantId,
-            ]);
-            return response()->json(['error' => 'User not found for this tenant'], 404);
+        $tenantId = $request->header('X-Tenant-ID');
+        if (!$tenantId) {
+            return response()->json(['error'=>'Tenant ID is missing'], 400);
         }
 
-        // ... rest of your try/catch delete logic
+        // Manually find the user after tenantId is available
+        $user = User::where('id', $id)
+                    ->where('tenant_id', $tenantId)
+                    ->firstOrFail(); // This will throw a 404 if not found for the tenant
+
+        try {
+            $user->delete();
+            Log::info('User deleted successfully', [
+                'user_id'   => $user->id,
+                'tenant_id' => $tenantId,
+            ]);
+            return response()->noContent();
+        } catch (\Throwable $e) {
+            Log::error('Error deleting user', [
+                'user_id'      => $user->id,
+                'error_message'=> $e->getMessage(),
+            ]);
+            return response()->json(['error'=>'Failed to delete user'], 500);
+        }
     }
 }
