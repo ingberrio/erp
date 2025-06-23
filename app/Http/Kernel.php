@@ -16,6 +16,9 @@ class Kernel extends HttpKernel
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+
+        \App\Http\Middleware\IdentifyTenant::class,
+        \App\Http\Middleware\SetTenantForPermissions::class,
     ];
 
     /**
@@ -32,9 +35,6 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
-            'identify.tenant',
-            'settenant.permissions',
-            // Aquí puedes agregar rate limiting si quieres:
             // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
@@ -55,8 +55,8 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         // Tu middleware multiempresa:
-        'identify.tenant' => \App\Http\Middleware\IdentifyTenant::class,
-        'settenant.permissions' => \App\Http\Middleware\SetTenantForPermissions::class,
+        // 'identify.tenant' => \App\Http\Middleware\IdentifyTenant::class,
+        // 'settenant.permissions' => \App\Http\Middleware\SetTenantForPermissions::class,
         // Otros middlewares personalizados...
     ];
 }

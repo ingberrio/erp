@@ -192,26 +192,32 @@ class UserController extends Controller
         }
     }
 
+    // In App\Http\Controllers\UserController.php, inside destroy method
     public function destroy(Request $request, User $user)
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        Log::debug('UserController@destroy: Start', [
+            'user_id_param' => $user->id,
+            'user_tenant_id_param' => $user->tenant_id,
+            'header_tenant_id' => $request->header('X-Tenant-ID'),
+        ]);
+
+        $tenantId = (int) $request->header('X-Tenant-ID'); // Cast to int for strict comparison
+
+        Log::debug('UserController@destroy: Tenant ID Check', [
+            'is_tenantId_null' => ($tenantId === null),
+            'is_user_tenant_id_mismatch' => ($user->tenant_id !== $tenantId),
+            'check_result' => (!$tenantId || $user->tenant_id !== $tenantId)
+        ]);
+
         if (!$tenantId || $user->tenant_id !== $tenantId) {
-            return response()->json(['error'=>'User not found for this tenant'], 404);
+            Log::error('UserController@destroy: Tenant Mismatch Error', [
+                'user_id' => $user->id,
+                'user_tenant_id' => $user->tenant_id,
+                'header_tenant_id' => $tenantId,
+            ]);
+            return response()->json(['error' => 'User not found for this tenant'], 404);
         }
 
-        try {
-            $user->delete();
-            Log::info('User deleted successfully', [
-                'user_id'   => $user->id,
-                'tenant_id' => $tenantId,
-            ]);
-            return response()->noContent();
-        } catch (\Throwable $e) {
-            Log::error('Error deleting user', [
-                'user_id'      => $user->id,
-                'error_message'=> $e->getMessage(),
-            ]);
-            return response()->json(['error'=>'Failed to delete user'], 500);
-        }
+        // ... rest of your try/catch delete logic
     }
 }
