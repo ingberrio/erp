@@ -247,8 +247,12 @@ const RolesPermisosCrud = ({ token, tenantId }) => {
         }
         body.password = userPassword.trim() || generateTemporaryPassword();
       }
-      delete body.tenant_id;
-      const finalBody = JSON.parse(JSON.stringify(body));
+      const finalBody = { // Explicitly construct the body
+        name: body.name,
+        email: body.email,
+        roles: body.roles,
+      };
+      if (body.password) finalBody.password = body.password; // Only add password if it exists
       console.log("Final payload before send (1):", JSON.stringify(finalBody));
       let url = `${API}/users`;
       let method = "POST";
