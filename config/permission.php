@@ -2,202 +2,165 @@
 
 return [
 
+    /*
+    |--------------------------------------------------------------------------
+    | Default Guard Name
+    |--------------------------------------------------------------------------
+    |
+    | Aquí definimos el guard por defecto que usará Spatie para roles y permisos.
+    |
+    */
+    'defaults' => [
+        'guard' => 'sanctum',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Guards
+    |--------------------------------------------------------------------------
+    |
+    | Lista de guards soportados. Añadimos 'sanctum' junto a 'web' y 'api'.
+    |
+    */
+    'guards' => [
+        'web',
+        'api',
+        'sanctum',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Models
+    |--------------------------------------------------------------------------
+    |
+    | Tus modelos de Rol, Permiso y Usuario.
+    |
+    */
     'models' => [
-
-        /*
-         * When using the "HasPermissions" trait from this package, we need to know which
-         * Eloquent model should be used to retrieve your permissions. Of course, it
-         * is often just the "Permission" model but you may use whatever you like.
-         *
-         * The model you want to use as a Permission model needs to implement the
-         * `Spatie\Permission\Contracts\Permission` contract.
-         */
-
         'permission' => App\Models\Permission::class,
-
-        /*
-         * When using the "HasRoles" trait from this package, we need to know which
-         * Eloquent model should be used to retrieve your roles. Of course, it
-         * is often just the "Role" model but you may use whatever you like.
-         *
-         * The model you want to use as a Role model needs to implement the
-         * `Spatie\Permission\Contracts\Role` contract.
-         */
-
-        'role' => App\Models\Role::class,
-        'user' => App\Models\User::class,
-
+        'role'       => App\Models\Role::class,
+        'user'       => App\Models\User::class,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Table Names
+    |--------------------------------------------------------------------------
+    |
+    | Nombres de las tablas usadas por el paquete.
+    |
+    */
     'table_names' => [
-
-        /*
-         * When using the "HasRoles" trait from this package, we need to know which
-         * table should be used to retrieve your roles. We have chosen a basic
-         * default value but you may easily change it to any table you like.
-         */
-
-        'roles' => 'roles',
-
-        /*
-         * When using the "HasPermissions" trait from this package, we need to know which
-         * table should be used to retrieve your permissions. We have chosen a basic
-         * default value but you may easily change it to any table you like.
-         */
-
-        'permissions' => 'permissions',
-
-        /*
-         * When using the "HasPermissions" trait from this package, we need to know which
-         * table should be used to retrieve your models permissions. We have chosen a
-         * basic default value but you may easily change it to any table you like.
-         */
-
+        'roles'                 => 'roles',
+        'permissions'           => 'permissions',
         'model_has_permissions' => 'model_has_permissions',
-
-        /*
-         * When using the "HasRoles" trait from this package, we need to know which
-         * table should be used to retrieve your models roles. We have chosen a
-         * basic default value but you may easily change it to any table you like.
-         */
-
-        'model_has_roles' => 'model_has_roles',
-
-        /*
-         * When using the "HasRoles" trait from this package, we need to know which
-         * table should be used to retrieve your roles permissions. We have chosen a
-         * basic default value but you may easily change it to any table you like.
-         */
-
-        'role_has_permissions' => 'role_has_permissions',
+        'model_has_roles'       => 'model_has_roles',
+        'role_has_permissions'  => 'role_has_permissions',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Column Names
+    |--------------------------------------------------------------------------
+    |
+    | Personalización de nombres de columnas y pivotes.
+    |
+    */
     'column_names' => [
-        /*
-         * Change this if you want to name the related pivots other than defaults
-         */
-        'role_pivot_key' => null, // default 'role_id',
-        'permission_pivot_key' => null, // default 'permission_id',
-
-        /*
-         * Change this if you want to name the related model primary key other than
-         * `model_id`.
-         *
-         * For example, this would be nice if your primary keys are all UUIDs. In
-         * that case, name this `model_uuid`.
-         */
-
-        'model_morph_key' => 'model_id',
-
-        /*
-         * Change this if you want to use the teams feature and your related model's
-         * foreign key is other than `team_id`.
-         */
-
-        'team_foreign_key' => 'tenant_id',
+        'role_pivot_key'       => null,         // usa role_id
+        'permission_pivot_key' => null,         // usa permission_id
+        'model_morph_key'      => 'model_id',
+        'team_foreign_key'     => 'tenant_id',  // para el feature “teams”
     ],
 
     /*
-     * When set to true, the method for checking permissions will be registered on the gate.
-     * Set this to false if you want to implement custom logic for checking permissions.
-     */
-
-    'register_permission_check_method' => true,
-
-    /*
-     * When set to true, Laravel\Octane\Events\OperationTerminated event listener will be registered
-     * this will refresh permissions on every TickTerminated, TaskTerminated and RequestTerminated
-     * NOTE: This should not be needed in most cases, but an Octane/Vapor combination benefited from it.
-     */
-    'register_octane_reset_listener' => false,
-
-    /*
-     * Events will fire when a role or permission is assigned/unassigned:
-     * \Spatie\Permission\Events\RoleAttached
-     * \Spatie\Permission\Events\RoleDetached
-     * \Spatie\Permission\Events\PermissionAttached
-     * \Spatie\Permission\Events\PermissionDetached
-     *
-     * To enable, set to true, and then create listeners to watch these events.
-     */
-    'events_enabled' => false,
-
-    /*
-     * Teams Feature.
-     * When set to true the package implements teams using the 'team_foreign_key'.
-     * If you want the migrations to register the 'team_foreign_key', you must
-     * set this to true before doing the migration.
-     * If you already did the migration then you must make a new migration to also
-     * add 'team_foreign_key' to 'roles', 'model_has_roles', and 'model_has_permissions'
-     * (view the latest version of this package's migration file)
-     */
-
+    |--------------------------------------------------------------------------
+    | Teams Feature
+    |--------------------------------------------------------------------------
+    |
+    | Habilita el soporte multi-tenant usando `team_foreign_key`.
+    |
+    */
     'teams' => true,
+    'columns' => [
+        'team_foreign_key' => 'tenant_id', // Cambia a 'tenant_id' para multi-tenant
+    ],
 
-    /*
-     * The class to use to resolve the permissions team id
-     */
     'team_resolver' => \Spatie\Permission\DefaultTeamResolver::class,
 
     /*
-     * Passport Client Credentials Grant
-     * When set to true the package will use Passports Client to check permissions
-     */
+    |--------------------------------------------------------------------------
+    | Register Permission Check Method
+    |--------------------------------------------------------------------------
+    |
+    | Si quieres registrar el método de chequeo de permisos en el Gate.
+    |
+    */
+    'register_permission_check_method' => true,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Octane Reset Listener
+    |--------------------------------------------------------------------------
+    |
+    | Si usas Laravel Octane, refresca permisos en cada operación.
+    |
+    */
+    'register_octane_reset_listener' => false,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Events
+    |--------------------------------------------------------------------------
+    |
+    | Habilita eventos al adjuntar/desadjuntar roles o permisos.
+    |
+    */
+    'events_enabled' => false,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Passport Client Credentials
+    |--------------------------------------------------------------------------
+    |
+    | Para usar Passport Client en lugar de checks normales.
+    |
+    */
     'use_passport_client_credentials' => false,
 
     /*
-     * When set to true, the required permission names are added to exception messages.
-     * This could be considered an information leak in some contexts, so the default
-     * setting is false here for optimum safety.
-     */
-
+    |--------------------------------------------------------------------------
+    | Display Names in Exceptions
+    |--------------------------------------------------------------------------
+    |
+    | Si quieres que las excepciones incluyan nombres de roles/permisos.
+    |
+    */
     'display_permission_in_exception' => false,
+    'display_role_in_exception'       => false,
 
     /*
-     * When set to true, the required role names are added to exception messages.
-     * This could be considered an information leak in some contexts, so the default
-     * setting is false here for optimum safety.
-     */
-
-    'display_role_in_exception' => false,
-
-    /*
-     * By default wildcard permission lookups are disabled.
-     * See documentation to understand supported syntax.
-     */
-
+    |--------------------------------------------------------------------------
+    | Wildcard Permissions
+    |--------------------------------------------------------------------------
+    |
+    | Soporte para permisos con comodines.
+    |
+    */
     'enable_wildcard_permission' => false,
-
-    /*
-     * The class to use for interpreting wildcard permissions.
-     * If you need to modify delimiters, override the class and specify its name here.
-     */
     // 'wildcard_permission' => Spatie\Permission\WildcardPermission::class,
 
-    /* Cache-specific settings */
-
+    /*
+    |--------------------------------------------------------------------------
+    | Cache Settings
+    |--------------------------------------------------------------------------
+    |
+    | Configuración de caché para acelerar la resolución de permisos.
+    |
+    */
     'cache' => [
-
-        /*
-         * By default all permissions are cached for 24 hours to speed up performance.
-         * When permissions or roles are updated the cache is flushed automatically.
-         */
-
         'expiration_time' => \DateInterval::createFromDateString('24 hours'),
-
-        /*
-         * The cache key used to store all permissions.
-         */
-
-        'key' => 'spatie.permission.cache' ,
-
-        /*
-         * You may optionally indicate a specific cache driver to use for permission and
-         * role caching using any of the `store` drivers listed in the cache.php config
-         * file. Using 'default' here means to use the `default` set in cache.php.
-         */
-
-        'store' => 'file',
+        'key'             => 'spatie.permission.cache',
+        'store'           => 'file',
     ],
 ];

@@ -14,7 +14,7 @@ return [
     */
 
     'defaults' => [
-        'guard' => env('AUTH_GUARD', 'web'),
+        'guard' => env('AUTH_GUARD', 'sanctum'),
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
@@ -41,7 +41,13 @@ return [
             'provider' => 'users',
         ],
 
+        // Alias "api" para que usar curl -H "Authorization: Bearer ..."
         'api' => [
+            'driver'   => 'sanctum',
+            'provider' => 'users',
+        ],
+
+        'sanctum' => [
             'driver' => 'sanctum',
             'provider' => 'users',
         ],
@@ -68,7 +74,7 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', App\Models\User::class),
+            'model' => App\Models\User::class,
         ],
 
         // 'users' => [

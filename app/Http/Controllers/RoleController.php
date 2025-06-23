@@ -3,91 +3,154 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Role; // <--- ¡IMPORTANTE! Cambia esto para usar tu modelo App\Models\Role
+use App\Models\Role;
 use Spatie\Permission\Models\Permission;
-use Illuminate\Support\Facades\Log; // Puedes añadir esto para depuración si lo necesitas
-use Illuminate\Validation\Rule; // Si usas Rule::unique
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class RoleController extends Controller
 {
-    // Lista roles con sus permisos para el tenant actual
+    /**
+     * Obtiene el guard por defecto de la aplicación.
+     */
+    private function defaultGuard(): string
+    {
+        return config('auth.defaults.guard');
+    }
+
+    /**
+     * Listar todos los roles con sus permisos para el tenant actual.
+     * GET /api/roles
+     */
     public function index(Request $request)
     {
         $tenantId = $request->header('X-Tenant-ID');
-        // Usará tu App\Models\Role que ya tiene el scope si BelongsToTenant funciona globalmente
-        return Role::with('permissions')->where('tenant_id', $tenantId)->get();
+        $roles = Role::with('permissions')
+            ->where('tenant_id', $tenantId)
+            ->get();
+
+        return response()->json($roles);
     }
 
-    // Crear rol
+    /**
+     * Crear un nuevo rol para el tenant actual.
+     * POST /api/roles
+     */
     public function store(Request $request)
     {
         $tenantId = $request->header('X-Tenant-ID');
+        $guard     = $this->defaultGuard();
+
         $request->validate([
             'name' => [
                 'required',
-                // Asegúrate de que 'tenant_id' se usa correctamente en la validación unique para multi-tenancy
-                Rule::unique('roles', 'name')->where(function ($query) use ($tenantId) {
-                    return $query->where('tenant_id', $tenantId);
-                })
+                Rule::unique('roles', 'name')
+                    ->where(fn($query) => $query->where('tenant_id', $tenantId))
             ],
         ]);
-        return Role::create([
-            'name' => $request->name,
-            'tenant_id' => $tenantId,
+
+        $role = Role::create([
+            'name'       => $request->name,
+            'tenant_id'  => $tenantId,
             'guard_name' => 'sanctum',
         ]);
+
+        return response()->json($role, 201);
     }
 
+    /**
+     * Mostrar un rol específico (con permisos).
+     * GET /api/roles/{id}
+     */
     public function show(Request $request, $id)
     {
         $tenantId = $request->header('X-Tenant-ID');
-        return Role::with('permissions')->where('tenant_id', $tenantId)->findOrFail($id);
+
+        $role = Role::with('permissions')
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($id);
+
+        return response()->json($role);
     }
 
+    /**
+     * Actualizar nombre (y sólo el nombre) de un rol.
+     * PUT /api/roles/{id}
+     */
     public function update(Request $request, $id)
     {
         $tenantId = $request->header('X-Tenant-ID');
-        $role = Role::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $role = Role::where('tenant_id', $tenantId)
+            ->findOrFail($id);
+
         $request->validate([
             'name' => [
                 'required',
-                // Asegúrate de que 'tenant_id' se usa correctamente en la validación unique para multi-tenancy
-                Rule::unique('roles', 'name')->ignore($role->id)->where(function ($query) use ($tenantId) {
-                    return $query->where('tenant_id', $tenantId);
-                })
+                Rule::unique('roles', 'name')
+                    ->ignore($role->id)
+                    ->where(fn($query) => $query->where('tenant_id', $tenantId))
             ],
         ]);
-        $role->update(['name' => $request->name]);
-        return $role;
+
+        $role->update([
+            'name' => $request->name,
+        ]);
+
+        return response()->json($role);
     }
 
+    /**
+     * Borrar un rol.
+     * DELETE /api/roles/{id}
+     */
     public function destroy(Request $request, $id)
     {
         $tenantId = $request->header('X-Tenant-ID');
-        $role = Role::where('tenant_id', $tenantId)->findOrFail($id);
-        // El error debería resolverse aquí, ya que $role es ahora una instancia de App\Models\Role
-        // que tiene la relación 'users' bien definida.
+
+        $role = Role::where('tenant_id', $tenantId)
+            ->findOrFail($id);
+
         $role->delete();
+
         return response()->noContent();
     }
 
-    // Asignar permisos a un rol (POST /roles/{role}/permissions)
+    /**
+     * Asignar permisos de forma masiva a un rol.
+     * POST /api/roles/{role}/permissions
+     */
     public function setPermissions(Request $request, $id)
-{
-    $tenantId = $request->header('X-Tenant-ID');
-    $role = Role::where('tenant_id', $tenantId)->findOrFail($id);
+    {
+        $tenantId = $request->header('X-Tenant-ID');
 
-    $permissionIds = Permission::whereIn('id', $request->permissions ?? [])
-        ->where('tenant_id', $tenantId)
-        ->pluck('id')->toArray();
+        $role = Role::where('tenant_id', $tenantId)
+            ->findOrFail($id);
 
-    try {
-        $role->syncPermissions($permissionIds);
-        Log::info('Permisos sincronizados correctamente para el rol.', ['role_id' => $role->id, 'permissions' => $permissionIds]);
-        return $role->load('permissions');
-    } catch (\Exception $e) {
-        Log::error("Error al sincronizar permisos para el rol: " . $e->getMessage(), ['role_id' => $role->id, 'exception' => $e]);
-        return response()->json(['message' => 'Error al asignar permisos: ' . $e->getMessage()], 500);
+        // Sólo tomar IDs válidos que existen en este tenant
+        $permissionIds = Permission::whereIn('id', $request->permissions ?? [])
+            ->where('tenant_id', $tenantId)
+            ->pluck('id')
+            ->toArray();
+
+        try {
+            $role->syncPermissions($permissionIds);
+
+            Log::info("Permisos sincronizados correctamente", [
+                'role_id'     => $role->id,
+                'permissions' => $permissionIds,
+            ]);
+
+            return response()->json($role->load('permissions'));
+        } catch (\Throwable $e) {
+            Log::error("Error al sincronizar permisos", [
+                'role_id' => $role->id,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => "Error al asignar permisos: {$e->getMessage()}"
+            ], 500);
+        }
     }
-}
 }
