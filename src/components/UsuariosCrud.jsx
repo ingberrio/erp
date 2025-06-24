@@ -22,6 +22,7 @@ export default function UsuariosCrud({ token, tenantId }) {
   const [roles, setRoles] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isAppReady, setIsAppReady] = useState(false);
 
   // Modal crear/editar rol
   const [openDialog, setOpenDialog] = useState(false);

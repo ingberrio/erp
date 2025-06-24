@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios"; // Importar Axios
+import axios from "axios";
 import {
   Box,
   AppBar,
@@ -13,7 +13,7 @@ import {
   ListItemIcon,
   ListItemText,
   CssBaseline,
-  CircularProgress, // Importar CircularProgress para el estado de carga
+  CircularProgress,
 } from "@mui/material";
 import BusinessIcon from "@mui/icons-material/Business";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -24,35 +24,27 @@ import EmpresasCrud from "./components/EmpresasCrud";
 import RolesPermisosCrud from "./components/RolesPermisosCrud";
 
 // --- Configuración Global de Axios ---
-// Esta instancia de Axios será utilizada por todos los componentes.
-// Configurar baseURL y headers comunes aquí.
-export const api = axios.create({ // Exportar 'api' para que otros componentes puedan usarla
-  baseURL: "http://127.0.0.1:8000/api", // Reemplaza con la URL base de tu API Laravel
+export const api = axios.create({
+  baseURL: "http://127.0.0.1:8000/api",
   headers: {
     "Accept": "application/json",
-    // Los headers Authorization y X-Tenant-ID se añadirán dinámicamente
   },
 });
 
-// Función para configurar globalmente los headers de Axios.
-// Esto es CRUCIAL para que todas las peticiones lleven el token y el tenant ID.
-const setGlobalAxiosHeaders = (token, tenantId) => {
+export const setGlobalAxiosHeaders = (token, tenantId) => {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
   } else {
-    // Si no hay token, eliminar el header para evitar enviar un token inválido
     delete api.defaults.headers.common["Authorization"];
   }
 
   if (tenantId) {
     api.defaults.headers.common["X-Tenant-ID"] = tenantId;
   } else {
-    // Si no hay tenantId, eliminar el header
     delete api.defaults.headers.common["X-Tenant-ID"];
   }
 };
 
-// --- Items del menú para navegación ---
 const menuItems = [
   { key: "empresas", label: "Empresas", icon: <BusinessIcon /> },
   { key: "usuarios", label: "Usuarios", icon: <PeopleIcon /> },
@@ -61,47 +53,36 @@ const menuItems = [
 const drawerWidth = 220;
 
 export default function App() {
-  // Estado para el token de autenticación
   const [token, setTokenState] = useState("");
-  // Estado para el objeto de usuario autenticado
   const [user, setUserState] = useState(null);
-  // Estado para el elemento de menú activo (por defecto 'empresas')
-  const [activeMenu, setActiveMenu] = useState("empresas");
-  // Nuevo estado para controlar la carga inicial de la aplicación
   const [appLoading, setAppLoading] = useState(true);
+  const [isAppReady, setIsAppReady] = useState(false); // Indica si la aplicación está completamente lista y autenticada
 
-  // --- Funciones para actualizar el estado y localStorage ---
-  // Estas funciones se pasarán a LoginComponent y se encargarán de sincronizar Axios
+  const [activeMenu, setActiveMenu] = useState("empresas");
+
   const updateToken = (newToken) => {
     setTokenState(newToken);
     localStorage.setItem("token", newToken);
-    // Llama a setGlobalAxiosHeaders para que el token se aplique inmediatamente
-    // tenantId puede ser null en este punto si user aún no se ha seteado,
-    // pero se actualizará en updateUser o la llamada a /user
-    setGlobalAxiosHeaders(newToken, user?.tenant_id);
   };
 
   const updateUser = (newUser) => {
     setUserState(newUser);
     localStorage.setItem("user", JSON.stringify(newUser));
-    // Llama a setGlobalAxiosHeaders para que el tenantId se aplique inmediatamente
-    // Asegúrate de usar el token actual (del estado) y el tenant_id del nuevo usuario
-    setGlobalAxiosHeaders(token, newUser?.tenant_id);
   };
 
-  // --- Manejador de Logout ---
   const handleLogout = () => {
+    console.log("App: Performing logout...");
     setTokenState("");
     setUserState(null);
     localStorage.removeItem("token");
-    localStorage.removeItem("user"); // También limpiar el objeto de usuario
-    setGlobalAxiosHeaders(null, null); // Limpiar los headers globales de Axios
-    // Aquí puedes añadir una redirección a la página de login si usas react-router-dom
-    // Por ejemplo: navigate('/login');
+    localStorage.removeItem("user");
+    setGlobalAxiosHeaders(null, null);
+    setIsAppReady(false);
   };
 
-  // --- useEffect para cargar y validar sesión al montar la aplicación ---
+  // --- useEffect para configurar el Interceptor de Axios y la carga inicial ---
   useEffect(() => {
+    console.log("App: Primary useEffect running (initial load/refresh)");
     const storedToken = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
 
@@ -111,62 +92,109 @@ export default function App() {
 
     if (storedToken) {
       initialToken = storedToken;
-      // Intenta parsear el objeto de usuario si existe
       if (storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           initialUser = parsedUser;
           initialTenantId = parsedUser.tenant_id;
+          console.log("App: Found stored user data:", parsedUser);
         } catch (e) {
-          console.error("Error al parsear el usuario de localStorage:", e);
-          // Si el usuario en localStorage está corrupto, lo borramos
+          console.error("App: Error parsing user from localStorage:", e);
           localStorage.removeItem("user");
         }
       }
     }
-
-    // Configura los headers de Axios globalmente con lo que tengamos (incluso si es null al principio)
-    // Esto es crucial para que la llamada a '/user' se haga con el token si existe.
+    console.log("App: Initializing Axios headers with token:", !!initialToken, "tenantId:", initialTenantId);
     setGlobalAxiosHeaders(initialToken, initialTenantId);
 
-    if (initialToken && initialTenantId) {
-      // Si hay token y tenantId en localStorage, intenta validar la sesión con el backend
-      api.get("/user") // Asume que tienes un endpoint /api/user que devuelve el usuario autenticado
-        .then(response => {
-          // Si la validación es exitosa, actualiza el estado y localStorage con datos frescos
-          const fetchedUser = response.data;
-          setTokenState(initialToken); // Mantén el token original
-          setUserState(fetchedUser);
-          localStorage.setItem("user", JSON.stringify(fetchedUser)); // Guarda la info de usuario fresca
 
-          // Asegúrate de que los headers globales de Axios estén correctos con el tenant_id fresco
-          // (Puede que ya lo estén si initialTenantId era correcto, pero lo confirmamos)
-          setGlobalAxiosHeaders(initialToken, fetchedUser.tenant_id);
-          setAppLoading(false); // La aplicación ha terminado de cargar
+    // --- Axios Request Interceptor ---
+    const requestInterceptor = api.interceptors.request.use(
+      (config) => {
+        const currentToken = localStorage.getItem("token");
+        const currentUser = localStorage.getItem("user");
+        let currentTenantId = null;
+        if (currentUser) {
+          try {
+            currentTenantId = JSON.parse(currentUser).tenant_id;
+          } catch (e) {
+            // Error al parsear, dejar currentTenantId como null
+          }
+        }
+
+        if (currentToken) {
+          config.headers.Authorization = `Bearer ${currentToken}`;
+        } else {
+          delete config.headers.Authorization;
+        }
+
+        if (currentTenantId) {
+          config.headers["X-Tenant-ID"] = currentTenantId;
+        } else {
+          delete config.headers["X-Tenant-ID"];
+        }
+        // console.log("App Interceptor: Request headers set:", { auth: !!config.headers.Authorization, tenant: config.headers["X-Tenant-ID"] });
+        return config;
+      },
+      (error) => {
+        return Promise.reject(error);
+      }
+    );
+
+    // --- Lógica de validación de sesión inicial ---
+    if (initialToken && initialTenantId) {
+      console.log("App: Validating session with /user endpoint...");
+      api.get("/user")
+        .then(response => {
+          const fetchedUser = response.data;
+          setTokenState(initialToken);
+          setUserState(fetchedUser);
+          localStorage.setItem("user", JSON.stringify(fetchedUser));
+          setAppLoading(false);
+          setIsAppReady(true); // <-- Establecido a true aquí
+          console.log("App: Session validated. isAppReady set to TRUE.");
         })
         .catch(error => {
-          console.error("La sesión ha expirado o es inválida:", error);
-          // Si el token es inválido o expiró, fuerza el logout
+          console.error("App: Session expired or invalid, logging out:", error);
           handleLogout();
           setAppLoading(false);
         });
     } else {
-      // Si no hay token o tenantId en localStorage, la aplicación ha terminado de cargar
-      // y mostrará la pantalla de login.
+      console.log("App: No stored token or tenantId, showing login.");
       setAppLoading(false);
+      setIsAppReady(false); // <-- Asegurarse de que esté en false si no hay sesión
     }
-  }, []); // El array vacío asegura que este efecto se ejecute solo una vez al montar
 
-  // --- Renderizar estado de carga ---
+    // Función de limpieza para remover el interceptor cuando el componente se desmonte
+    return () => {
+      console.log("App: Cleaning up request interceptor.");
+      api.interceptors.request.eject(requestInterceptor);
+    };
+  }, []); // Se ejecuta solo una vez al montar
+
+  // --- useEffect para reaccionar a cambios en token/user y actualizar isAppReady ---
+  useEffect(() => {
+    console.log("App: Secondary useEffect running (token/user/appLoading changed).");
+    console.log("Current state - token:", !!token, "user:", user ? user.email : "null", "tenant_id:", user?.tenant_id, "appLoading:", appLoading, "isAppReady:", isAppReady);
+
+    if (!appLoading) {
+        if (token && user?.tenant_id && !isAppReady) {
+            setIsAppReady(true);
+            console.log("App: isAppReady set to TRUE after login/state update.");
+        } else if ((!token || !user?.tenant_id) && isAppReady) {
+            setIsAppReady(false);
+            console.log("App: isAppReady set to FALSE due to missing token/user.");
+        }
+    }
+  }, [token, user, appLoading, isAppReady]);
+
+
+  // Renderizar estado de carga
   if (appLoading) {
     return (
       <Box sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        bgcolor: "#1a1a1a",
-        color: "#fff"
+        display: "flex", justifyContent: "center", alignItems: "center",
+        minHeight: "100vh", bgcolor: "#1a1a1a", color: "#fff"
       }}>
         <CircularProgress color="inherit" sx={{ mr: 2 }} />
         <Typography variant="h5">Cargando aplicación...</Typography>
@@ -174,72 +202,49 @@ export default function App() {
     );
   }
 
-  // --- Renderizar LoginComponent si no hay token o usuario/tenant ID válido ---
-  // Se ejecuta después de que `appLoading` es false.
-  // Aseguramos que token, user y user.tenant_id estén presentes y sean válidos.
+  // Renderizar LoginComponent si no hay token o usuario/tenant ID válido
   if (!token || !user || !user.tenant_id) {
+    console.log("App: Showing LoginComponent (token, user, or tenant_id is missing).");
     return (
-      // Pasar las funciones para actualizar el estado y localStorage
       <LoginComponent setToken={updateToken} setUser={updateUser} />
     );
   }
 
-  // --- Contenido principal de la aplicación (después de autenticación exitosa) ---
+  // Contenido principal de la aplicación (después de autenticación exitosa)
   let mainContent = null;
-  // Ya no necesitas 'currentTenantId' aquí, los componentes hijos usarán la 'api' global
-  // const currentTenantId = user?.tenant_id; // <-- ELIMINADO/NO NECESARIO EN ESTA LÓGICA
+  const currentTenantId = user.tenant_id;
+  console.log("App: Rendering main content. currentTenantId:", currentTenantId, "isAppReady:", isAppReady);
 
   if (activeMenu === "empresas") {
-    // Ya no es necesario pasar token y tenantId como props a EmpresasCrud
-    mainContent = <EmpresasCrud />;
+    mainContent = <EmpresasCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
   } else if (activeMenu === "usuarios") {
-    // Ya no es necesario pasar token y tenantId como props a RolesPermisosCrud
-    mainContent = <RolesPermisosCrud />;
+    mainContent = <RolesPermisosCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
   }
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#1a1a1a" }}>
       <CssBaseline />
-      {/* AppBar superior */}
-      <AppBar
-        position="fixed"
-        sx={{
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-          bgcolor: "#212224",
-        }}
-      >
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: "#212224" }}>
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Cannabis ERP
           </Typography>
-          {user && ( // Mostrar info del usuario si está disponible
+          {user && (
             <Typography sx={{ mr: 2 }}>
               {user.name} ({user.email})
             </Typography>
           )}
-          <Button
-            color="inherit"
-            startIcon={<LogoutIcon />}
-            onClick={handleLogout}
-            sx={{ bgcolor: "#333", ":hover": { bgcolor: "#444" } }}
-          >
+          <Button color="inherit" startIcon={<LogoutIcon />} onClick={handleLogout} sx={{ bgcolor: "#333", ":hover": { bgcolor: "#444" } }}>
             Salir
           </Button>
         </Toolbar>
       </AppBar>
 
-      {/* Drawer lateral */}
       <Drawer
         variant="permanent"
         sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          [`& .MuiDrawer-paper`]: {
-            width: drawerWidth,
-            bgcolor: "#232325",
-            color: "#fff",
-            boxSizing: "border-box",
-          },
+          width: drawerWidth, flexShrink: 0,
+          [`& .MuiDrawer-paper`]: { width: drawerWidth, bgcolor: "#232325", color: "#fff", boxSizing: "border-box" },
         }}
       >
         <Toolbar />
@@ -251,20 +256,11 @@ export default function App() {
                   selected={activeMenu === item.key}
                   onClick={() => setActiveMenu(item.key)}
                   sx={{
-                    "&.Mui-selected": {
-                      bgcolor: "#4a4a4a", // Color de fondo cuando está seleccionado
-                      "&:hover": {
-                        bgcolor: "#5a5a5a",
-                      },
-                    },
-                    "&:hover": {
-                      bgcolor: "#3a3a3a",
-                    },
+                    "&.Mui-selected": { bgcolor: "#4a4a4a", "&:hover": { bgcolor: "#5a5a5a" }, },
+                    "&:hover": { bgcolor: "#3a3a3a" },
                   }}
                 >
-                  <ListItemIcon sx={{ color: "#fff" }}>
-                    {item.icon}
-                  </ListItemIcon>
+                  <ListItemIcon sx={{ color: "#fff" }}>{item.icon}</ListItemIcon>
                   <ListItemText primary={item.label} />
                 </ListItemButton>
               </ListItem>
@@ -273,18 +269,11 @@ export default function App() {
         </Box>
       </Drawer>
 
-      {/* Contenido Principal */}
       <Box
         component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          bgcolor: "#18191b",
-          minHeight: "100vh",
-          width: { sm: `calc(100vw - ${drawerWidth}px)` },
-        }}
+        sx={{ flexGrow: 1, p: 3, bgcolor: "#18191b", minHeight: "100vh", width: { sm: `calc(100vw - ${drawerWidth}px)` }, }}
       >
-        <Toolbar /> {/* Espaciador para el AppBar */}
+        <Toolbar />
         {mainContent}
       </Box>
     </Box>

@@ -20,7 +20,7 @@ import SaveIcon from "@mui/icons-material/Save";
 
 // EmpresasCrud ahora no necesita recibir 'token' ni 'tenantId' como props,
 // porque la instancia global 'api' ya maneja esos headers.
-const EmpresasCrud = () => {
+const EmpresasCrud = (tenantId) => {
   const [empresas, setEmpresas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
@@ -51,8 +51,10 @@ const EmpresasCrud = () => {
   // Se ejecuta una vez al montar el componente, ya que 'api' debería estar configurado.
   // También se puede añadir 'api' a las dependencias si la instancia pudiera cambiar (poco probable).
   useEffect(() => {
-    fetchEmpresas();
-  }, []);
+    if (tenantId) { // Solo si tenantId existe
+      fetchEmpresas();
+    }
+  }, [tenantId]); 
 
   // Crear/editar empresa
   const handleSaveEmpresa = async (e) => {

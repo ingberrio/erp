@@ -1,6 +1,6 @@
 // src/components/UsuariosCrudInternal.jsx
-import React, { useState, useEffect } from "react";
-import { api } from "../App"; // Importar la instancia global de Axios
+import React, { useState, useEffect, useCallback } from "react";
+import { api } from "../App";
 import {
   Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, List, ListItem, ListItemText, IconButton, Snackbar, Alert,
@@ -15,50 +15,75 @@ import SearchIcon from '@mui/icons-material/Search';
 import SaveIcon from "@mui/icons-material/Save";
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import GroupIcon from '@mui/icons-material/Group'; // Para el icono del título, aunque el título principal está en el padre
+import GroupIcon from '@mui/icons-material/Group';
 
 
-const UsuariosCrudInternal = () => {
+const UsuariosCrudInternal = ({ tenantId, isAppReady }) => {
   const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]); // Para la lista de roles disponibles en el diálogo
+  const [rolesForAssignment, setRolesForAssignment] = useState([]);
   const [loading, setLoading] = useState(false);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
 
   const [openUserDialog, setOpenUserDialog] = useState(false);
-  const [editingUser, setEditingUser] = useState(null); // Guarda el objeto de usuario que se está editando
+  const [editingUser, setEditingUser] = useState(null);
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
-  const [userRoles, setUserRoles] = useState([]); // IDs de los roles seleccionados para el usuario
-  const [userSearch, setUserSearch] = useState(""); // Estado para el campo de búsqueda de usuarios
+  const [userSelectedRoleIds, setUserSelectedRoleIds] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
 
-  // --- Fetch Data Functions ---
-  const fetchUsers = async () => {
+  // --- Fetch Users Function (para la tabla principal) ---
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
+    console.log("UsuariosCrudInternal: fetchUsers attempting to load...");
     try {
-      const res = await api.get("/users?with_roles=true"); // Asumiendo que el backend puede incluir roles
+      const res = await api.get("/users?with_roles=true");
       setUsers(Array.isArray(res.data) ? res.data : res.data.data || []);
+      console.log("UsuariosCrudInternal: Users loaded successfully:", res.data);
+      // Para cerrar el snackbar si era de error, usa el callback de setSnack
+      setSnack(prevSnack => {
+        if (prevSnack.open && prevSnack.severity === "error") {
+          return { ...prevSnack, open: false };
+        }
+        return prevSnack;
+      });
     } catch (err) {
-      console.error("Error al cargar usuarios:", err);
+      console.error("UsuariosCrudInternal: Error loading users:", err);
       setSnack({ open: true, message: "No se pudieron cargar los usuarios", severity: "error" });
     }
     setLoading(false);
-  };
+  }, []); // <--- ¡Importante! Arreglo de dependencias vacío para que la función sea estable
 
-  const fetchRolesForAssignment = async () => {
+  // --- Fetch Roles Function (para el diálogo de asignación) ---
+  const fetchRolesForAssignment = useCallback(async () => {
+    console.log("UsuariosCrudInternal: fetchRolesForAssignment attempting to load...");
     try {
-      const res = await api.get("/roles"); // Obtener todos los roles para asignación
-      setRoles(Array.isArray(res.data) ? res.data : res.data.data || []);
+      const res = await api.get("/roles");
+      setRolesForAssignment(Array.isArray(res.data) ? res.data : res.data.data || []);
+      console.log("UsuariosCrudInternal: Roles for assignment loaded successfully.");
+      // Para cerrar el snackbar si era de error, usa el callback de setSnack
+      setSnack(prevSnack => {
+        if (prevSnack.open && prevSnack.severity === "error") {
+          return { ...prevSnack, open: false };
+        }
+        return prevSnack;
+      });
     } catch (err) {
-      console.error("Error al cargar roles para asignación:", err);
+      console.error("UsuariosCrudInternal: Error loading roles for assignment:", err);
       setSnack({ open: true, message: "No se pudieron cargar los roles para asignación", severity: "error" });
     }
-  };
+  }, []); // <--- ¡Importante! Arreglo de dependencias vacío para que la función sea estable
 
+  // --- useEffect para cargar usuarios al montar y cuando tenantId/isAppReady cambien ---
   useEffect(() => {
-    fetchUsers();
-    fetchRolesForAssignment(); // Cargar roles al inicio para el diálogo de usuario
-  }, []);
+    console.log("UsuariosCrudInternal: Main useEffect condition check. tenantId:", tenantId, "isAppReady:", isAppReady);
+    if (tenantId && isAppReady) {
+      console.log("UsuariosCrudInternal: Condition met for initial user load. Calling fetchUsers.");
+      fetchUsers();
+    } else {
+      console.log("UsuariosCrudInternal: Condition NOT met for initial load. Waiting for tenantId and isAppReady to be true.");
+    }
+  }, [tenantId, isAppReady, fetchUsers]); // Dependencias: tenantId, isAppReady, y fetchUsers (que ahora es estable)
 
   // --- Filtering Logic ---
   const filteredUsers = users.filter(user =>
@@ -71,8 +96,11 @@ const UsuariosCrudInternal = () => {
     setEditingUser(user);
     setUserName(user ? user.name : "");
     setUserEmail(user ? user.email : "");
-    setUserPassword(""); // Never pre-fill password for security
-    setUserRoles(user ? (user.roles?.map(role => role.id) || []) : []); // Set selected roles
+    setUserPassword("");
+    if (tenantId && isAppReady) {
+      fetchRolesForAssignment(); // Carga los roles solo al abrir el diálogo
+    }
+    setUserSelectedRoleIds(user ? (user.roles?.map(role => role.id) || []) : []);
     setOpenUserDialog(true);
   };
 
@@ -82,7 +110,7 @@ const UsuariosCrudInternal = () => {
     setUserName("");
     setUserEmail("");
     setUserPassword("");
-    setUserRoles([]);
+    setUserSelectedRoleIds([]);
   };
 
   // --- CRUD Operations ---
@@ -93,23 +121,25 @@ const UsuariosCrudInternal = () => {
       const userData = {
         name: userName,
         email: userEmail,
-        // La contraseña solo se envía si es un nuevo usuario o si se ha introducido un valor en la edición
         ...(!editingUser || userPassword.trim() !== "" ? { password: userPassword } : {}),
-        roles: userRoles, // Send an array of role IDs
+        roles: userSelectedRoleIds,
       };
 
+      let res;
       if (editingUser) {
-        await api.put(`/users/${editingUser.id}`, userData);
+        res = await api.put(`/users/${editingUser.id}`, userData);
         setSnack({ open: true, message: "Usuario actualizado", severity: "success" });
+        setUsers(prevUsers => prevUsers.map(u => u.id === res.data.user.id ? res.data.user : u));
       } else {
-        await api.post("/users", userData);
+        res = await api.post("/users", userData);
         setSnack({ open: true, message: "Usuario creado", severity: "success" });
+        setUsers(prevUsers => [...prevUsers, res.data.user]);
       }
       handleCloseUserDialog();
-      fetchUsers(); // Refresh list
     } catch (err) {
       console.error("Error al guardar usuario:", err.response?.data || err.message);
-      setSnack({ open: true, message: "Error al guardar usuario: " + (err.response?.data?.message || err.message), severity: "error" });
+      const errorMessage = err.response?.data?.message || err.message;
+      setSnack({ open: true, message: "Error al guardar usuario: " + errorMessage, severity: "error" });
     }
     setLoading(false);
   };
@@ -120,17 +150,17 @@ const UsuariosCrudInternal = () => {
     try {
       await api.delete(`/users/${userToDelete.id}`);
       setSnack({ open: true, message: "Usuario eliminado", severity: "info" });
-      fetchUsers();
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== userToDelete.id));
     } catch (err) {
       console.error("No se pudo eliminar el usuario:", err);
-      setSnack({ open: true, message: "No se pudo eliminar el usuario", severity: "error" });
+      const errorMessage = err.response?.data?.message || err.message;
+      setSnack({ open: true, message: "No se pudo eliminar el usuario: " + errorMessage, severity: "error" });
     }
     setLoading(false);
   };
 
-  // --- Role Assignment Logic for Users ---
   const toggleUserRole = (roleId) => {
-    setUserRoles(prevSelected =>
+    setUserSelectedRoleIds(prevSelected =>
       prevSelected.includes(roleId)
         ? prevSelected.filter(id => id !== roleId)
         : [...prevSelected, roleId]
@@ -161,11 +191,11 @@ const UsuariosCrudInternal = () => {
           sx={{ minWidth: 160, borderRadius: 2, width: { xs: "100%", sm: "auto" } }}
           onClick={() => handleOpenUserDialog(null)}
         >
-          NUEVO USUARIO
+          + NUEVO USUARIO
         </Button>
       </Box>
 
-      <TableContainer component={Paper}> {/* Usar Paper para el fondo de la tabla */}
+      <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: "#fafbfc" }}>
@@ -277,20 +307,20 @@ const UsuariosCrudInternal = () => {
               sx={{ mb: 2 }}
               helperText={editingUser ? "Dejar vacío para no cambiar la contraseña." : "Requerido para nuevos usuarios."}
               autoComplete="new-password"
-              required={!editingUser && userPassword.trim() === ""} // Solo requerido si es nuevo y el campo está vacío
+              required={!editingUser && userPassword.trim() === ""}
               disabled={loading}
             />
             <Divider sx={{ mb: 1 }} />
             <Typography variant="subtitle2" mb={1}>Roles Asignados</Typography>
             <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid #ccc", p: 1, borderRadius: 1 }}>
-              {roles.length === 0 ? (
+              {rolesForAssignment.length === 0 ? (
                 <Typography color="text.secondary">No hay roles disponibles.</Typography>
               ) : (
-                roles.map((role) => (
+                rolesForAssignment.map((role) => (
                   <Box key={role.id} sx={{ display: "flex", alignItems: "center", mb: 0.5 }}>
                     <Checkbox
                       size="small"
-                      checked={userRoles.includes(role.id)}
+                      checked={userSelectedRoleIds.includes(role.id)}
                       onChange={() => toggleUserRole(role.id)}
                       disabled={loading}
                       icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
@@ -307,7 +337,7 @@ const UsuariosCrudInternal = () => {
             <Button
               type="submit"
               variant="contained"
-              disabled={loading || !userName || !userEmail || (!editingUser && userPassword.trim() === "")} // Password is required for new users
+              disabled={loading || !userName || !userEmail || (!editingUser && userPassword.trim() === "")}
             >
               {loading ? <CircularProgress size={24} /> : (editingUser ? "Guardar Cambios" : "Crear Usuario")}
             </Button>
@@ -321,7 +351,8 @@ const UsuariosCrudInternal = () => {
         onClose={() => setSnack({ ...snack, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })} sx={{ width: '100%' }}>
+        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })}>
+          {/* Eliminado sx={{ width: '100%' }} para evitar posibles saltos visuales */}
           {snack.message}
         </Alert>
       </Snackbar>

@@ -1,33 +1,27 @@
 // src/components/RolesPermisosCrud.jsx
 
 import React, { useState } from "react";
-// Importa la instancia global de Axios desde App.jsx
-// Ya no es necesario importar 'api' aquí, ya que este componente solo contiene las pestañas
-// y los componentes internos importan 'api' directamente.
-// import { api } from "../App"; // <-- Puedes eliminar esta línea
-
-import {
-  Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, List, ListItem, ListItemText, IconButton, Snackbar, Alert, Divider,
-  Tabs, Tab, CircularProgress,
-  InputAdornment,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
-import SecurityIcon from "@mui/icons-material/Security";
-import PeopleIcon from "@mui/icons-material/People";
-import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
-import SearchIcon from '@mui/icons-material/Search';
-
-// Importa los componentes internos que deben estar en archivos separados
+// Importa los componentes internos.
 import UsuariosCrudInternal from "./UsuariosCrudInternal";
 import RolesCrudInternal from "./RolesCrudInternal";
 import PermissionsCrudInternal from "./PermissionsCrudInternal";
 
-const RolesPermisosCrud = () => {
+import {
+  Box, Paper, Typography, Divider, Tabs, Tab, // Asegúrate de que Tabs y Tab estén importados
+} from "@mui/material";
+import SecurityIcon from "@mui/icons-material/Security"; // Icono para Roles/Permisos
+import PeopleIcon from "@mui/icons-material/People"; // Icono para Usuarios
+import AssignmentIndIcon from "@mui/icons-material/AssignmentInd"; // Icono para asignar roles/permisos
+
+// El componente RolesPermisosCrud ahora recibe 'tenantId' e 'isAppReady' como props.
+const RolesPermisosCrud = ({ tenantId, isAppReady }) => {
+  // Estado para la pestaña activa (0: Usuarios, 1: Roles, 2: Permisos)
   const [activeTab, setActiveTab] = useState(0);
 
+  // Log de las props recibidas
+  console.log("RolesPermisosCrud: Props received - tenantId:", tenantId, "isAppReady:", isAppReady);
+
+  // Manejador del cambio de pestaña
   const handleChangeTab = (event, newValue) => {
     setActiveTab(newValue);
   };
@@ -50,6 +44,8 @@ const RolesPermisosCrud = () => {
         </Typography>
         <Divider sx={{ my: 2 }} />
 
+        {/* Pestañas para navegar entre Usuarios, Roles y Permisos */}
+        {/* Este bloque de Tabs es el que renderiza el submenu */}
         <Tabs value={activeTab} onChange={handleChangeTab} aria-label="Secciones de gestión"
               sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="Usuarios" icon={<PeopleIcon />} iconPosition="start" />
@@ -57,14 +53,16 @@ const RolesPermisosCrud = () => {
           <Tab label="Permisos" icon={<SecurityIcon />} iconPosition="start" />
         </Tabs>
 
+        {/* Contenido de las pestañas, pasando tenantId e isAppReady a los hijos */}
+        {/* Cada uno de estos se renderiza condicionalmente según la pestaña activa */}
         {activeTab === 0 && (
-          <UsuariosCrudInternal />
+          <UsuariosCrudInternal tenantId={tenantId} isAppReady={isAppReady} />
         )}
         {activeTab === 1 && (
-          <RolesCrudInternal />
+          <RolesCrudInternal tenantId={tenantId} isAppReady={isAppReady} />
         )}
         {activeTab === 2 && (
-          <PermissionsCrudInternal />
+          <PermissionsCrudInternal tenantId={tenantId} isAppReady={isAppReady} />
         )}
 
       </Paper>
