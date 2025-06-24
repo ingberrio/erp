@@ -17,7 +17,8 @@ class Role extends SpatieRole // Extiende el modelo Role de Spatie
 
     protected $fillable = [
         'name',
-        'guard_name',
+        'email',
+        'password',
         'tenant_id', // Asegúrate de que tenant_id esté fillable
     ];
 
