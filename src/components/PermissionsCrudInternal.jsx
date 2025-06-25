@@ -1,9 +1,9 @@
 // src/components/PermissionsCrudInternal.jsx
-import React, { useState, useEffect, useCallback } from "react"; // <-- Importa useCallback
+import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../App";
 import {
   Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, List, ListItem, ListItemText, IconButton, Snackbar, Alert,
+  TextField, IconButton, Snackbar, Alert,
   CircularProgress, InputAdornment, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper,
 } from "@mui/material";
@@ -14,7 +14,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import SearchIcon from '@mui/icons-material/Search';
 
 
-const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe las props
+const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
@@ -25,6 +25,10 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe la
   const [permissionDesc, setPermissionDesc] = useState("");
   const [permSearch, setPermSearch] = useState("");
 
+  // Nuevos estados para el diálogo de confirmación de eliminación
+  const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
+  const [permToDelete, setPermToDelete] = useState(null); // Guarda el permiso a eliminar
+
   // --- Fetch Data Functions ---
   const fetchPermissions = useCallback(async () => {
     setLoading(true);
@@ -33,15 +37,18 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe la
       const res = await api.get("/permissions");
       setPermissions(Array.isArray(res.data) ? res.data : res.data.data || []);
       console.log("PermissionsCrudInternal: Permissions loaded successfully:", res.data);
-      if (snack.open && snack.severity === "error") {
-        setSnack(prevSnack => ({ ...prevSnack, open: false }));
-      }
+      setSnack(prevSnack => { // Usa el callback para evitar la función re-creada
+        if (prevSnack.open && prevSnack.severity === "error") {
+          return { ...prevSnack, open: false };
+        }
+        return prevSnack;
+      });
     } catch (err) {
       console.error("PermissionsCrudInternal: Error loading permissions:", err);
       setSnack({ open: true, message: "No se pudieron cargar los permisos", severity: "error" });
     }
     setLoading(false);
-  }, [snack.open, snack.severity]);
+  }, []); // Dependencias vacías para useCallback para estabilidad
 
   // Se ejecuta CUANDO tenantId Y isAppReady son true.
   useEffect(() => {
@@ -60,7 +67,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe la
     (perm.description && perm.description.toLowerCase().includes(permSearch.toLowerCase()))
   );
 
-  // --- Dialog Handlers ---
+  // --- Dialog Handlers (Create/Edit Permission) ---
   const handleOpenPermDialog = (perm = null) => {
     setEditingPerm(perm);
     setPermissionName(perm ? perm.name : "");
@@ -75,7 +82,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe la
     setPermissionDesc("");
   };
 
-  // --- CRUD Operations ---
+  // --- CRUD Operations (Save) ---
   const handleSavePermission = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -85,34 +92,57 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe la
         description: permissionDesc,
       };
 
+      let res;
       if (editingPerm) {
-        await api.put(`/permissions/${editingPerm.id}`, permData);
+        res = await api.put(`/permissions/${editingPerm.id}`, permData);
         setSnack({ open: true, message: "Permiso actualizado", severity: "success" });
+        // Optimización: Actualiza el permiso en el estado directamente
+        setPermissions(prevPerms => prevPerms.map(p => p.id === res.data.id ? res.data : p)); // Asume que la API devuelve el permiso actualizado
       } else {
-        await api.post("/permissions", permData);
+        res = await api.post("/permissions", permData);
         setSnack({ open: true, message: "Permiso creado", severity: "success" });
+        // Optimización: Añade el nuevo permiso al estado directamente
+        setPermissions(prevPerms => [...prevPerms, res.data]); // Asume que la API devuelve el nuevo permiso
       }
       handleClosePermDialog();
-      fetchPermissions();
     } catch (err) {
       console.error("Error al guardar permiso:", err.response?.data || err.message);
-      setSnack({ open: true, message: "Error al guardar permiso: " + (err.response?.data?.message || err.message), severity: "error" });
+      const errorMessage = err.response?.data?.message || err.message;
+      setSnack({ open: true, message: "Error al guardar permiso: " + errorMessage, severity: "error" });
     }
     setLoading(false);
   };
 
-  const handleDeletePermission = async (permissionToDelete) => {
-    if (!window.confirm(`¿Eliminar permiso "${permissionToDelete.name}"? Esta acción es irreversible.`)) return;
+  // --- Delete Confirmation Handler ---
+  // Esta función se llama al hacer clic en el botón de eliminar
+  const confirmDeletePermission = (perm) => {
+    setPermToDelete(perm);
+    setOpenConfirmDialog(true);
+  };
+
+  // Esta función se llama si el usuario confirma la eliminación
+  const handleDeleteConfirmed = async () => {
+    setOpenConfirmDialog(false); // Cierra el diálogo de confirmación
+    if (!permToDelete) return; // Si por alguna razón no hay permiso a eliminar, sale
+
     setLoading(true);
     try {
-      await api.delete(`/permissions/${permissionToDelete.id}`);
+      await api.delete(`/permissions/${permToDelete.id}`);
       setSnack({ open: true, message: "Permiso eliminado", severity: "info" });
-      fetchPermissions();
+      // Optimización: Elimina el permiso del estado directamente
+      setPermissions(prevPerms => prevPerms.filter(p => p.id !== permToDelete.id));
+      setPermToDelete(null); // Limpia el permiso a eliminar
     } catch (err) {
       console.error("No se pudo eliminar el permiso:", err);
-      setSnack({ open: true, message: "No se pudo eliminar el permiso", severity: "error" });
+      const errorMessage = err.response?.data?.message || err.message;
+      setSnack({ open: true, message: "No se pudo eliminar el permiso: " + errorMessage, severity: "error" });
     }
     setLoading(false);
+  };
+
+  const handleCancelDelete = () => {
+    setOpenConfirmDialog(false);
+    setPermToDelete(null);
   };
 
   return (
@@ -180,7 +210,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe la
                       <EditIcon />
                     </IconButton>
                     <IconButton
-                      onClick={() => handleDeletePerm(perm)}
+                      onClick={() => confirmDeletePermission(perm)} // <-- Llama a la nueva función de confirmación
                       color="error"
                     >
                       <DeleteIcon />
@@ -231,13 +261,38 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => { // <-- Recibe la
         </form>
       </Dialog>
 
+      {/* Custom Confirmation Dialog for Delete */}
+      <Dialog
+        open={openConfirmDialog}
+        onClose={handleCancelDelete}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle id="alert-dialog-title">{"Confirmar Eliminación"}</DialogTitle>
+        <DialogContent>
+          <Typography id="alert-dialog-description">
+            ¿Estás seguro de que quieres eliminar el permiso "
+            {permToDelete ? permToDelete.name : ''}"? Esta acción es irreversible.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDelete} disabled={loading}>Cancelar</Button>
+          <Button onClick={handleDeleteConfirmed} color="error" variant="contained" disabled={loading} autoFocus>
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={snack.open}
         autoHideDuration={4000}
         onClose={() => setSnack({ ...snack, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })} sx={{ width: '100%' }}>
+        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })}>
+          {/* Eliminado sx={{ width: '100%' }} para evitar posibles saltos visuales */}
           {snack.message}
         </Alert>
       </Snackbar>
