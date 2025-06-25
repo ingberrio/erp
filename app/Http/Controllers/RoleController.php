@@ -7,8 +7,8 @@ use App\Models\Role;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException; // Asegúrate de que esta importación exista
-use Illuminate\Support\Facades\DB; // Asegúrate de que esta importación exista
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 
 class RoleController extends Controller
@@ -22,7 +22,7 @@ class RoleController extends Controller
     }
 
     /**
-     * Listar todos los roles con sus permisos para el tenant actual.
+     * Listar todos los roles con sus permisos y el conteo de usuarios para el tenant actual.
      * GET /api/roles
      */
     public function index(Request $request)
@@ -33,8 +33,9 @@ class RoleController extends Controller
         }
 
         try {
-            $roles = Role::with('permissions') // Carga los permisos para la lista
-                // ->withCount('users') // Descomentar si tienes una relación 'users' en Role para contar usuarios
+            // Carga los permisos y el conteo de usuarios asociados a cada rol
+            $roles = Role::with('permissions')
+                ->withCount('users') // <-- Agregado para contar los usuarios relacionados
                 ->where('tenant_id', $tenantId)
                 ->get();
 
@@ -73,7 +74,7 @@ class RoleController extends Controller
                         ->where(fn($query) => $query->where('tenant_id', $tenantId))
                         ->where(fn($query) => $query->where('guard_name', 'sanctum')), // Asegura unicidad por guard_name
                 ],
-                'description' => 'nullable|string|max:255', // <-- Validar campo description
+                'description' => 'nullable|string|max:255',
                 'permissions' => 'nullable|array',
                 'permissions.*' => ['integer', Rule::exists('permissions', 'id')->where(function ($query) use ($tenantId, $guard) {
                     $query->where('tenant_id', $tenantId)->where('guard_name', $guard);
@@ -82,7 +83,7 @@ class RoleController extends Controller
 
             $role = Role::create([
                 'name'        => $validated['name'],
-                'description' => $validated['description'] ?? null, // <-- Guardar description
+                'description' => $validated['description'] ?? null,
                 'tenant_id'   => $tenantId,
                 'guard_name'  => $guard, // Asumimos 'sanctum' para roles de API
             ]);
@@ -100,7 +101,7 @@ class RoleController extends Controller
             ]);
 
             // Devolver el rol con los permisos cargados
-            return response()->json($role->load('permissions'), 201);
+            return response()->json($role->load('permissions')->loadCount('users'), 201); // <-- loadCount para el conteo de usuarios al crear
 
         } catch (ValidationException $e) {
             DB::rollBack();
@@ -117,7 +118,7 @@ class RoleController extends Controller
     }
 
     /**
-     * Mostrar un rol específico (con permisos).
+     * Mostrar un rol específico (con permisos y conteo de usuarios).
      * GET /api/roles/{id}
      */
     public function show(Request $request, $id)
@@ -128,7 +129,9 @@ class RoleController extends Controller
         }
 
         try {
-            $role = Role::with('permissions') // Siempre cargar permisos al mostrar un solo rol
+            // Siempre cargar permisos y conteo de usuarios al mostrar un solo rol
+            $role = Role::with('permissions')
+                ->withCount('users') // <-- Agregado para contar los usuarios relacionados
                 ->where('tenant_id', $tenantId)
                 ->findOrFail($id);
 
@@ -174,8 +177,8 @@ class RoleController extends Controller
                         ->where(fn($query) => $query->where('tenant_id', $tenantId))
                         ->where(fn($query) => $query->where('guard_name', 'sanctum')), // Asegura unicidad por guard_name
                 ],
-                'description' => 'nullable|string|max:255', // <-- Validar campo description
-                'permissions' => 'nullable|array', // Los permisos ahora pueden enviarse en la actualización
+                'description' => 'nullable|string|max:255',
+                'permissions' => 'nullable|array',
                 'permissions.*' => ['integer', Rule::exists('permissions', 'id')->where(function ($query) use ($tenantId, $guard) {
                     $query->where('tenant_id', $tenantId)->where('guard_name', $guard);
                 })],
@@ -183,7 +186,7 @@ class RoleController extends Controller
 
             $role->update([
                 'name'        => $validated['name'],
-                'description' => $validated['description'] ?? $role->description, // <-- Actualiza la descripción
+                'description' => $validated['description'] ?? $role->description,
             ]);
 
             // Sincronizar permisos si se enviaron en la petición
@@ -198,8 +201,8 @@ class RoleController extends Controller
                 'tenant_id' => $tenantId,
             ]);
 
-            // Devolver el rol con los permisos cargados después de la actualización
-            return response()->json($role->load('permissions'));
+            // Devolver el rol con los permisos y el conteo de usuarios cargados después de la actualización
+            return response()->json($role->load('permissions')->loadCount('users')); // <-- loadCount para el conteo de usuarios al actualizar
         } catch (ValidationException $e) {
             DB::rollBack();
             Log::error('Validation failed during role update', [
@@ -240,13 +243,6 @@ class RoleController extends Controller
             $role = Role::where('tenant_id', $tenantId)
                 ->findOrFail($id);
 
-            // Opcional: antes de borrar un rol, podrías querer desasignarlo de todos los usuarios
-            // o añadir una validación para evitar borrar roles con usuarios asignados.
-            // if ($role->users()->count() > 0) {
-            //     throw new \Exception('No se puede eliminar el rol porque tiene usuarios asignados.');
-            // }
-            // $role->users()->detach(); // Si tienes una relación directa de users en Role
-
             $role->delete();
 
             DB::commit();
@@ -256,7 +252,7 @@ class RoleController extends Controller
                 'tenant_id' => $tenantId,
             ]);
 
-            return response()->noContent(); // 204 No Content
+            return response()->noContent();
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             DB::rollBack();
             return response()->json(['error' => 'Role not found for this tenant.'], 404);
@@ -275,7 +271,7 @@ class RoleController extends Controller
      * Asignar permisos de forma masiva a un rol.
      * POST /api/roles/{role}/permissions
      * Nota: Este método se mantiene opcionalmente si necesitas un endpoint dedicado,
-     * pero la lógica de sincronización ya está integrada en 'update'.
+     * pero la lógica de sincronización ya está integrada en 'update' y 'store'.
      */
     public function setPermissions(Request $request, $id)
     {
@@ -288,7 +284,6 @@ class RoleController extends Controller
             $role = Role::where('tenant_id', $tenantId)
                 ->findOrFail($id);
 
-            // Validar que los IDs de permisos son enteros
             $request->validate([
                 'permissions' => 'required|array',
                 'permissions.*' => ['integer', Rule::exists('permissions', 'id')->where(function ($query) use ($tenantId) {
@@ -301,7 +296,6 @@ class RoleController extends Controller
                 ->pluck('id')
                 ->toArray();
 
-            // Sincronizar permisos, lo que manejará la eliminación de los no incluidos y la adición de los nuevos
             $role->syncPermissions($permissionIds);
 
             Log::info("Permisos sincronizados correctamente", [
@@ -310,7 +304,7 @@ class RoleController extends Controller
                 'tenant_id'   => $tenantId,
             ]);
 
-            return response()->json($role->load('permissions'));
+            return response()->json($role->load('permissions')->loadCount('users')); // <-- loadCount para el conteo de usuarios
         } catch (ValidationException $e) {
             Log::error('Validation failed during setPermissions', ['errors' => $e->errors()]);
             return response()->json(['error' => 'Fallo de validación al asignar permisos', 'details' => $e->errors()], 422);
