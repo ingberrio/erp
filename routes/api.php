@@ -7,6 +7,9 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\BoardController;   // <-- Nueva importación
+use App\Http\Controllers\LListController;    // <-- Nueva importación (para List)
+use App\Http\Controllers\CardController;     // <-- Nueva importación (para Card)
 
 // Rutas públicas: NO requieren tenant ni autenticación
 Route::post('/register', [AuthController::class, 'register']);
@@ -38,4 +41,27 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // CRUD de permisos
     Route::apiResource('permissions', PermissionController::class);
+
+    // --- Módulo de Calendario (Tipo Trello) API Routes ---
+    // Boards CRUD (Tableros principales del calendario/proyecto)
+    Route::apiResource('boards', BoardController::class);
+
+    // Lists CRUD (Columnas/listas dentro de un tablero) - Rutas anidadas y singulares
+    Route::prefix('boards/{board}')->group(function () {
+        // Rutas para crear y listar listas dentro de un tablero específico
+        Route::apiResource('lists', LListController::class)->except(['show', 'update', 'destroy']);
+    });
+    // Rutas para mostrar, actualizar y eliminar una lista individual
+    Route::apiResource('lists', LListController::class)->only(['show', 'update', 'destroy']);
+
+    // Cards CRUD (Tarjetas/tareas dentro de una lista) - Rutas anidadas y singulares
+    Route::prefix('lists/{list}')->group(function () {
+        // Rutas para crear y listar tarjetas dentro de una lista específica
+        Route::apiResource('cards', CardController::class)->except(['show', 'update', 'destroy']);
+    });
+    // Rutas para mostrar, actualizar y eliminar una tarjeta individual
+    Route::apiResource('cards', CardController::class)->only(['show', 'update', 'destroy']);
+
+    // Ruta específica para reordenar tarjetas (dentro de una lista o entre listas)
+    Route::post('cards/reorder', [CardController::class, 'reorder']);
 });
