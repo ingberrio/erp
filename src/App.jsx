@@ -18,10 +18,12 @@ import {
 import BusinessIcon from "@mui/icons-material/Business";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PeopleIcon from "@mui/icons-material/People";
+import EventNoteIcon from "@mui/icons-material/EventNote"; // Importar icono para Calendario
 
 import LoginComponent from "./components/LoginComponent";
 import EmpresasCrud from "./components/EmpresasCrud";
 import RolesPermisosCrud from "./components/RolesPermisosCrud";
+import CalendarioModuleWrapper from './components/CalendarioModuleWrapper'; // Importar el wrapper del calendario
 
 // --- Configuración Global de Axios ---
 export const api = axios.create({
@@ -31,6 +33,7 @@ export const api = axios.create({
   },
 });
 
+// setGlobalAxiosHeaders se usa para inicializar y limpiar los headers por defecto
 export const setGlobalAxiosHeaders = (token, tenantId) => {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -43,11 +46,14 @@ export const setGlobalAxiosHeaders = (token, tenantId) => {
   } else {
     delete api.defaults.headers.common["X-Tenant-ID"];
   }
+  console.log("App.jsx: setGlobalAxiosHeaders llamado. Token:", token ? "presente" : "ausente", "Tenant ID:", tenantId);
 };
 
+// --- Items del menú para navegación ---
 const menuItems = [
   { key: "empresas", label: "Empresas", icon: <BusinessIcon /> },
   { key: "usuarios", label: "Usuarios", icon: <PeopleIcon /> },
+  { key: "calendario", label: "Calendario", icon: <EventNoteIcon /> }, // Nuevo ítem de menú
 ];
 
 const drawerWidth = 220;
@@ -63,26 +69,28 @@ export default function App() {
   const updateToken = (newToken) => {
     setTokenState(newToken);
     localStorage.setItem("token", newToken);
+    console.log("App.jsx: Token actualizado en estado y localStorage."); // Debug log
   };
 
   const updateUser = (newUser) => {
     setUserState(newUser);
     localStorage.setItem("user", JSON.stringify(newUser));
+    console.log("App.jsx: Usuario actualizado en estado y localStorage. Tenant ID:", newUser?.tenant_id); // Debug log
   };
 
   const handleLogout = () => {
-    console.log("App: Performing logout...");
+    console.log("App.jsx: Iniciando Logout."); // Debug log
     setTokenState("");
     setUserState(null);
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    // Limpiamos los headers directamente al desloguearse
     setGlobalAxiosHeaders(null, null);
     setIsAppReady(false);
   };
 
   // --- useEffect para configurar el Interceptor de Axios y la carga inicial ---
   useEffect(() => {
-    console.log("App: Primary useEffect running (initial load/refresh)");
     const storedToken = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
 
@@ -97,20 +105,24 @@ export default function App() {
           const parsedUser = JSON.parse(storedUser);
           initialUser = parsedUser;
           initialTenantId = parsedUser.tenant_id;
-          console.log("App: Found stored user data:", parsedUser);
         } catch (e) {
-          console.error("App: Error parsing user from localStorage:", e);
+          console.error("App.jsx: Error al parsear el usuario de localStorage:", e);
           localStorage.removeItem("user");
         }
       }
     }
-    console.log("App: Initializing Axios headers with token:", !!initialToken, "tenantId:", initialTenantId);
+
+    // Configura los headers de Axios con lo que se recuperó de localStorage INMEDIATAMENTE.
+    // Esto es vital para la primera llamada a '/user' en el flujo de validación.
     setGlobalAxiosHeaders(initialToken, initialTenantId);
 
 
     // --- Axios Request Interceptor ---
+    // Este interceptor se ejecutará ANTES de CADA petición saliente de la instancia 'api'.
     const requestInterceptor = api.interceptors.request.use(
       (config) => {
+        // Obtener el token y tenantId más recientes DIRECTAMENTE de localStorage
+        // Esto asegura que siempre usamos los valores más actualizados.
         const currentToken = localStorage.getItem("token");
         const currentUser = localStorage.getItem("user");
         let currentTenantId = null;
@@ -122,28 +134,34 @@ export default function App() {
           }
         }
 
+        console.log("App.jsx [Interceptor]: Preparando request para URL:", config.url); // Debug log
         if (currentToken) {
           config.headers.Authorization = `Bearer ${currentToken}`;
+          console.log("App.jsx [Interceptor]: Token de autorización adjuntado. Longitud:", currentToken.length); // Debug log
         } else {
           delete config.headers.Authorization;
+          console.log("App.jsx [Interceptor]: No hay token, Authorization header limpiado."); // Debug log
         }
 
         if (currentTenantId) {
           config.headers["X-Tenant-ID"] = currentTenantId;
+          console.log("App.jsx [Interceptor]: X-Tenant-ID adjuntado:", currentTenantId); // Debug log
         } else {
           delete config.headers["X-Tenant-ID"];
+          console.log("App.jsx [Interceptor]: No hay Tenant ID, X-Tenant-ID header limpiado."); // Debug log
         }
-        // console.log("App Interceptor: Request headers set:", { auth: !!config.headers.Authorization, tenant: config.headers["X-Tenant-ID"] });
+
         return config;
       },
       (error) => {
+        console.error("App.jsx [Interceptor Error]:", error); // Debug log
         return Promise.reject(error);
       }
     );
 
     // --- Lógica de validación de sesión inicial ---
     if (initialToken && initialTenantId) {
-      console.log("App: Validating session with /user endpoint...");
+      console.log("App.jsx: Token y Tenant ID iniciales encontrados. Validando sesión..."); // Debug log
       api.get("/user")
         .then(response => {
           const fetchedUser = response.data;
@@ -151,46 +169,42 @@ export default function App() {
           setUserState(fetchedUser);
           localStorage.setItem("user", JSON.stringify(fetchedUser));
           setAppLoading(false);
-          setIsAppReady(true); // <-- Establecido a true aquí
-          console.log("App: Session validated. isAppReady set to TRUE.");
+          setIsAppReady(true);
+          console.log("App.jsx: Sesión validada y App lista."); // Debug log
         })
         .catch(error => {
-          console.error("App: Session expired or invalid, logging out:", error);
+          console.error("App.jsx: La sesión ha expirado o es inválida (error en /user):", error); // Debug log
           handleLogout();
           setAppLoading(false);
         });
     } else {
-      console.log("App: No stored token or tenantId, showing login.");
+      console.log("App.jsx: No hay token o Tenant ID inicial. Mostrando pantalla de login."); // Debug log
       setAppLoading(false);
-      setIsAppReady(false); // <-- Asegurarse de que esté en false si no hay sesión
+      setIsAppReady(false);
     }
 
     // Función de limpieza para remover el interceptor cuando el componente se desmonte
     return () => {
-      console.log("App: Cleaning up request interceptor.");
+      console.log("App.jsx: Limpiando interceptor de Axios."); // Debug log
       api.interceptors.request.eject(requestInterceptor);
     };
-  }, []); // Se ejecuta solo una vez al montar
+  }, []); // Este useEffect solo se ejecuta una vez al montar
 
-  // --- useEffect para reaccionar a cambios en token/user y actualizar isAppReady ---
+  // Este useEffect para sincronizar isAppReady con token/user
   useEffect(() => {
-    console.log("App: Secondary useEffect running (token/user/appLoading changed).");
-    console.log("Current state - token:", !!token, "user:", user ? user.email : "null", "tenant_id:", user?.tenant_id, "appLoading:", appLoading, "isAppReady:", isAppReady);
-
-    if (!appLoading) {
-        if (token && user?.tenant_id && !isAppReady) {
-            setIsAppReady(true);
-            console.log("App: isAppReady set to TRUE after login/state update.");
-        } else if ((!token || !user?.tenant_id) && isAppReady) {
-            setIsAppReady(false);
-            console.log("App: isAppReady set to FALSE due to missing token/user.");
-        }
-    }
-  }, [token, user, appLoading, isAppReady]);
+      if (token && user?.tenant_id && !isAppReady && !appLoading) {
+          setIsAppReady(true);
+          console.log("App.jsx: isAppReady establecido a TRUE."); // Debug log
+      } else if ((!token || !user?.tenant_id) && isAppReady && !appLoading) {
+          setIsAppReady(false);
+          console.log("App.jsx: isAppReady establecido a FALSE."); // Debug log
+      }
+  }, [token, user, isAppReady, appLoading]);
 
 
   // Renderizar estado de carga
   if (appLoading) {
+    console.log("App.jsx: Mostrando spinner de carga."); // Debug log
     return (
       <Box sx={{
         display: "flex", justifyContent: "center", alignItems: "center",
@@ -204,7 +218,7 @@ export default function App() {
 
   // Renderizar LoginComponent si no hay token o usuario/tenant ID válido
   if (!token || !user || !user.tenant_id) {
-    console.log("App: Showing LoginComponent (token, user, or tenant_id is missing).");
+    console.log("App.jsx: Mostrando LoginComponent (no autenticado)."); // Debug log
     return (
       <LoginComponent setToken={updateToken} setUser={updateUser} />
     );
@@ -213,12 +227,14 @@ export default function App() {
   // Contenido principal de la aplicación (después de autenticación exitosa)
   let mainContent = null;
   const currentTenantId = user.tenant_id;
-  console.log("App: Rendering main content. currentTenantId:", currentTenantId, "isAppReady:", isAppReady);
+  console.log("App.jsx: Usuario autenticado. Tenant ID actual:", currentTenantId, "App ready:", isAppReady); // Debug log
 
   if (activeMenu === "empresas") {
     mainContent = <EmpresasCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
   } else if (activeMenu === "usuarios") {
     mainContent = <RolesPermisosCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
+  } else if (activeMenu === "calendario") { // Nueva condición para Calendario
+    mainContent = <CalendarioModuleWrapper tenantId={currentTenantId} isAppReady={isAppReady} />;
   }
 
   return (
