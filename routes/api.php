@@ -7,9 +7,9 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\BoardController;   // <-- Nueva importación
-use App\Http\Controllers\LListController;    // <-- Nueva importación (para List)
-use App\Http\Controllers\CardController;     // <-- Nueva importación (para Card)
+use App\Http\Controllers\BoardController;
+use App\Http\Controllers\LListController;
+use App\Http\Controllers\CardController;
 
 // Rutas públicas: NO requieren tenant ni autenticación
 Route::post('/register', [AuthController::class, 'register']);
@@ -58,10 +58,13 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::prefix('lists/{list}')->group(function () {
         // Rutas para crear y listar tarjetas dentro de una lista específica
         Route::apiResource('cards', CardController::class)->except(['show', 'update', 'destroy']);
+        // AÑADIR LA RUTA DE REORDENAR AQUÍ, DENTRO DEL PREFIJO DE LISTA
+        // Esto asegura que {list} esté disponible en el controlador
+        Route::put('cards/reorder', [CardController::class, 'reorderCardsInList']); // Cambiado a PUT y nombre de método diferente
     });
     // Rutas para mostrar, actualizar y eliminar una tarjeta individual
     Route::apiResource('cards', CardController::class)->only(['show', 'update', 'destroy']);
 
-    // Ruta específica para reordenar tarjetas (dentro de una lista o entre listas)
-    Route::post('cards/reorder', [CardController::class, 'reorder']);
+    // ELIMINAR ESTA RUTA GLOBAL DUPLICADA:
+    // Route::post('cards/reorder', [CardController::class, 'reorder']); // <-- ¡ELIMINAR ESTA LÍNEA!
 });

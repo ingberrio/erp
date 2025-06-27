@@ -9,6 +9,7 @@ use App\Models\Board;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class CardController extends Controller
 {
@@ -18,25 +19,18 @@ class CardController extends Controller
      */
     public function index(Request $request, LList $list)
     {
-        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la lista pertenezca al tenant ---
-        // Se asume que el modelo List ya tiene el BelongsToTenant scope
-        // y que el list ID en la URL ya fue resuelto por Laravel bajo el tenant del usuario.
-        // Verificamos explícitamente que la lista y su tablero pertenezcan al tenant del request.
-        if ($list->tenant_id != $request->header('X-Tenant-ID') || $list->board->tenant_id != $request->header('X-Tenant-ID')) {
-            abort(403, 'Unauthorized access to this list\'s cards: List or board tenant mismatch.');
+        $tenantId = $request->header('X-Tenant-ID');
+        if ($list->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized access: List does not belong to the current tenant.');
         }
 
         try {
-            $cards = Card::where('list_id', $list->id)
-                ->where('tenant_id', $request->header('X-Tenant-ID'))
-                ->orderBy('order')
-                ->get();
-
+            $cards = $list->cards()->orderBy('order')->get();
             return response()->json($cards);
         } catch (\Throwable $e) {
             Log::error('Error fetching cards in index', [
                 'list_id' => $list->id,
-                'tenant_id' => $request->header('X-Tenant-ID'),
+                'tenant_id' => $tenantId,
                 'error_message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -50,35 +44,30 @@ class CardController extends Controller
      */
     public function store(Request $request, LList $list)
     {
-        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la lista pertenezca al tenant ---
-        Log::info('CardController@store: Verificando acceso a lista', [
-            'list_id_resolved' => $list->id,
-            'list_tenant_id' => $list->tenant_id,
-            'list_board_tenant_id' => $list->board->tenant_id,
-            'request_x_tenant_id' => $request->header('X-Tenant-ID'),
-            'user_id' => $request->user() ? $request->user()->id : 'N/A (No autenticado)',
-            'user_tenant_id_from_user_model' => $request->user() ? $request->user()->tenant_id : 'N/A (No autenticado)',
-            'request_data' => $request->all(), // !!! LOG ADICIONAL PARA VER DATOS DE ENTRADA !!!
-        ]);
+        $tenantId = $request->header('X-Tenant-ID');
 
-        if ($list->tenant_id != $request->header('X-Tenant-ID') || $list->board->tenant_id != $request->header('X-Tenant-ID')) {
-            abort(403, 'Unauthorized to create card on this list: List or board tenant mismatch.');
+        if ($list->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to create card on this list: List tenant mismatch.');
         }
+
+        Log::info('CardController@store: Attempting to create card.', [
+            'list_id' => $list->id,
+            'tenant_id_request' => $tenantId,
+            'request_data' => $request->all(),
+        ]);
 
         try {
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string|max:1000',
                 'due_date' => 'nullable|date',
-                // 'status' es obligatorio y debe ser uno de los valores definidos
                 'status' => 'required|string|in:todo,in_progress,done',
-                'order' => 'integer|min:0', // Optional: frontend can suggest an order
-                'user_id' => 'nullable|exists:users,id', // User assigned to the card
+                'order' => 'integer|min:0',
+                'user_id' => 'nullable|exists:users,id',
             ]);
 
-            // Determine the next order if not provided
             $maxOrder = Card::where('list_id', $list->id)
-                            ->where('tenant_id', $request->header('X-Tenant-ID')) // Filtrar por tenant para el orden
+                            ->where('tenant_id', $tenantId)
                             ->max('order');
             $order = $validated['order'] ?? ($maxOrder !== null ? $maxOrder + 1 : 0);
 
@@ -89,17 +78,16 @@ class CardController extends Controller
                 'status' => $validated['status'],
                 'order' => $order,
                 'list_id' => $list->id,
-                'board_id' => $list->board_id, // Inherit board_id from list
-                'tenant_id' => $request->header('X-Tenant-ID'), // Inherit tenant from board/list
-                'user_id' => $validated['user_id'] ?? $request->user()->id, // Asignar al usuario actual si no se provee
+                'board_id' => $list->board_id,
+                'tenant_id' => $tenantId,
+                'user_id' => $validated['user_id'] ?? $request->user()->id,
             ]);
 
             Log::info('Card created successfully.', ['card_id' => $card->id, 'list_id' => $list->id, 'tenant_id' => $card->tenant_id]);
 
             return response()->json($card, 201);
         } catch (ValidationException $e) {
-            Log::error('Validation failed during card store', ['errors' => $e->errors()]);
-            // Devolver los detalles del error de validación para depuración en el frontend
+            Log::error('Validation failed during card store', ['errors' => $e->errors(), 'request_data' => $request->all()]);
             return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
         } catch (\Throwable $e) {
             Log::error('Unexpected error during card store', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
@@ -113,11 +101,10 @@ class CardController extends Controller
      */
     public function show(Request $request, Card $card)
     {
-        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la tarjeta pertenezca al tenant ---
-        if ($card->tenant_id != $request->header('X-Tenant-ID') || $card->board->tenant_id != $request->header('X-Tenant-ID')) {
-            abort(403, 'Unauthorized access to this card: Card or board tenant mismatch.');
+        $tenantId = $request->header('X-Tenant-ID');
+        if ($card->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized access: Card does not belong to the current tenant.');
         }
-
         return response()->json($card);
     }
 
@@ -127,45 +114,50 @@ class CardController extends Controller
      */
     public function update(Request $request, Card $card)
     {
-        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la tarjeta pertenezca al tenant ---
-        if ($card->tenant_id != $request->header('X-Tenant-ID') || $card->board->tenant_id != $request->header('X-Tenant-ID')) {
-            abort(403, 'Unauthorized to update this card: Card or board tenant mismatch.');
+        $tenantId = $request->header('X-Tenant-ID');
+
+        if ($card->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to update this card: Card tenant mismatch.');
         }
+
+        Log::info('CardController@update: Attempting to update card.', [
+            'card_id' => $card->id,
+            'tenant_id_request' => $tenantId,
+            'request_data' => $request->all(),
+        ]);
 
         try {
             $validated = $request->validate([
-                'title' => 'required|string|max:255',
+                'title' => 'sometimes|required|string|max:255',
                 'description' => 'nullable|string|max:1000',
                 'due_date' => 'nullable|date',
-                'status' => 'required|string|in:todo,in_progress,done',
-                'order' => 'integer|min:0',
-                'list_id' => [ // Allows moving card to another list
+                'status' => 'sometimes|required|string|in:todo,in_progress,done',
+                'order' => 'sometimes|required|integer|min:0',
+                'list_id' => [
+                    'sometimes',
                     'required',
                     'exists:lists,id',
-                    // Asegurarse de que la lista destino esté dentro del mismo tablero Y tenant
-                    Rule::exists('lists', 'id')->where(function ($query) use ($card, $request) {
-                        return $query->where('board_id', $card->board_id)
-                                     ->where('tenant_id', $request->header('X-Tenant-ID'));
+                    Rule::exists('lists', 'id')->where(function ($query) use ($tenantId) {
+                        return $query->where('tenant_id', $tenantId);
                     }),
                 ],
                 'user_id' => 'nullable|exists:users,id',
             ]);
 
-            $card->update([
-                'title' => $validated['title'],
-                'description' => $validated['description'] ?? $card->description,
-                'due_date' => $validated['due_date'] ?? $card->due_date,
-                'status' => $validated['status'],
-                'order' => $validated['order'] ?? $card->order,
-                'list_id' => $validated['list_id'],
-                'user_id' => $validated['user_id'] ?? $card->user_id,
-            ]);
+            if (isset($validated['list_id']) && $validated['list_id'] !== $card->list_id) {
+                $newList = LList::find($validated['list_id']);
+                if ($newList && $newList->board_id !== $card->board_id) {
+                    $validated['board_id'] = $newList->board_id;
+                }
+            }
+
+            $card->update($validated);
 
             Log::info('Card updated successfully.', ['card_id' => $card->id, 'list_id' => $card->list_id, 'tenant_id' => $card->tenant_id]);
 
             return response()->json($card);
         } catch (ValidationException $e) {
-            Log::error('Validation failed during card update', ['card_id' => $card->id, 'errors' => $e->errors()]);
+            Log::error('Validation failed during card update', ['card_id' => $card->id, 'errors' => $e->errors(), 'request_data' => $request->all()]);
             return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
         } catch (\Throwable $e) {
             Log::error('Unexpected error during card update', ['card_id' => $card->id, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
@@ -179,9 +171,9 @@ class CardController extends Controller
      */
     public function destroy(Request $request, Card $card)
     {
-        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la tarjeta pertenezca al tenant ---
-        if ($card->tenant_id != $request->header('X-Tenant-ID') || $card->board->tenant_id != $request->header('X-Tenant-ID')) {
-            abort(403, 'Unauthorized to delete this card: Card or board tenant mismatch.');
+        $tenantId = $request->header('X-Tenant-ID');
+        if ($card->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to delete this card: Card tenant mismatch.');
         }
 
         try {
@@ -196,102 +188,62 @@ class CardController extends Controller
     }
 
     /**
-     * Reorder cards within a list or move between lists.
-     * POST /api/cards/reorder
+     * Reorder cards within a specific list.
+     * PUT /api/lists/{list}/cards/reorder
      */
-    public function reorder(Request $request)
+    public function reorderCardsInList(Request $request, LList $list)
     {
         $tenantId = $request->header('X-Tenant-ID');
-        if (!$tenantId) {
-            return response()->json(['error' => 'Tenant ID is missing'], 400);
+
+        if ($list->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to reorder cards in this list: List tenant mismatch.');
         }
 
+        Log::info('CardController@reorderCardsInList: Attempting to reorder cards in list.', [
+            'list_id' => $list->id,
+            'tenant_id_request' => $tenantId,
+            'request_data' => $request->all(),
+        ]);
+
         try {
-            $validated = $request->validate([
-                'card_id' => 'required|exists:cards,id',
-                'new_list_id' => 'required|exists:lists,id',
-                'new_order' => 'required|integer|min:0',
+            $validatedData = $request->validate([
+                'card_ids' => 'nullable|array', // CAMBIO CLAVE AQUÍ: Permitir array vacío
+                'card_ids.*' => [
+                    'sometimes', // CAMBIO CLAVE AQUÍ: Solo validar si hay elementos
+                    'exists:cards,id',
+                    Rule::exists('cards', 'id')->where(function ($query) use ($list, $tenantId) {
+                        return $query->where('list_id', $list->id)
+                                     ->where('tenant_id', $tenantId);
+                    }),
+                ],
             ]);
 
-            $card = Card::where('id', $validated['card_id'])
-                        ->where('tenant_id', $tenantId)
-                        ->firstOrFail();
-
-            $oldListId = $card->list_id;
-            $newListId = $validated['new_list_id'];
-            $newOrder = $validated['new_order'];
-
-            // Ensure the target list belongs to the same board as the original card's board,
-            // and that board belongs to the current tenant.
-            $board = Board::where('id', $card->board_id)
-                          ->where('tenant_id', $tenantId)
-                          ->first(); // Quitado user_id para permitir colaboración de tenant
-            if (!$board) {
-                abort(403, 'Unauthorized to reorder cards on this board: Board tenant mismatch.');
-            }
-
-            // Begin transaction for reordering
-            \DB::beginTransaction();
-
-            // Adjust order in the old list
-            if ($oldListId === $newListId) {
-                // Reordering within the same list
-                $cardsToShift = Card::where('list_id', $oldListId)
-                    ->where('tenant_id', $tenantId)
-                    ->where('id', '!=', $card->id)
-                    ->orderBy('order')
-                    ->get();
-
-                $newOrderCounter = 0;
-                foreach ($cardsToShift as $c) {
-                    if ($newOrderCounter === $newOrder) {
-                        $newOrderCounter++; // Skip the new position for the moved card
+            DB::transaction(function () use ($validatedData, $list, $tenantId) {
+                // Solo iterar si card_ids no es nulo y tiene elementos
+                if (!empty($validatedData['card_ids'])) {
+                    foreach ($validatedData['card_ids'] as $index => $cardId) {
+                        Card::where('id', $cardId)
+                            ->where('list_id', $list->id)
+                            ->where('tenant_id', $tenantId)
+                            ->update(['order' => $index]);
                     }
-                    if ($c->order !== $newOrderCounter) {
-                        $c->update(['order' => $newOrderCounter]);
-                    }
-                    $newOrderCounter++;
                 }
-                $card->update(['order' => $newOrder]);
-            } else {
-                // Moving between different lists
-                // Adjust order in the old list (shift remaining cards up)
-                Card::where('list_id', $oldListId)
-                    ->where('tenant_id', $tenantId)
-                    ->where('order', '>', $card->order)
-                    ->decrement('order');
+            });
 
-                // Adjust order in the new list (shift cards down to make space)
-                Card::where('list_id', $newListId)
-                    ->where('tenant_id', $tenantId)
-                    ->where('order', '>=', $newOrder)
-                    ->increment('order');
+            // Siempre devolver las tarjetas ordenadas, incluso si la lista está vacía
+            $orderedCards = Card::where('list_id', $list->id)
+                                ->where('tenant_id', $tenantId)
+                                ->orderBy('order')
+                                ->get();
 
-                $card->update([
-                    'list_id' => $newListId,
-                    'order' => $newOrder,
-                    'board_id' => $board->id // Ensure board_id is correct after list change
-                ]);
-            }
+            Log::info('Cards reordered successfully in list.', ['list_id' => $list->id, 'tenant_id' => $tenantId, 'reordered_count' => count($orderedCards)]);
 
-            \DB::commit();
-
-            Log::info('Card reordered successfully.', [
-                'card_id' => $card->id,
-                'old_list_id' => $oldListId,
-                'new_list_id' => $newListId,
-                'new_order' => $newOrder,
-                'tenant_id' => $tenantId,
-            ]);
-
-            return response()->json(['message' => 'Card reordered successfully.']);
+            return response()->json($orderedCards, 200);
         } catch (ValidationException $e) {
-            \DB::rollBack();
-            Log::error('Validation failed during card reorder', ['errors' => $e->errors()]);
+            Log::error('Validation failed during reorderCardsInList', ['errors' => $e->errors(), 'request_data' => $request->all()]);
             return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
         } catch (\Throwable $e) {
-            \DB::rollBack();
-            Log::error('Unexpected error during card reorder', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            Log::error('Unexpected error during reorderCardsInList', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'request_data' => $request->all()]);
             return response()->json(['error' => 'An unexpected error occurred.', 'details' => $e->getMessage()], 500);
         }
     }
