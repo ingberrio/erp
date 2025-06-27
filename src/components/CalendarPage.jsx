@@ -1,5 +1,5 @@
 // src/components/CalendarPage.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../App"; // Importa tu instancia de Axios configurada
 import {
   Box, Typography, Button, CircularProgress, Snackbar, Alert,
@@ -9,18 +9,36 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import DateRangeIcon from '@mui/icons-material/DateRange';
-import DescriptionIcon from '@mui/icons-material/Description';
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import DescriptionIcon from "@mui/icons-material/Description";
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import GroupIcon from '@mui/icons-material/Group'; // Icono para "Tus tableros"
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'; // Icono para volver
+import GroupIcon from '@mui/icons-material/Group';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 // --- Importaciones para MUI X Date Pickers ---
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
-import 'dayjs/locale/es'; // Importar la localización para español (opcional, pero recomendado)
+import 'dayjs/locale/es';
+
+// --- Importaciones para dnd-kit ---
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  KeyboardSensor,
+  closestCorners,
+  useDroppable,
+} from '@dnd-kit/core';
+import {
+  sortableKeyboardCoordinates,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 
 // --- Componente de Diálogo de Confirmación Genérico ---
@@ -65,12 +83,10 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
   const [viewingBoardId, setViewingBoardId] = useState(null);
   const selectedBoard = boards.find(board => board.id === viewingBoardId);
 
-  // Estados para el diálogo de confirmación
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
 
 
-  // --- Fetch Boards ---
   const fetchBoards = useCallback(async () => {
     if (!tenantId || !isAppReady) {
       console.log("CalendarPage: Skipping fetchBoards. tenantId:", tenantId, "isAppReady:", isAppReady);
@@ -107,7 +123,6 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
   }, [fetchBoards, tenantId, isAppReady]);
 
 
-  // --- Dialogo para Crear/Editar Board ---
   const handleOpenBoardDialog = (board = null) => {
     setEditingBoard(board);
     setBoardName(board ? board.name : "");
@@ -157,13 +172,12 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
     }
   };
 
-  // Función para manejar la confirmación de eliminación de tablero
   const handleDeleteBoardConfirm = useCallback(async (boardToDelete) => {
     setLoading(true);
     try {
       await api.delete(`/boards/${boardToDelete.id}`);
       setSnack({ open: true, message: "Tablero eliminado.", severity: "info" });
-      setViewingBoardId(null); // Volver a la selección de tableros
+      setViewingBoardId(null);
       await fetchBoards();
     } catch (err) {
       console.error("CalendarPage: Error al eliminar tablero:", err.response?.data || err.message);
@@ -171,11 +185,10 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
       setSnack({ open: true, message: "Error al eliminar tablero: " + errorMessage, severity: "error" });
     } finally {
       setLoading(false);
-      setConfirmDialogOpen(false); // Cerrar el diálogo de confirmación
+      setConfirmDialogOpen(false);
     }
   }, [fetchBoards]);
 
-  // Handler para abrir el diálogo de confirmación para eliminar un tablero
   const handleDeleteBoardClick = (boardToDelete) => {
     setConfirmDialogData({
       title: "Confirmar Eliminación",
@@ -459,32 +472,56 @@ const CreateBoardCard = ({ onClick }) => {
 const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen }) => {
   const [lists, setLists] = useState([]);
   const [loadingLists, setLoadingLists] = useState(false);
+  const [activeDraggableId, setActiveDraggableId] = useState(null); // Estado para la tarjeta que se está arrastrando
+  const [openAddListDialog, setOpenAddListDialog] = useState(false); // Estado para el diálogo de añadir lista
+  const [listName, setListName] = useState(""); // Estado para el nombre de la nueva lista
 
-  const [openAddListDialog, setOpenAddListDialog] = useState(false);
-  const [listName, setListName] = useState("");
 
-  const fetchLists = useCallback(async () => {
-    if (!board?.id || !tenantId) return;
+  // Configuración de sensores para dnd-kit
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  // Función para cargar listas Y sus tarjetas anidadas
+  const fetchListsWithCards = useCallback(async () => {
+    if (!board?.id || !tenantId) {
+      console.log("BoardView: Skipping fetchListsWithCards. Board ID:", board?.id, "Tenant ID:", tenantId);
+      return;
+    }
 
     setLoadingLists(true);
-    console.log(`BoardView: Fetching lists for board ID: ${board.id}`);
+    console.log(`BoardView: Fetching lists with cards for board ID: ${board.id}`);
     try {
-      const response = await api.get(`/boards/${board.id}/lists`);
-      const fetchedLists = Array.isArray(response.data) ? response.data : response.data.data || [];
-      setLists(fetchedLists.sort((a, b) => a.order - b.order));
-      console.log(`BoardView: Lists fetched successfully for board ID: ${board.id}`);
+      const listsResponse = await api.get(`/boards/${board.id}/lists`);
+      let fetchedLists = Array.isArray(listsResponse.data) ? listsResponse.data : listsResponse.data.data || [];
+
+      const listsWithCardsPromises = fetchedLists.map(async (list) => {
+        try {
+          const cardsResponse = await api.get(`/lists/${list.id}/cards`);
+          const fetchedCards = Array.isArray(cardsResponse.data) ? cardsResponse.data : cardsResponse.data.data || [];
+          return { ...list, cards: fetchedCards.sort((a, b) => a.order - b.order) };
+        } catch (cardError) {
+          console.error(`Error fetching cards for list ${list.id}:`, cardError);
+          setParentSnack({ open: true, message: `Error al cargar tarjetas de la lista "${list.name}".`, severity: "error" });
+          return { ...list, cards: [] };
+        }
+      });
+
+      const listsWithCards = await Promise.all(listsWithCardsPromises);
+      setLists(listsWithCards.sort((a, b) => a.order - b.order));
+      console.log("BoardView: Lists with cards fetched successfully.");
     } catch (error) {
       console.error(`BoardView: Error fetching lists for board ID: ${board.id}`, error);
-      setParentSnack({ open: true, message: "Error al cargar las listas.", severity: "error" });
+      setParentSnack({ open: true, message: "Error al cargar las listas del tablero.", severity: "error" });
     } finally {
       setLoadingLists(false);
     }
   }, [board?.id, tenantId, setParentSnack]);
 
   useEffect(() => {
-    console.log("BoardView: useEffect running. Board ID:", board?.id);
-    fetchLists();
-  }, [fetchLists]);
+    fetchListsWithCards();
+  }, [fetchListsWithCards]);
 
   const handleOpenAddListDialog = () => {
     setListName("");
@@ -503,7 +540,7 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
       await api.post(`/boards/${board.id}/lists`, { name: listName });
       setParentSnack({ open: true, message: "Lista creada.", severity: "success" });
       handleCloseAddListDialog();
-      await fetchLists();
+      await fetchListsWithCards();
     } catch (err) {
       console.error("Error al crear lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
@@ -518,7 +555,7 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
     try {
       await api.delete(`/lists/${listToDelete.id}`);
       setParentSnack({ open: true, message: "Lista eliminada.", severity: "info" });
-      await fetchLists();
+      await fetchListsWithCards();
     } catch (err) {
       console.error("Error al eliminar lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
@@ -527,7 +564,7 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
       setLoadingLists(false);
       setParentConfirmDialogOpen(false);
     }
-  }, [fetchLists, setParentSnack, setParentConfirmDialogOpen]);
+  }, [fetchListsWithCards, setParentSnack, setParentConfirmDialogOpen]);
 
   const handleDeleteListClick = (listToDelete) => {
     setParentConfirmDialog({
@@ -538,56 +575,231 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
     setParentConfirmDialogOpen(true);
   };
 
+  // --- dnd-kit handlers ---
+  const handleDragStart = (event) => {
+    setActiveDraggableId(event.active.id);
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    setActiveDraggableId(null);
+
+    if (!over) return;
+    if (active.id === over.id) return;
+
+    // Crea una copia profunda del estado actual de las listas
+    const newLists = JSON.parse(JSON.stringify(lists));
+
+    let draggedCard = null;
+    let sourceList = null;
+    let destinationList = null;
+    let sourceCardIndex = -1;
+
+    // Encuentra la tarjeta arrastrada y su lista de origen
+    for (let i = 0; i < newLists.length; i++) {
+        const list = newLists[i];
+        for (let j = 0; j < list.cards.length; j++) {
+            if (list.cards[j].id === active.id) {
+                draggedCard = list.cards[j];
+                sourceList = list;
+                sourceCardIndex = j;
+                break;
+            }
+        }
+        if (draggedCard) break;
+    }
+
+    if (!draggedCard || !sourceList) {
+        console.error("onDragEnd: No se encontró la tarjeta arrastrada o la lista de origen.");
+        return;
+    }
+
+    let targetListId = over.id;
+    let targetCardId = null;
+
+    // Determina si el destino es una tarjeta o una lista
+    if (over.data.current && over.data.current.type === 'Card') {
+        targetListId = over.data.current.card.list_id;
+        targetCardId = over.id;
+    } else if (over.data.current && over.data.current.type === 'List') {
+        targetListId = over.id;
+    } else {
+        console.warn("onDragEnd: Tipo de destino no reconocido o área de soltar inválida.");
+        return;
+    }
+
+    // Encuentra la lista de destino
+    destinationList = newLists.find(list => list.id === targetListId);
+
+    if (!destinationList) {
+        console.error("onDragEnd: No se pudo encontrar la lista de destino.");
+        return;
+    }
+
+    const isSameList = sourceList.id === destinationList.id;
+
+    if (isSameList) {
+      // Movimiento dentro de la misma lista
+      const oldIndex = sourceCardIndex;
+      const newIndex = destinationList.cards.findIndex(card => card.id === over.id);
+
+      if (oldIndex !== newIndex) {
+        const updatedCards = arrayMove(sourceList.cards, oldIndex, newIndex);
+        sourceList.cards = updatedCards.map((card, idx) => ({ ...card, order: idx }));
+
+        setLists(newLists); // Actualiza el estado local inmediatamente para feedback visual
+
+        try {
+          // Llama a la API para reordenar las tarjetas en la misma lista
+          await api.put(`/lists/${sourceList.id}/cards/reorder`, {
+            card_ids: updatedCards.map(card => card.id),
+          });
+          setParentSnack({ open: true, message: "Tarjeta reordenada.", severity: "success" });
+        } catch (error) {
+          console.error("Error al reordenar tarjeta:", error.response?.data || error.message);
+          setParentSnack({ open: true, message: "Error al reordenar la tarjeta. Recargando datos...", severity: "error" });
+          await fetchListsWithCards(); // Vuelve a cargar los datos si hay un error
+        }
+      }
+    } else {
+      // Movimiento entre diferentes listas
+      // 1. Elimina la tarjeta de la lista de origen
+      sourceList.cards.splice(sourceCardIndex, 1);
+
+      // 2. Calcula la posición donde insertar la tarjeta en la lista de destino
+      let targetIndexInDestination = destinationList.cards.length; // Por defecto, al final
+
+      if (targetCardId) {
+        targetIndexInDestination = destinationList.cards.findIndex(card => card.id === targetCardId);
+        // Si no se encuentra la tarjeta de destino (ej. arrastró sobre el espacio vacío de la lista), añadir al final
+        if (targetIndexInDestination === -1) targetIndexInDestination = destinationList.cards.length;
+      } else if (destinationList.cards.length === 0 && over.data.current.type === 'List') {
+        // Si arrastró sobre una lista vacía
+        targetIndexInDestination = 0;
+      }
+
+      // 3. Inserta la tarjeta en la lista de destino y actualiza su list_id
+      destinationList.cards.splice(targetIndexInDestination, 0, {
+        ...draggedCard,
+        list_id: destinationList.id,
+      });
+
+      // 4. Reasigna los órdenes para ambas listas
+      sourceList.cards = sourceList.cards.map((card, idx) => ({ ...card, order: idx }));
+      destinationList.cards = destinationList.cards.map((card, idx) => ({ ...card, order: idx }));
+
+      setLists(newLists); // Actualiza el estado local inmediatamente para feedback visual
+
+      try {
+        // Llama a la API para actualizar el list_id y order de la tarjeta movida
+        await api.put(`/cards/${draggedCard.id}`, {
+          list_id: destinationList.id,
+          order: targetIndexInDestination, // El orden final en la nueva lista
+        });
+
+        // Llama a la API para reordenar las tarjetas en la lista de origen
+        await api.put(`/lists/${sourceList.id}/cards/reorder`, {
+          card_ids: sourceList.cards.map(card => card.id),
+        });
+
+        // Llama a la API para reordenar las tarjetas en la lista de destino
+        await api.put(`/lists/${destinationList.id}/cards/reorder`, {
+          card_ids: destinationList.cards.map(card => card.id),
+        });
+
+        setParentSnack({ open: true, message: "Tarjeta movida de lista.", severity: "success" });
+      } catch (error) {
+        console.error("Error al mover tarjeta entre listas:", error.response?.data || error.message);
+        setParentSnack({ open: true, message: "Error al mover la tarjeta. Recargando datos...", severity: "error" });
+        await fetchListsWithCards(); // Vuelve a cargar los datos si hay un error
+      }
+    }
+  };
+
+  const getActiveCard = useCallback(() => {
+    if (!activeDraggableId) return null;
+    for (const list of lists) {
+      const card = list.cards.find(c => c.id === activeDraggableId);
+      if (card) return card;
+    }
+    return null;
+  }, [activeDraggableId, lists]);
+
 
   if (!board) return null;
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        overflowX: 'auto',
-        gap: 2,
-        pb: 2,
-        alignItems: 'flex-start',
-        minHeight: '200px'
-      }}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
-      {loadingLists ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', py: 2 }}>
-          <CircularProgress size={24} />
-        </Box>
-      ) : (
-        <>
-          {lists.map((list) => (
-            <ListView
-              key={list.id}
-              list={list}
-              tenantId={tenantId}
-              refreshLists={fetchLists}
-              handleDeleteList={handleDeleteListClick}
-              setParentSnack={setParentSnack}
-              setParentConfirmDialog={setParentConfirmDialog}
-              setParentConfirmDialogOpen={setParentConfirmDialogOpen}
-            />
-          ))}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleOpenAddListDialog}
+      <Box
+        sx={{
+          display: 'flex',
+          overflowX: 'auto',
+          gap: 2,
+          pb: 2,
+          alignItems: 'flex-start',
+          minHeight: '200px'
+        }}
+      >
+        {loadingLists ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', py: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', gap: 2, height: '100%', alignItems: 'flex-start' }}>
+            {lists.map((list) => (
+              <ListView
+                key={list.id}
+                list={list}
+                tenantId={tenantId}
+                refreshLists={fetchListsWithCards}
+                handleDeleteList={handleDeleteListClick}
+                setParentSnack={setParentSnack}
+                setParentConfirmDialog={setParentConfirmDialog}
+                setParentConfirmDialogOpen={setParentConfirmDialogOpen}
+              />
+            ))}
+          </Box>
+        )}
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleOpenAddListDialog}
+          sx={{
+            minWidth: 280,
+            height: 50,
+            flexShrink: 0,
+            bgcolor: '#e0e0e0',
+            color: '#444',
+            '&:hover': { bgcolor: '#d0d0d0' },
+            borderRadius: 2
+          }}
+        >
+          Añadir otra lista
+        </Button>
+      </Box>
+
+      <DragOverlay>
+        {activeDraggableId ? (
+          <Paper
             sx={{
-              minWidth: 280,
-              height: 50,
-              flexShrink: 0,
-              bgcolor: '#e0e0e0',
-              color: '#444',
-              '&:hover': { bgcolor: '#d0d0d0' },
-              borderRadius: 2
+              p: 1.5,
+              bgcolor: '#fff',
+              borderRadius: 1.5,
+              boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+              cursor: 'grabbing',
+              width: '280px',
+              opacity: 0.8,
             }}
           >
-            Añadir otra lista
-          </Button>
-        </>
-      )}
+            <CardContent card={getActiveCard()} />
+          </Paper>
+        ) : null}
+      </DragOverlay>
 
       <Dialog open={openAddListDialog} onClose={handleCloseAddListDialog} maxWidth="xs" fullWidth>
         <DialogTitle>Añadir Nueva Lista</DialogTitle>
@@ -611,51 +823,32 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
           </DialogActions>
         </form>
       </Dialog>
-    </Box>
+    </DndContext>
   );
 };
 
 
 // --- Componente: ListView (Representa una lista de Trello) ---
 const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen }) => {
-  const [cards, setCards] = useState([]);
-  const [loadingCards, setLoadingCards] = useState(false);
-
   const [openAddCardDialog, setOpenAddCardDialog] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
   const [cardDescription, setCardDescription] = useState("");
-  // Estado para la fecha de vencimiento, ahora como objeto dayjs o null
   const [cardDueDate, setCardDueDate] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
 
-  const fetchCards = useCallback(async () => {
-    if (!list?.id || !tenantId) return;
-
-    setLoadingCards(true);
-    console.log(`ListView: Fetching cards for list ID: ${list.id}`);
-    try {
-      const response = await api.get(`/lists/${list.id}/cards`);
-      const fetchedCards = Array.isArray(response.data) ? response.data : response.data.data || [];
-      setCards(fetchedCards.sort((a, b) => a.order - b.order));
-      console.log(`ListView: Cards fetched successfully for list ID: ${list.id}`);
-    } catch (error) {
-      console.error(`ListView: Error fetching cards for list ID: ${list.id}`, error);
-      setParentSnack({ open: true, message: "Error al cargar las tarjetas.", severity: "error" });
-    } finally {
-      setLoadingCards(false);
+  const { setNodeRef, isOver } = useDroppable({
+    id: list.id,
+    data: {
+        type: 'List',
+        listId: list.id,
     }
-  }, [list?.id, tenantId, setParentSnack]);
+  });
 
-  useEffect(() => {
-    console.log("ListView: useEffect running. List ID:", list?.id);
-    fetchCards();
-  }, [fetchCards]);
 
   const handleOpenCardDialog = (card = null) => {
     setEditingCard(card);
     setCardTitle(card ? card.title : "");
     setCardDescription(card ? (card.description || "") : "");
-    // Si hay una fecha, convertirla a un objeto dayjs
     setCardDueDate(card && card.due_date ? dayjs(card.due_date) : null);
     setOpenAddCardDialog(true);
   };
@@ -665,7 +858,7 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
     setEditingCard(null);
     setCardTitle("");
     setCardDescription("");
-    setCardDueDate(null); // Restablecer a null para el DatePicker
+    setCardDueDate(null);
   };
 
   const handleSaveCard = async (e) => {
@@ -675,12 +868,10 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
       return;
     }
 
-    setLoadingCards(true);
     try {
       const cardData = {
         title: cardTitle,
         description: cardDescription,
-        // Convertir el objeto dayjs a formato ISO 8601 string para el backend
         due_date: cardDueDate ? cardDueDate.format('YYYY-MM-DD') : null,
         list_id: list.id,
         status: 'todo',
@@ -694,32 +885,28 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
         res = await api.post(`/lists/${list.id}/cards`, cardData);
         setParentSnack({ open: true, message: "Tarjeta creada.", severity: "success" });
       }
-      await fetchCards();
+      await refreshLists();
       handleCloseCardDialog();
     } catch (err) {
       console.error("Error al guardar tarjeta:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       setParentSnack({ open: true, message: "Error al guardar tarjeta: " + errorMessage, severity: "error" });
-    } finally {
-      setLoadingCards(false);
     }
   };
 
   const handleDeleteCardConfirm = useCallback(async (cardToDelete) => {
-    setLoadingCards(true);
     try {
       await api.delete(`/cards/${cardToDelete.id}`);
       setParentSnack({ open: true, message: "Tarjeta eliminada.", severity: "info" });
-      await fetchCards();
+      await refreshLists();
     } catch (err) {
       console.error("Error al eliminar tarjeta:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       setParentSnack({ open: true, message: "Error al eliminar tarjeta: " + errorMessage, severity: "error" });
     } finally {
-      setLoadingCards(false);
       setParentConfirmDialogOpen(false);
     }
-  }, [fetchCards, setParentSnack, setParentConfirmDialogOpen]);
+  }, [refreshLists, setParentSnack, setParentConfirmDialogOpen]);
 
   const handleDeleteCardClick = (cardToDelete) => {
     setParentConfirmDialog({
@@ -752,20 +939,25 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
         </IconButton>
       </Box>
       <Divider sx={{ mb: 1.5 }} />
-      <Box sx={{ maxHeight: 'calc(100vh - 250px)', overflowY: 'auto', pr: 1 }}>
-        {loadingCards ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={24} />
-          </Box>
-        ) : (
-          cards.map(card => (
-            <CardView
-              key={card.id}
-              card={card}
-              handleEdit={handleOpenCardDialog}
-              handleDelete={handleDeleteCardClick}
-            />
-          ))
+      <Box
+        ref={setNodeRef}
+        sx={{
+          maxHeight: 'calc(100vh - 250px)',
+          overflowY: 'auto',
+          pr: 1,
+          bgcolor: isOver ? '#e0f2f7' : 'transparent',
+          minHeight: list.cards.length === 0 ? '80px' : 'auto',
+          transition: 'background-color 0.2s ease',
+          pb: 1,
+        }}
+      >
+        {list.cards.map((card) => (
+          <CardItem key={card.id} card={card} handleEdit={handleOpenCardDialog} handleDelete={handleDeleteCardClick} />
+        ))}
+        {list.cards.length === 0 && !isOver && (
+          <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+            Arrastra tarjetas aquí o añade una nueva.
+          </Typography>
         )}
       </Box>
       <Button
@@ -778,12 +970,10 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
         Añadir una tarjeta
       </Button>
 
-      {/* Dialogo para Crear/Editar Tarjeta */}
       <Dialog open={openAddCardDialog} onClose={handleCloseCardDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{editingCard ? "Editar Tarjeta" : "Crear Nueva Tarjeta"}</DialogTitle>
         <form onSubmit={handleSaveCard}>
           <DialogContent
-            // El overflow visible es especialmente útil para MUI X DatePicker si se renderiza en un portal o superposición
             sx={{ overflow: 'visible' }}
           >
             <TextField
@@ -793,7 +983,7 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
               fullWidth
               required
               sx={{ mt: 1, mb: 2 }}
-              disabled={loadingCards}
+              disabled={false}
             />
             <TextField
               label="Descripción"
@@ -803,31 +993,29 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
               multiline
               rows={3}
               sx={{ mb: 2 }}
-              disabled={loadingCards}
+              disabled={false}
             />
-            {/* --- Integración de DatePicker de MUI X --- */}
             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
               <DatePicker
                 label="Fecha de Vencimiento"
-                value={cardDueDate} // cardDueDate ahora es un objeto dayjs o null
+                value={cardDueDate}
                 onChange={(newValue) => {
-                  setCardDueDate(newValue); // newValue es un objeto dayjs o null
+                  setCardDueDate(newValue);
                 }}
                 slotProps={{
                     textField: {
                         fullWidth: true,
                         sx: { mb: 2 },
-                        disabled: loadingCards,
+                        disabled: false,
                     }
                 }}
               />
             </LocalizationProvider>
-            {/* --- Fin Integración de DatePicker de MUI X --- */}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseCardDialog} disabled={loadingCards}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={loadingCards || !cardTitle.trim()}>
-              {loadingCards ? <CircularProgress size={24} /> : (editingCard ? "Guardar Cambios" : "Crear Tarjeta")}
+            <Button onClick={handleCloseCardDialog} disabled={false}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={false || !cardTitle.trim()}>
+              {false ? <CircularProgress size={24} /> : (editingCard ? "Guardar Cambios" : "Crear Tarjeta")}
             </Button>
           </DialogActions>
         </form>
@@ -837,21 +1025,48 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
 };
 
 
-// --- Componente: CardView (Representa una tarjeta/tarea) ---
-const CardView = ({ card, handleEdit, handleDelete }) => {
+// --- Componente CardItem (La tarjeta arrastrable y reordenable) ---
+const CardItem = ({ card, handleEdit, handleDelete }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: card.id,
+    data: {
+      type: 'Card',
+      card: card,
+    },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 9999 : 'auto',
+    marginBottom: '12px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    backgroundColor: 'white',
+    padding: '12px',
+    cursor: isDragging ? 'grabbing' : 'grab',
+  };
+
   return (
-    <Paper
-      sx={{
-        p: 1.5,
-        mb: 1.5,
-        bgcolor: '#fff',
-        borderRadius: 1.5,
-        boxShadow: '0 1px 0 rgba(9,30,66,.25)',
-        cursor: 'pointer',
-        '&:hover': { bgcolor: '#f0f0f0' },
-        position: 'relative'
-      }}
-    >
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <CardContent card={card} handleEdit={handleEdit} handleDelete={handleDelete} />
+    </div>
+  );
+};
+
+
+// --- Componente: CardContent (Solo el contenido visual de la tarjeta) ---
+const CardContent = ({ card, handleEdit, handleDelete }) => {
+  return (
+    <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Typography variant="body1" sx={{ fontWeight: 500, color: '#333', flexGrow: 1, pr: 1 }}>
           {card.title}
@@ -890,8 +1105,9 @@ const CardView = ({ card, handleEdit, handleDelete }) => {
           </Typography>
         </Box>
       )}
-    </Paper>
+    </Box>
   );
 };
 
+// Exporta CalendarPage como componente principal
 export default CalendarPage;
