@@ -15,6 +15,41 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import GroupIcon from '@mui/icons-material/Group'; // Icono para "Tus tableros"
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'; // Icono para volver
 
+// --- Importaciones para MUI X Date Pickers ---
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es'; // Importar la localización para español (opcional, pero recomendado)
+
+
+// --- Componente de Diálogo de Confirmación Genérico ---
+const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
+  return (
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      aria-labelledby="alert-dialog-title"
+      aria-describedby="alert-dialog-description"
+    >
+      <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
+      <DialogContent>
+        <Typography id="alert-dialog-description">
+          {message}
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel} color="primary">
+          Cancelar
+        </Button>
+        <Button onClick={onConfirm} color="error" autoFocus>
+          Confirmar
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 
 // --- Componente principal del Módulo de Calendario ---
 const CalendarPage = ({ tenantId, isAppReady }) => {
@@ -27,10 +62,13 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
   const [boardDescription, setBoardDescription] = useState("");
   const [editingBoard, setEditingBoard] = useState(null);
 
-  // Nuevo estado para controlar qué tablero se está visualizando en detalle
   const [viewingBoardId, setViewingBoardId] = useState(null);
-  // El tablero seleccionado actualmente para pasar a BoardView
   const selectedBoard = boards.find(board => board.id === viewingBoardId);
+
+  // Estados para el diálogo de confirmación
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
+
 
   // --- Fetch Boards ---
   const fetchBoards = useCallback(async () => {
@@ -47,11 +85,9 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
       setBoards(fetchedBoards);
       console.log("CalendarPage: Boards fetched successfully. Total:", fetchedBoards.length);
 
-      // Si no hay tableros y se está intentando ver uno, resetear la vista
       if (fetchedBoards.length === 0 && viewingBoardId) {
           setViewingBoardId(null);
       } else if (viewingBoardId && !fetchedBoards.some(b => b.id === viewingBoardId)) {
-          // Si el tablero que se estaba viendo fue eliminado, volver a la selección
           setViewingBoardId(null);
       }
 
@@ -61,9 +97,8 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, isAppReady, viewingBoardId]); // viewingBoardId es una dependencia aquí para que fetchBoards se reactive si el ID de visualización cambia y necesita revalidar el tablero.
+  }, [tenantId, isAppReady, viewingBoardId]);
 
-  // Este useEffect para llamar a fetchBoards solo cuando tenantId o isAppReady cambian
   useEffect(() => {
     console.log("CalendarPage: Initial useEffect running. Boards count:", boards.length, "Is app ready:", isAppReady);
     if (tenantId && isAppReady) {
@@ -109,7 +144,6 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
       } else {
         res = await api.post("/boards", boardData);
         setSnack({ open: true, message: "Tablero creado.", severity: "success" });
-        // Después de crear un tablero, lo seleccionamos para visualizarlo
         setViewingBoardId(res.data.id);
       }
       await fetchBoards();
@@ -123,8 +157,8 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
     }
   };
 
-  const handleDeleteBoard = async (boardToDelete) => {
-    if (!window.confirm(`¿Estás seguro de eliminar el tablero "${boardToDelete.name}"? Esto también eliminará todas sus listas y tarjetas.`)) return;
+  // Función para manejar la confirmación de eliminación de tablero
+  const handleDeleteBoardConfirm = useCallback(async (boardToDelete) => {
     setLoading(true);
     try {
       await api.delete(`/boards/${boardToDelete.id}`);
@@ -137,21 +171,30 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
       setSnack({ open: true, message: "Error al eliminar tablero: " + errorMessage, severity: "error" });
     } finally {
       setLoading(false);
+      setConfirmDialogOpen(false); // Cerrar el diálogo de confirmación
     }
+  }, [fetchBoards]);
+
+  // Handler para abrir el diálogo de confirmación para eliminar un tablero
+  const handleDeleteBoardClick = (boardToDelete) => {
+    setConfirmDialogData({
+      title: "Confirmar Eliminación",
+      message: `¿Estás seguro de eliminar el tablero "${boardToDelete.name}"? Esto también eliminará todas sus listas y tarjetas.`,
+      onConfirm: () => handleDeleteBoardConfirm(boardToDelete),
+    });
+    setConfirmDialogOpen(true);
   };
 
-  // Función para manejar el clic en una tarjeta de tablero
+
   const handleBoardCardClick = (boardId) => {
       setViewingBoardId(boardId);
   };
 
-  // Función para volver a la selección de tableros
   const handleBackToBoardSelection = () => {
       setViewingBoardId(null);
   };
 
 
-  // Si estamos en la vista de un tablero específico
   if (viewingBoardId && selectedBoard) {
     return (
       <Box sx={{ p: { xs: 2, sm: 3 } }}>
@@ -165,7 +208,7 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
           <Typography variant="body1" color="text.secondary" sx={{ ml: { sm: 2 } }}>
             {selectedBoard.description || "Sin descripción."}
           </Typography>
-          <Box sx={{ flexGrow: 1 }} /> {/* Espaciador */}
+          <Box sx={{ flexGrow: 1 }} />
           <Button
             variant="outlined"
             startIcon={<EditIcon />}
@@ -178,14 +221,19 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
             variant="outlined"
             color="error"
             startIcon={<DeleteIcon />}
-            onClick={() => handleDeleteBoard(selectedBoard)}
+            onClick={() => handleDeleteBoardClick(selectedBoard)}
             sx={{ borderRadius: 2 }}
           >
             Eliminar Tablero
           </Button>
         </Box>
-        {/* Contenedor principal para las Listas (Columnas) */}
-        <BoardView board={selectedBoard} fetchBoards={fetchBoards} tenantId={tenantId} />
+        <BoardView
+          board={selectedBoard}
+          tenantId={tenantId}
+          setParentSnack={setSnack}
+          setParentConfirmDialog={setConfirmDialogData}
+          setParentConfirmDialogOpen={setConfirmDialogOpen}
+        />
 
         <Snackbar
             open={snack.open}
@@ -198,7 +246,6 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
             </Alert>
         </Snackbar>
 
-        {/* Diálogo para Crear/Editar Tablero (se sigue usando el mismo) */}
         <Dialog open={openBoardDialog} onClose={handleCloseBoardDialog} maxWidth="sm" fullWidth>
             <DialogTitle>{editingBoard ? "Editar Tablero" : "Crear Nuevo Tablero"}</DialogTitle>
             <form onSubmit={handleSaveBoard}>
@@ -233,11 +280,17 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
                 </DialogActions>
             </form>
         </Dialog>
+        <ConfirmationDialog
+            open={confirmDialogOpen}
+            title={confirmDialogData.title}
+            message={confirmDialogData.message}
+            onConfirm={confirmDialogData.onConfirm}
+            onCancel={() => setConfirmDialogOpen(false)}
+        />
       </Box>
     );
   }
 
-  // Vista de selección de tableros
   return (
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
@@ -275,7 +328,6 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
         </Alert>
       </Snackbar>
 
-      {/* Diálogo para Crear/Editar Tablero (se sigue usando el mismo) */}
       <Dialog open={openBoardDialog} onClose={handleCloseBoardDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{editingBoard ? "Editar Tablero" : "Crear Nuevo Tablero"}</DialogTitle>
         <form onSubmit={handleSaveBoard}>
@@ -310,6 +362,13 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
           </DialogActions>
         </form>
       </Dialog>
+      <ConfirmationDialog
+            open={confirmDialogOpen}
+            title={confirmDialogData.title}
+            message={confirmDialogData.message}
+            onConfirm={confirmDialogData.onConfirm}
+            onCancel={() => setConfirmDialogOpen(false)}
+        />
     </Box>
   );
 };
@@ -317,7 +376,6 @@ const CalendarPage = ({ tenantId, isAppReady }) => {
 
 // --- Componente de Tarjeta de Tablero (Para mostrar en la selección) ---
 const BoardCard = ({ board, onClick }) => {
-  // Generar un color aleatorio basado en el ID del tablero para consistencia
   const getColor = (id) => {
     let hash = 0;
     for (let i = 0; i < id.length; i++) {
@@ -331,7 +389,7 @@ const BoardCard = ({ board, onClick }) => {
     return color;
   };
 
-  const randomColor = getColor(board.id); // Color de fondo de la tarjeta
+  const randomColor = getColor(board.id);
 
   return (
     <Paper
@@ -345,7 +403,7 @@ const BoardCard = ({ board, onClick }) => {
         justifyContent: 'space-between',
         p: 2,
         cursor: 'pointer',
-        color: '#fff', // Texto blanco para contraste
+        color: '#fff',
         fontWeight: 600,
         boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
         transition: 'transform 0.2s, box-shadow 0.2s',
@@ -369,7 +427,7 @@ const CreateBoardCard = ({ onClick }) => {
       onClick={onClick}
       sx={{
         height: 120,
-        backgroundColor: '#f0f0f0', // Fondo claro
+        backgroundColor: '#f0f0f0',
         borderRadius: 2,
         display: 'flex',
         flexDirection: 'column',
@@ -379,7 +437,7 @@ const CreateBoardCard = ({ onClick }) => {
         cursor: 'pointer',
         color: '#666',
         fontWeight: 600,
-        border: '2px dashed #ccc', // Borde punteado
+        border: '2px dashed #ccc',
         boxShadow: 'none',
         transition: 'transform 0.2s, background-color 0.2s',
         '&:hover': {
@@ -398,10 +456,9 @@ const CreateBoardCard = ({ onClick }) => {
 
 
 // --- Componente: BoardView (Representa un tablero de Trello) ---
-const BoardView = ({ board, fetchBoards, tenantId }) => {
+const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen }) => {
   const [lists, setLists] = useState([]);
   const [loadingLists, setLoadingLists] = useState(false);
-  const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
 
   const [openAddListDialog, setOpenAddListDialog] = useState(false);
   const [listName, setListName] = useState("");
@@ -414,19 +471,18 @@ const BoardView = ({ board, fetchBoards, tenantId }) => {
     try {
       const response = await api.get(`/boards/${board.id}/lists`);
       const fetchedLists = Array.isArray(response.data) ? response.data : response.data.data || [];
-      // Ordenar listas por el campo 'order'
       setLists(fetchedLists.sort((a, b) => a.order - b.order));
       console.log(`BoardView: Lists fetched successfully for board ID: ${board.id}`);
     } catch (error) {
-      console.error(`BoardView: Error fetching lists for board ID: ${board.id}`, error); 
-      setSnack({ open: true, message: "Error al cargar las listas.", severity: "error" });
+      console.error(`BoardView: Error fetching lists for board ID: ${board.id}`, error);
+      setParentSnack({ open: true, message: "Error al cargar las listas.", severity: "error" });
     } finally {
       setLoadingLists(false);
     }
-  }, [board?.id, tenantId]);
+  }, [board?.id, tenantId, setParentSnack]);
 
   useEffect(() => {
-    console.log("BoardView: useEffect running. Board ID:", board?.id); 
+    console.log("BoardView: useEffect running. Board ID:", board?.id);
     fetchLists();
   }, [fetchLists]);
 
@@ -445,66 +501,83 @@ const BoardView = ({ board, fetchBoards, tenantId }) => {
     setLoadingLists(true);
     try {
       await api.post(`/boards/${board.id}/lists`, { name: listName });
-      setSnack({ open: true, message: "Lista creada.", severity: "success" });
+      setParentSnack({ open: true, message: "Lista creada.", severity: "success" });
       handleCloseAddListDialog();
-      await fetchLists(); // Recarga las listas para ver la nueva
+      await fetchLists();
     } catch (err) {
       console.error("Error al crear lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setSnack({ open: true, message: "Error al crear lista: " + errorMessage, severity: "error" });
+      setParentSnack({ open: true, message: "Error al crear lista: " + errorMessage, severity: "error" });
     } finally {
       setLoadingLists(false);
     }
   };
 
-  const handleDeleteList = async (listToDelete) => {
-    if (!window.confirm(`¿Eliminar la lista "${listToDelete.name}" y todas sus tarjetas?`)) return;
+  const handleDeleteListConfirm = useCallback(async (listToDelete) => {
     setLoadingLists(true);
     try {
       await api.delete(`/lists/${listToDelete.id}`);
-      setSnack({ open: true, message: "Lista eliminada.", severity: "info" });
-      await fetchLists(); // Recargar listas
+      setParentSnack({ open: true, message: "Lista eliminada.", severity: "info" });
+      await fetchLists();
     } catch (err) {
       console.error("Error al eliminar lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setSnack({ open: true, message: "Error al eliminar lista: " + errorMessage, severity: "error" });
+      setParentSnack({ open: true, message: "Error al eliminar lista: " + errorMessage, severity: "error" });
     } finally {
       setLoadingLists(false);
+      setParentConfirmDialogOpen(false);
     }
+  }, [fetchLists, setParentSnack, setParentConfirmDialogOpen]);
+
+  const handleDeleteListClick = (listToDelete) => {
+    setParentConfirmDialog({
+      title: "Confirmar Eliminación de Lista",
+      message: `¿Eliminar la lista "${listToDelete.name}" y todas sus tarjetas?`,
+      onConfirm: () => handleDeleteListConfirm(listToDelete),
+    });
+    setParentConfirmDialogOpen(true);
   };
 
 
-  if (!board) return null; // No renderizar si no hay tablero seleccionado
+  if (!board) return null;
 
   return (
     <Box
       sx={{
         display: 'flex',
-        overflowX: 'auto', // Permite scroll horizontal para las listas
+        overflowX: 'auto',
         gap: 2,
-        pb: 2, // Padding inferior para el scrollbar
-        alignItems: 'flex-start', // Alinea las listas en la parte superior
-        minHeight: '200px' // Altura mínima para que el scroll horizontal se vea
+        pb: 2,
+        alignItems: 'flex-start',
+        minHeight: '200px'
       }}
     >
-      {loadingLists ? ( // Aquí es loadingLists, no loadingCards
+      {loadingLists ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', py: 2 }}>
           <CircularProgress size={24} />
         </Box>
       ) : (
         <>
-          {lists.map((list) => ( // Iterar sobre las 'lists' que están en el estado de BoardView
-            <ListView key={list.id} list={list} tenantId={tenantId} refreshLists={fetchLists} handleDeleteList={handleDeleteList} />
+          {lists.map((list) => (
+            <ListView
+              key={list.id}
+              list={list}
+              tenantId={tenantId}
+              refreshLists={fetchLists}
+              handleDeleteList={handleDeleteListClick}
+              setParentSnack={setParentSnack}
+              setParentConfirmDialog={setParentConfirmDialog}
+              setParentConfirmDialogOpen={setParentConfirmDialogOpen}
+            />
           ))}
-          {/* Botón para añadir una nueva lista */}
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={handleOpenAddListDialog} // Este es el handle para el diálogo de añadir lista
+            onClick={handleOpenAddListDialog}
             sx={{
-              minWidth: 280, // Ancho fijo para la columna de añadir lista
+              minWidth: 280,
               height: 50,
-              flexShrink: 0, // No permitir que se encoja
+              flexShrink: 0,
               bgcolor: '#e0e0e0',
               color: '#444',
               '&:hover': { bgcolor: '#d0d0d0' },
@@ -516,7 +589,6 @@ const BoardView = ({ board, fetchBoards, tenantId }) => {
         </>
       )}
 
-      {/* Dialogo para Añadir Nueva Lista */}
       <Dialog open={openAddListDialog} onClose={handleCloseAddListDialog} maxWidth="xs" fullWidth>
         <DialogTitle>Añadir Nueva Lista</DialogTitle>
         <form onSubmit={handleAddList}>
@@ -533,38 +605,27 @@ const BoardView = ({ board, fetchBoards, tenantId }) => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseAddListDialog} disabled={loadingLists}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={loadingLists || !listName}>
+            <Button type="submit" variant="contained" disabled={loadingLists || !listName.trim()}>
               {loadingLists ? <CircularProgress size={24} /> : "Crear Lista"}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
-
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={4000}
-        onClose={() => setSnack({ ...snack, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })}>
-          {snack.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };
 
 
 // --- Componente: ListView (Representa una lista de Trello) ---
-const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
+const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen }) => {
   const [cards, setCards] = useState([]);
   const [loadingCards, setLoadingCards] = useState(false);
-  const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
 
   const [openAddCardDialog, setOpenAddCardDialog] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
   const [cardDescription, setCardDescription] = useState("");
-  const [cardDueDate, setCardDueDate] = useState("");
+  // Estado para la fecha de vencimiento, ahora como objeto dayjs o null
+  const [cardDueDate, setCardDueDate] = useState(null);
   const [editingCard, setEditingCard] = useState(null);
 
   const fetchCards = useCallback(async () => {
@@ -579,11 +640,11 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
       console.log(`ListView: Cards fetched successfully for list ID: ${list.id}`);
     } catch (error) {
       console.error(`ListView: Error fetching cards for list ID: ${list.id}`, error);
-      setSnack({ open: true, message: "Error al cargar las tarjetas.", severity: "error" });
+      setParentSnack({ open: true, message: "Error al cargar las tarjetas.", severity: "error" });
     } finally {
       setLoadingCards(false);
     }
-  }, [list?.id, tenantId]);
+  }, [list?.id, tenantId, setParentSnack]);
 
   useEffect(() => {
     console.log("ListView: useEffect running. List ID:", list?.id);
@@ -594,7 +655,8 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
     setEditingCard(card);
     setCardTitle(card ? card.title : "");
     setCardDescription(card ? (card.description || "") : "");
-    setCardDueDate(card && card.due_date ? card.due_date.split('T')[0] : ""); // FormatoISO-MM-DD
+    // Si hay una fecha, convertirla a un objeto dayjs
+    setCardDueDate(card && card.due_date ? dayjs(card.due_date) : null);
     setOpenAddCardDialog(true);
   };
 
@@ -603,13 +665,13 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
     setEditingCard(null);
     setCardTitle("");
     setCardDescription("");
-    setCardDueDate("");
+    setCardDueDate(null); // Restablecer a null para el DatePicker
   };
 
   const handleSaveCard = async (e) => {
     e.preventDefault();
     if (!cardTitle.trim()) {
-      setSnack({ open: true, message: "El título de la tarjeta es obligatorio.", severity: "warning" });
+      setParentSnack({ open: true, message: "El título de la tarjeta es obligatorio.", severity: "warning" });
       return;
     }
 
@@ -618,45 +680,56 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
       const cardData = {
         title: cardTitle,
         description: cardDescription,
-        due_date: cardDueDate || null,
+        // Convertir el objeto dayjs a formato ISO 8601 string para el backend
+        due_date: cardDueDate ? cardDueDate.format('YYYY-MM-DD') : null,
         list_id: list.id,
-        status: 'todo', // <-- ¡¡¡CORRECCIÓN CLAVE: Añadir estado por defecto!!!
+        status: 'todo',
       };
 
       let res;
       if (editingCard) {
         res = await api.put(`/cards/${editingCard.id}`, cardData);
-        setSnack({ open: true, message: "Tarjeta actualizada.", severity: "success" });
+        setParentSnack({ open: true, message: "Tarjeta actualizada.", severity: "success" });
       } else {
         res = await api.post(`/lists/${list.id}/cards`, cardData);
-        setSnack({ open: true, message: "Tarjeta creada.", severity: "success" });
+        setParentSnack({ open: true, message: "Tarjeta creada.", severity: "success" });
       }
       await fetchCards();
       handleCloseCardDialog();
     } catch (err) {
       console.error("Error al guardar tarjeta:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setSnack({ open: true, message: "Error al guardar tarjeta: " + errorMessage, severity: "error" });
+      setParentSnack({ open: true, message: "Error al guardar tarjeta: " + errorMessage, severity: "error" });
     } finally {
       setLoadingCards(false);
     }
   };
 
-  const handleDeleteCard = async (cardToDelete) => {
-    if (!window.confirm(`¿Eliminar la tarjeta "${cardToDelete.title}"?`)) return;
+  const handleDeleteCardConfirm = useCallback(async (cardToDelete) => {
     setLoadingCards(true);
     try {
       await api.delete(`/cards/${cardToDelete.id}`);
-      setSnack({ open: true, message: "Tarjeta eliminada.", severity: "info" });
+      setParentSnack({ open: true, message: "Tarjeta eliminada.", severity: "info" });
       await fetchCards();
     } catch (err) {
       console.error("Error al eliminar tarjeta:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setSnack({ open: true, message: "Error al eliminar tarjeta: " + errorMessage, severity: "error" });
+      setParentSnack({ open: true, message: "Error al eliminar tarjeta: " + errorMessage, severity: "error" });
     } finally {
       setLoadingCards(false);
+      setParentConfirmDialogOpen(false);
     }
+  }, [fetchCards, setParentSnack, setParentConfirmDialogOpen]);
+
+  const handleDeleteCardClick = (cardToDelete) => {
+    setParentConfirmDialog({
+      title: "Confirmar Eliminación de Tarjeta",
+      message: `¿Eliminar la tarjeta "${cardToDelete.title}"?`,
+      onConfirm: () => handleDeleteCardConfirm(cardToDelete),
+    });
+    setParentConfirmDialogOpen(true);
   };
+
 
   return (
     <Paper
@@ -686,7 +759,12 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
           </Box>
         ) : (
           cards.map(card => (
-            <CardView key={card.id} card={card} handleEdit={handleOpenCardDialog} handleDelete={handleDeleteCard} />
+            <CardView
+              key={card.id}
+              card={card}
+              handleEdit={handleOpenCardDialog}
+              handleDelete={handleDeleteCardClick}
+            />
           ))
         )}
       </Box>
@@ -704,7 +782,10 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
       <Dialog open={openAddCardDialog} onClose={handleCloseCardDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{editingCard ? "Editar Tarjeta" : "Crear Nueva Tarjeta"}</DialogTitle>
         <form onSubmit={handleSaveCard}>
-          <DialogContent>
+          <DialogContent
+            // El overflow visible es especialmente útil para MUI X DatePicker si se renderiza en un portal o superposición
+            sx={{ overflow: 'visible' }}
+          >
             <TextField
               label="Título de la Tarjeta"
               value={cardTitle}
@@ -724,16 +805,24 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
               sx={{ mb: 2 }}
               disabled={loadingCards}
             />
-            <TextField
-              label="Fecha de Vencimiento"
-              type="date"
-              value={cardDueDate}
-              onChange={e => setCardDueDate(e.target.value)}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2 }}
-              disabled={loadingCards}
-            />
+            {/* --- Integración de DatePicker de MUI X --- */}
+            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
+              <DatePicker
+                label="Fecha de Vencimiento"
+                value={cardDueDate} // cardDueDate ahora es un objeto dayjs o null
+                onChange={(newValue) => {
+                  setCardDueDate(newValue); // newValue es un objeto dayjs o null
+                }}
+                slotProps={{
+                    textField: {
+                        fullWidth: true,
+                        sx: { mb: 2 },
+                        disabled: loadingCards,
+                    }
+                }}
+              />
+            </LocalizationProvider>
+            {/* --- Fin Integración de DatePicker de MUI X --- */}
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseCardDialog} disabled={loadingCards}>Cancelar</Button>
@@ -743,17 +832,6 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
           </DialogActions>
         </form>
       </Dialog>
-
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={4000}
-        onClose={() => setSnack({ ...snack, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })}>
-          {snack.message}
-        </Alert>
-      </Snackbar>
     </Paper>
   );
 };
