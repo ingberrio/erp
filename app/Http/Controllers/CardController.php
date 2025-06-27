@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Card;
 use App\Models\LList; // Using LList for the model
 use App\Models\Board;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 
@@ -17,13 +18,12 @@ class CardController extends Controller
      */
     public function index(Request $request, LList $list)
     {
-        // Ensure the list's board belongs to the current tenant and user (security check)
-        $board = Board::where('id', $list->board_id)
-                      ->where('tenant_id', $request->header('X-Tenant-ID'))
-                      ->where('user_id', $request->user()->id)
-                      ->first();
-        if (!$board) {
-            abort(403, 'Unauthorized access to this list\'s cards.');
+        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la lista pertenezca al tenant ---
+        // Se asume que el modelo List ya tiene el BelongsToTenant scope
+        // y que el list ID en la URL ya fue resuelto por Laravel bajo el tenant del usuario.
+        // Verificamos explícitamente que la lista y su tablero pertenezcan al tenant del request.
+        if ($list->tenant_id != $request->header('X-Tenant-ID') || $list->board->tenant_id != $request->header('X-Tenant-ID')) {
+            abort(403, 'Unauthorized access to this list\'s cards: List or board tenant mismatch.');
         }
 
         try {
@@ -50,13 +50,19 @@ class CardController extends Controller
      */
     public function store(Request $request, LList $list)
     {
-        // Ensure the list's board belongs to the current tenant and user (security check)
-        $board = Board::where('id', $list->board_id)
-                      ->where('tenant_id', $request->header('X-Tenant-ID'))
-                      ->where('user_id', $request->user()->id)
-                      ->first();
-        if (!$board) {
-            abort(403, 'Unauthorized to create card on this list.');
+        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la lista pertenezca al tenant ---
+        Log::info('CardController@store: Verificando acceso a lista', [
+            'list_id_resolved' => $list->id,
+            'list_tenant_id' => $list->tenant_id,
+            'list_board_tenant_id' => $list->board->tenant_id,
+            'request_x_tenant_id' => $request->header('X-Tenant-ID'),
+            'user_id' => $request->user() ? $request->user()->id : 'N/A (No autenticado)',
+            'user_tenant_id_from_user_model' => $request->user() ? $request->user()->tenant_id : 'N/A (No autenticado)',
+            'request_data' => $request->all(), // !!! LOG ADICIONAL PARA VER DATOS DE ENTRADA !!!
+        ]);
+
+        if ($list->tenant_id != $request->header('X-Tenant-ID') || $list->board->tenant_id != $request->header('X-Tenant-ID')) {
+            abort(403, 'Unauthorized to create card on this list: List or board tenant mismatch.');
         }
 
         try {
@@ -64,13 +70,16 @@ class CardController extends Controller
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string|max:1000',
                 'due_date' => 'nullable|date',
-                'status' => 'required|string|in:todo,in_progress,done', // Basic statuses
+                // 'status' es obligatorio y debe ser uno de los valores definidos
+                'status' => 'required|string|in:todo,in_progress,done',
                 'order' => 'integer|min:0', // Optional: frontend can suggest an order
                 'user_id' => 'nullable|exists:users,id', // User assigned to the card
             ]);
 
             // Determine the next order if not provided
-            $maxOrder = Card::where('list_id', $list->id)->max('order');
+            $maxOrder = Card::where('list_id', $list->id)
+                            ->where('tenant_id', $request->header('X-Tenant-ID')) // Filtrar por tenant para el orden
+                            ->max('order');
             $order = $validated['order'] ?? ($maxOrder !== null ? $maxOrder + 1 : 0);
 
             $card = Card::create([
@@ -82,7 +91,7 @@ class CardController extends Controller
                 'list_id' => $list->id,
                 'board_id' => $list->board_id, // Inherit board_id from list
                 'tenant_id' => $request->header('X-Tenant-ID'), // Inherit tenant from board/list
-                'user_id' => $validated['user_id'] ?? null, // Assign the user if provided
+                'user_id' => $validated['user_id'] ?? $request->user()->id, // Asignar al usuario actual si no se provee
             ]);
 
             Log::info('Card created successfully.', ['card_id' => $card->id, 'list_id' => $list->id, 'tenant_id' => $card->tenant_id]);
@@ -90,6 +99,7 @@ class CardController extends Controller
             return response()->json($card, 201);
         } catch (ValidationException $e) {
             Log::error('Validation failed during card store', ['errors' => $e->errors()]);
+            // Devolver los detalles del error de validación para depuración en el frontend
             return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
         } catch (\Throwable $e) {
             Log::error('Unexpected error during card store', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
@@ -103,13 +113,9 @@ class CardController extends Controller
      */
     public function show(Request $request, Card $card)
     {
-        // Ensure the card belongs to the current tenant and its board belongs to the current user
-        $board = Board::where('id', $card->board_id)
-                      ->where('tenant_id', $request->header('X-Tenant-ID'))
-                      ->where('user_id', $request->user()->id)
-                      ->first();
-        if (!$board) {
-            abort(403, 'Unauthorized access to this card.');
+        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la tarjeta pertenezca al tenant ---
+        if ($card->tenant_id != $request->header('X-Tenant-ID') || $card->board->tenant_id != $request->header('X-Tenant-ID')) {
+            abort(403, 'Unauthorized access to this card: Card or board tenant mismatch.');
         }
 
         return response()->json($card);
@@ -121,13 +127,9 @@ class CardController extends Controller
      */
     public function update(Request $request, Card $card)
     {
-        // Ensure the card belongs to the current tenant and its board belongs to the current user
-        $board = Board::where('id', $card->board_id)
-                      ->where('tenant_id', $request->header('X-Tenant-ID'))
-                      ->where('user_id', $request->user()->id)
-                      ->first();
-        if (!$board) {
-            abort(403, 'Unauthorized to update this card.');
+        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la tarjeta pertenezca al tenant ---
+        if ($card->tenant_id != $request->header('X-Tenant-ID') || $card->board->tenant_id != $request->header('X-Tenant-ID')) {
+            abort(403, 'Unauthorized to update this card: Card or board tenant mismatch.');
         }
 
         try {
@@ -140,8 +142,9 @@ class CardController extends Controller
                 'list_id' => [ // Allows moving card to another list
                     'required',
                     'exists:lists,id',
+                    // Asegurarse de que la lista destino esté dentro del mismo tablero Y tenant
                     Rule::exists('lists', 'id')->where(function ($query) use ($card, $request) {
-                        return $query->where('board_id', $card->board_id) // Must be in the same board
+                        return $query->where('board_id', $card->board_id)
                                      ->where('tenant_id', $request->header('X-Tenant-ID'));
                     }),
                 ],
@@ -176,13 +179,9 @@ class CardController extends Controller
      */
     public function destroy(Request $request, Card $card)
     {
-        // Ensure the card belongs to the current tenant and its board belongs to the current user
-        $board = Board::where('id', $card->board_id)
-                      ->where('tenant_id', $request->header('X-Tenant-ID'))
-                      ->where('user_id', $request->user()->id)
-                      ->first();
-        if (!$board) {
-            abort(403, 'Unauthorized to delete this card.');
+        // --- CORRECCIÓN CLAVE AQUÍ: Solo verificar que la tarjeta pertenezca al tenant ---
+        if ($card->tenant_id != $request->header('X-Tenant-ID') || $card->board->tenant_id != $request->header('X-Tenant-ID')) {
+            abort(403, 'Unauthorized to delete this card: Card or board tenant mismatch.');
         }
 
         try {
@@ -223,13 +222,12 @@ class CardController extends Controller
             $newOrder = $validated['new_order'];
 
             // Ensure the target list belongs to the same board as the original card's board,
-            // and that board belongs to the current user and tenant.
+            // and that board belongs to the current tenant.
             $board = Board::where('id', $card->board_id)
                           ->where('tenant_id', $tenantId)
-                          ->where('user_id', $request->user()->id)
-                          ->first();
+                          ->first(); // Quitado user_id para permitir colaboración de tenant
             if (!$board) {
-                abort(403, 'Unauthorized to reorder cards on this board.');
+                abort(403, 'Unauthorized to reorder cards on this board: Board tenant mismatch.');
             }
 
             // Begin transaction for reordering

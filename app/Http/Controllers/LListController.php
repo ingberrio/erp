@@ -17,9 +17,19 @@ class LListController extends Controller
      */
     public function index(Request $request, Board $board)
     {
-        // Ensure the board belongs to the current tenant and user (security check)
-        if ($board->tenant_id !== $request->header('X-Tenant-ID') || $board->user_id !== $request->user()->id) {
-            abort(403, 'Unauthorized access to board lists.');
+        // --- LOGS DE DEPURACIÓN PARA EL ERROR 403 ---
+        Log::info('LListController@index: Verificando acceso a tablero', [
+            'board_id_resolved' => $board->id,
+            'board_tenant_id' => $board->tenant_id, // Este es un entero
+            'request_x_tenant_id' => $request->header('X-Tenant-ID'), // Este es una cadena
+            'user_id' => $request->user() ? $request->user()->id : 'N/A (No autenticado)',
+            'user_tenant_id_from_user_model' => $request->user() ? $request->user()->tenant_id : 'N/A (No autenticado)',
+        ]);
+        // --- FIN LOGS DE DEPURACIÓN ---
+
+        // --- CORRECCIÓN CLAVE AQUÍ: Cambiado '!' a '!=' para comparación de valor, no de tipo ---
+        if ($board->tenant_id != $request->header('X-Tenant-ID')) {
+            abort(403, 'Unauthorized access: Board does not belong to your tenant.');
         }
 
         try {
@@ -50,9 +60,19 @@ class LListController extends Controller
      */
     public function store(Request $request, Board $board)
     {
-        // Ensure the board belongs to the current tenant and user (security check)
-        if ($board->tenant_id !== $request->header('X-Tenant-ID') || $board->user_id !== $request->user()->id) {
-            abort(403, 'Unauthorized to create list on this board.');
+        // --- LOGS DE DEPURACIÓN PARA EL ERROR 403 ---
+        Log::info('LListController@store: Verificando acceso a tablero', [
+            'board_id_resolved' => $board->id,
+            'board_tenant_id' => $board->tenant_id,
+            'request_x_tenant_id' => $request->header('X-Tenant-ID'),
+            'user_id' => $request->user() ? $request->user()->id : 'N/A (No autenticado)',
+            'user_tenant_id_from_user_model' => $request->user() ? $request->user()->tenant_id : 'N/A (No autenticado)',
+        ]);
+        // --- FIN LOGS DE DEPURACIÓN ---
+
+        // --- CORRECCIÓN CLAVE AQUÍ: Cambiado '!' a '!=' ---
+        if ($board->tenant_id != $request->header('X-Tenant-ID')) {
+            abort(403, 'Unauthorized to create list on this board: Board does not belong to your tenant.');
         }
 
         try {
@@ -61,26 +81,29 @@ class LListController extends Controller
                     'required',
                     'string',
                     'max:255',
-                    // Unique list name per board
-                    Rule::unique('lists')->where(function ($query) use ($board) {
-                        return $query->where('board_id', $board->id);
+                    // Asegurarse de que el nombre de la lista sea único por tablero Y por tenant
+                    Rule::unique('lists')->where(function ($query) use ($board, $request) {
+                        return $query->where('board_id', $board->id)
+                                     ->where('tenant_id', $request->header('X-Tenant-ID'));
                     }),
                 ],
-                'order' => 'integer|min:0', // Optional: frontend can suggest an order, or we auto-assign
+                'order' => 'integer|min:0', // Opcional: el frontend puede sugerir un orden, o lo asignamos automáticamente
             ]);
 
-            // Determine the next order if not provided
-            $maxOrder = LList::where('board_id', $board->id)->max('order');
+            // Determinar el siguiente orden si no se proporciona
+            $maxOrder = LList::where('board_id', $board->id)
+                             ->where('tenant_id', $request->header('X-Tenant-ID')) // Solo max order dentro del tenant
+                             ->max('order');
             $order = $validated['order'] ?? ($maxOrder !== null ? $maxOrder + 1 : 0);
 
             $list = LList::create([
                 'name' => $validated['name'],
                 'order' => $order,
                 'board_id' => $board->id,
-                'tenant_id' => $request->header('X-Tenant-ID'), // Inherit tenant from board
+                'tenant_id' => $request->header('X-Tenant-ID'), // Heredar tenant del tablero
             ]);
 
-            Log::info('List created successfully.', ['list_id' => $list->id, 'board_id' => $board->id, 'tenant_id' => $list->tenant_id]);
+            Log::info('List created successfully.', ['list_id' => $list->id, 'board_id' => $list->board_id, 'tenant_id' => $list->tenant_id]);
 
             return response()->json($list, 201);
         } catch (ValidationException $e) {
@@ -98,12 +121,19 @@ class LListController extends Controller
      */
     public function update(Request $request, LList $list)
     {
-        // Ensure the list belongs to the current tenant and user (security check via its board)
-        $board = Board::where('id', $list->board_id)
-                      ->where('tenant_id', $request->header('X-Tenant-ID'))
-                      ->where('user_id', $request->user()->id)
-                      ->first();
-        if (!$board) {
+        // --- LOGS DE DEPURACIÓN PARA EL ERROR 403 ---
+        Log::info('LListController@update: Verificando acceso a lista', [
+            'list_id_resolved' => $list->id,
+            'list_tenant_id' => $list->tenant_id,
+            'list_board_tenant_id' => $list->board->tenant_id,
+            'request_x_tenant_id' => $request->header('X-Tenant-ID'),
+            'user_id' => $request->user() ? $request->user()->id : 'N/A (No autenticado)',
+            'user_tenant_id_from_user_model' => $request->user() ? $request->user()->tenant_id : 'N/A (No autenticado)',
+        ]);
+        // --- FIN LOGS DE DEPURACIÓN ---
+
+        // --- CORRECCIÓN CLAVE AQUÍ: Cambiado '!' a '!=' ---
+        if ($list->tenant_id != $request->header('X-Tenant-ID') || $list->board->tenant_id != $request->header('X-Tenant-ID')) {
             abort(403, 'Unauthorized access to this list.');
         }
 
@@ -113,8 +143,10 @@ class LListController extends Controller
                     'required',
                     'string',
                     'max:255',
-                    Rule::unique('lists')->ignore($list->id)->where(function ($query) use ($list) {
-                        return $query->where('board_id', $list->board_id);
+                    // Asegurarse de que sea único por board Y tenant al ignorar la lista actual
+                    Rule::unique('lists')->ignore($list->id)->where(function ($query) use ($list, $request) {
+                        return $query->where('board_id', $list->board_id)
+                                     ->where('tenant_id', $request->header('X-Tenant-ID'));
                     }),
                 ],
                 'order' => 'integer|min:0',
@@ -143,12 +175,19 @@ class LListController extends Controller
      */
     public function destroy(Request $request, LList $list)
     {
-        // Ensure the list belongs to the current tenant and user (security check via its board)
-        $board = Board::where('id', $list->board_id)
-                      ->where('tenant_id', $request->header('X-Tenant-ID'))
-                      ->where('user_id', $request->user()->id)
-                      ->first();
-        if (!$board) {
+        // --- LOGS DE DEPURACIÓN PARA EL ERROR 403 ---
+        Log::info('LListController@destroy: Verificando acceso a lista', [
+            'list_id_resolved' => $list->id,
+            'list_tenant_id' => $list->tenant_id,
+            'list_board_tenant_id' => $list->board->tenant_id,
+            'request_x_tenant_id' => $request->header('X-Tenant-ID'),
+            'user_id' => $request->user() ? $request->user()->id : 'N/A (No autenticado)',
+            'user_tenant_id_from_user_model' => $request->user() ? $request->user()->tenant_id : 'N/A (No autenticado)',
+        ]);
+        // --- FIN LOGS DE DEPURACIÓN ---
+
+        // --- CORRECCIÓN CLAVE AQUÍ: Cambiado '!' a '!=' ---
+        if ($list->tenant_id != $request->header('X-Tenant-ID') || $list->board->tenant_id != $request->header('X-Tenant-ID')) {
             abort(403, 'Unauthorized to delete this list.');
         }
 
