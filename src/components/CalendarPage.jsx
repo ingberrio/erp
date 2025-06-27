@@ -619,7 +619,8 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList }) => {
         title: cardTitle,
         description: cardDescription,
         due_date: cardDueDate || null,
-        list_id: list.id, // Asegúrate de que la tarjeta se asocie a la lista correcta
+        list_id: list.id,
+        status: 'todo', // <-- ¡¡¡CORRECCIÓN CLAVE: Añadir estado por defecto!!!
       };
 
       let res;
