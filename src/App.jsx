@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// src/App.jsx
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import {
   Box,
@@ -14,16 +15,26 @@ import {
   ListItemText,
   CssBaseline,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
+import { createTheme, ThemeProvider } from '@mui/material/styles'; // Importar ThemeProvider y createTheme
 import BusinessIcon from "@mui/icons-material/Business";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PeopleIcon from "@mui/icons-material/People";
-import EventNoteIcon from "@mui/icons-material/EventNote"; // Importar icono para Calendario
+import EventNoteIcon from "@mui/icons-material/EventNote"; // Icono para Calendario
+import GrassIcon from '@mui/icons-material/Grass'; // Nuevo icono para Cultivo
+import SecurityIcon from '@mui/icons-material/Security'; // Icono para Roles/Permisos
 
+// Importaciones de componentes (asegúrate de que los nombres de archivo coincidan)
 import LoginComponent from "./components/LoginComponent";
 import EmpresasCrud from "./components/EmpresasCrud";
 import RolesPermisosCrud from "./components/RolesPermisosCrud";
-import CalendarioModuleWrapper from './components/CalendarioModuleWrapper'; // Importar el wrapper del calendario
+import CalendarioModuleWrapper from './components/CalendarioModuleWrapper';
+import CultivationPage from './components/CultivationPage';
+
+// Importar BrowserRouter y useNavigate desde react-router-dom
+import { BrowserRouter as Router, useNavigate } from 'react-router-dom';
 
 // --- Configuración Global de Axios ---
 export const api = axios.create({
@@ -31,6 +42,7 @@ export const api = axios.create({
   headers: {
     "Accept": "application/json",
   },
+  withCredentials: true, // ¡CRÍTICO! Permite el envío y recepción de cookies
 });
 
 // setGlobalAxiosHeaders se usa para inicializar y limpiar los headers por defecto
@@ -52,159 +64,202 @@ export const setGlobalAxiosHeaders = (token, tenantId) => {
 // --- Items del menú para navegación ---
 const menuItems = [
   { key: "empresas", label: "Empresas", icon: <BusinessIcon /> },
+  { key: "cultivo", label: "Cultivo", icon: <GrassIcon /> },
+  { key: "calendario", label: "Calendario", icon: <EventNoteIcon /> },
   { key: "usuarios", label: "Usuarios", icon: <PeopleIcon /> },
-  { key: "calendario", label: "Calendario", icon: <EventNoteIcon /> }, // Nuevo ítem de menú
+  { key: "roles-permisos", label: "Roles y Permisos", icon: <SecurityIcon /> }, // Nuevo item de menú
 ];
 
 const drawerWidth = 220;
 
-export default function App() {
+// Tema de Material-UI (definido aquí para que ThemeProvider pueda usarlo)
+const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: '#90caf9' },
+    secondary: { main: '#f48fb1' },
+    background: { default: '#121212', paper: '#1d1d1d' },
+  },
+  typography: { fontFamily: 'Inter, sans-serif' },
+  components: {
+    MuiButton: { styleOverrides: { root: { borderRadius: '8px' } } },
+    MuiPaper: { styleOverrides: { root: { borderRadius: '12px' } } },
+  },
+});
+
+// --- Nuevo componente AppContent que contiene la lógica principal ---
+function AppContent() {
   const [token, setTokenState] = useState("");
   const [user, setUserState] = useState(null);
   const [appLoading, setAppLoading] = useState(true);
-  const [isAppReady, setIsAppReady] = useState(false); // Indica si la aplicación está completamente lista y autenticada
+  const [isAppReady, setIsAppReady] = useState(false);
+  const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
 
-  const [activeMenu, setActiveMenu] = useState("empresas");
+  const [activeMenu, setActiveMenu] = useState("empresas"); // Mantener "empresas" como activo por defecto
 
-  const updateToken = (newToken) => {
+  const navigate = useNavigate(); // useNavigate ahora está dentro de AppContent, que es hijo de Router
+
+  const updateToken = useCallback((newToken) => {
     setTokenState(newToken);
     localStorage.setItem("token", newToken);
-    console.log("App.jsx: Token actualizado en estado y localStorage."); // Debug log
-  };
+    console.log("App.jsx: Token actualizado en estado y localStorage.");
+  }, []);
 
-  const updateUser = (newUser) => {
+  const updateUser = useCallback((newUser) => {
     setUserState(newUser);
     localStorage.setItem("user", JSON.stringify(newUser));
-    console.log("App.jsx: Usuario actualizado en estado y localStorage. Tenant ID:", newUser?.tenant_id); // Debug log
-  };
-
-  const handleLogout = () => {
-    console.log("App.jsx: Iniciando Logout."); // Debug log
-    setTokenState("");
-    setUserState(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    // Limpiamos los headers directamente al desloguearse
-    setGlobalAxiosHeaders(null, null);
-    setIsAppReady(false);
-  };
-
-  // --- useEffect para configurar el Interceptor de Axios y la carga inicial ---
-  useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-
-    let initialToken = null;
-    let initialUser = null;
-    let initialTenantId = null;
-
-    if (storedToken) {
-      initialToken = storedToken;
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          initialUser = parsedUser;
-          initialTenantId = parsedUser.tenant_id;
-        } catch (e) {
-          console.error("App.jsx: Error al parsear el usuario de localStorage:", e);
-          localStorage.removeItem("user");
-        }
-      }
+    console.log("App.jsx: Usuario actualizado en estado y localStorage. Tenant ID:", newUser?.tenant_id);
+    // Si el usuario se actualiza (ej. login), la app está lista
+    if (newUser && newUser.tenant_id) {
+        setIsAppReady(true);
     }
+  }, []);
 
-    // Configura los headers de Axios con lo que se recuperó de localStorage INMEDIATAMENTE.
-    // Esto es vital para la primera llamada a '/user' en el flujo de validación.
-    setGlobalAxiosHeaders(initialToken, initialTenantId);
+  const handleLogout = useCallback(async () => {
+    console.log("App.jsx: Iniciando Logout.");
+    setAppLoading(true); // Activar loading para el logout
+    try {
+      await api.post('/logout'); // Usar la instancia 'api' para que adjunte el token
+    } catch (error) {
+      console.error("App.jsx: Error al cerrar sesión en el backend:", error);
+      // No es crítico si el logout del backend falla después de limpiar el frontend
+    } finally {
+      setTokenState("");
+      setUserState(null);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("tenantId"); // Asegúrate de limpiar también tenantId
+      setGlobalAxiosHeaders(null, null);
+      setIsAppReady(false);
+      setAppLoading(false);
+      setSnack({ open: true, message: "Sesión cerrada.", severity: "info" });
+      navigate('/login'); // Redirigir a la página de login
+    }
+  }, [navigate]);
 
+  // Efecto para la carga inicial de la aplicación y validación de sesión
+  useEffect(() => {
+    const initializeApp = async () => {
+      setAppLoading(true);
+      try {
+        // 1. Obtener la cookie CSRF (CRÍTICO para Sanctum SPA)
+        console.log("App.jsx: Intentando obtener CSRF cookie...");
+        await axios.get('http://127.0.0.1:8000/sanctum/csrf-cookie', { withCredentials: true });
+        console.log("App.jsx: CSRF cookie obtenida exitosamente.");
 
-    // --- Axios Request Interceptor ---
-    // Este interceptor se ejecutará ANTES de CADA petición saliente de la instancia 'api'.
+        // 2. Cargar token y usuario de localStorage
+        const storedToken = localStorage.getItem("token");
+        const storedUser = localStorage.getItem("user");
+        let initialUser = null;
+        let initialTenantId = null;
+
+        if (storedToken && storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            initialUser = parsedUser;
+            initialTenantId = parsedUser.tenant_id;
+            // Configurar headers de Axios antes de cualquier otra llamada API
+            setGlobalAxiosHeaders(storedToken, initialTenantId);
+
+            // 3. Validar el token y obtener usuario del backend
+            console.log("App.jsx: Validando sesión con /user...");
+            const response = await api.get("/user"); // Usar 'api' para que el interceptor adjunte el token
+            const fetchedUser = response.data;
+            setTokenState(storedToken);
+            setUserState(fetchedUser);
+            localStorage.setItem("user", JSON.stringify(fetchedUser)); // Actualizar user en localStorage si es necesario
+            setIsAppReady(true);
+            console.log("App.jsx: Sesión validada y App lista. Usuario:", fetchedUser.email);
+          } catch (error) {
+            console.error("App.jsx: La sesión ha expirado o es inválida (error en /user):", error);
+            // Si hay un error al validar el usuario, limpiar la sesión
+            handleLogout(); // Llama a handleLogout para limpiar todo y redirigir
+            setSnack({ open: true, message: "Su sesión ha expirado. Por favor, inicie sesión de nuevo.", severity: "warning" });
+          }
+        } else {
+          console.log("App.jsx: No hay token o usuario en localStorage. Usuario no autenticado.");
+          setUserState(null);
+          setTokenState("");
+          setGlobalAxiosHeaders(null, null); // Limpiar headers si no hay token
+          setIsAppReady(false);
+        }
+      } catch (error) {
+        console.error("App.jsx: Error fatal al inicializar la aplicación (CSRF o red):", error);
+        setSnack({ open: true, message: "Error de conexión o al iniciar la aplicación. Intente de nuevo.", severity: "error" });
+        setUserState(null);
+        setTokenState("");
+        setGlobalAxiosHeaders(null, null);
+        setIsAppReady(false);
+      } finally {
+        setAppLoading(false); // Desactivar el spinner de carga inicial
+      }
+    };
+
+    initializeApp();
+
+    // Interceptor de solicitudes de Axios (asegura que los headers estén siempre actualizados)
     const requestInterceptor = api.interceptors.request.use(
       (config) => {
-        // Obtener el token y tenantId más recientes DIRECTAMENTE de localStorage
-        // Esto asegura que siempre usamos los valores más actualizados.
-        const currentToken = localStorage.getItem("token");
-        const currentUser = localStorage.getItem("user");
-        let currentTenantId = null;
-        if (currentUser) {
-          try {
-            currentTenantId = JSON.parse(currentUser).tenant_id;
-          } catch (e) {
-            // Error al parsear, dejar currentTenantId como null
+        // Excluir login, register y csrf-cookie del interceptor de token/tenantId
+        if (!config.url.includes('/login') && !config.url.includes('/register') && !config.url.includes('/sanctum/csrf-cookie')) {
+          const currentToken = localStorage.getItem("token");
+          const currentUser = localStorage.getItem("user");
+          let currentTenantId = null;
+          if (currentUser) {
+            try {
+              currentTenantId = JSON.parse(currentUser).tenant_id;
+            } catch (e) {
+              console.error("App.jsx [Interceptor]: Error al parsear usuario de localStorage:", e);
+            }
+          }
+
+          if (currentToken) {
+            config.headers.Authorization = `Bearer ${currentToken}`;
+          } else {
+            delete config.headers.Authorization;
+          }
+
+          if (currentTenantId) {
+            config.headers["X-Tenant-ID"] = currentTenantId;
+          } else {
+            delete config.headers["X-Tenant-ID"];
           }
         }
-
-        console.log("App.jsx [Interceptor]: Preparando request para URL:", config.url); // Debug log
-        if (currentToken) {
-          config.headers.Authorization = `Bearer ${currentToken}`;
-          console.log("App.jsx [Interceptor]: Token de autorización adjuntado. Longitud:", currentToken.length); // Debug log
-        } else {
-          delete config.headers.Authorization;
-          console.log("App.jsx [Interceptor]: No hay token, Authorization header limpiado."); // Debug log
-        }
-
-        if (currentTenantId) {
-          config.headers["X-Tenant-ID"] = currentTenantId;
-          console.log("App.jsx [Interceptor]: X-Tenant-ID adjuntado:", currentTenantId); // Debug log
-        } else {
-          delete config.headers["X-Tenant-ID"];
-          console.log("App.jsx [Interceptor]: No hay Tenant ID, X-Tenant-ID header limpiado."); // Debug log
-        }
-
         return config;
       },
       (error) => {
-        console.error("App.jsx [Interceptor Error]:", error); // Debug log
         return Promise.reject(error);
       }
     );
 
-    // --- Lógica de validación de sesión inicial ---
-    if (initialToken && initialTenantId) {
-      console.log("App.jsx: Token y Tenant ID iniciales encontrados. Validando sesión..."); // Debug log
-      api.get("/user")
-        .then(response => {
-          const fetchedUser = response.data;
-          setTokenState(initialToken);
-          setUserState(fetchedUser);
-          localStorage.setItem("user", JSON.stringify(fetchedUser));
-          setAppLoading(false);
-          setIsAppReady(true);
-          console.log("App.jsx: Sesión validada y App lista."); // Debug log
-        })
-        .catch(error => {
-          console.error("App.jsx: La sesión ha expirado o es inválida (error en /user):", error); // Debug log
-          handleLogout();
-          setAppLoading(false);
-        });
-    } else {
-      console.log("App.jsx: No hay token o Tenant ID inicial. Mostrando pantalla de login."); // Debug log
-      setAppLoading(false);
-      setIsAppReady(false);
-    }
-
-    // Función de limpieza para remover el interceptor cuando el componente se desmonte
-    return () => {
-      console.log("App.jsx: Limpiando interceptor de Axios."); // Debug log
-      api.interceptors.request.eject(requestInterceptor);
-    };
-  }, []); // Este useEffect solo se ejecuta una vez al montar
-
-  // Este useEffect para sincronizar isAppReady con token/user
-  useEffect(() => {
-      if (token && user?.tenant_id && !isAppReady && !appLoading) {
-          setIsAppReady(true);
-          console.log("App.jsx: isAppReady establecido a TRUE."); // Debug log
-      } else if ((!token || !user?.tenant_id) && isAppReady && !appLoading) {
-          setIsAppReady(false);
-          console.log("App.jsx: isAppReady establecido a FALSE."); // Debug log
+    // Interceptor de respuestas de Axios (manejo de 401 global)
+    const responseInterceptor = api.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        if (error.response && error.response.status === 401) {
+          // Si es 401 y el usuario estaba logueado, significa que el token expiró o es inválido
+          if (user) { // Solo si el usuario estaba previamente autenticado en el estado
+            console.warn("App.jsx [Interceptor]: 401 Unauthorized. Token expirado o inválido. Redirigiendo a login.");
+            setSnack({ open: true, message: "Su sesión ha expirado. Por favor, inicie sesión de nuevo.", severity: "warning" });
+            handleLogout(); // Llama a la función de logout para limpiar el estado y redirigir
+          } else {
+            // Si no estaba logueado, es un 401 esperado (ej. intentando acceder a ruta protegida sin login)
+            console.log("App.jsx [Interceptor]: 401 Unauthorized para usuario no logueado.");
+          }
+        }
+        return Promise.reject(error);
       }
-  }, [token, user, isAppReady, appLoading]);
+    );
 
+    return () => {
+      console.log("App.jsx: Limpiando interceptores de Axios.");
+      api.interceptors.request.eject(requestInterceptor);
+      api.interceptors.response.eject(responseInterceptor);
+    };
+  }, [handleLogout]); // Dependencia handleLogout para evitar bucles si se actualiza
 
-  // Renderizar estado de carga
+  // Renderizado condicional basado en el estado de autenticación y carga
   if (appLoading) {
-    console.log("App.jsx: Mostrando spinner de carga."); // Debug log
     return (
       <Box sx={{
         display: "flex", justifyContent: "center", alignItems: "center",
@@ -216,25 +271,29 @@ export default function App() {
     );
   }
 
-  // Renderizar LoginComponent si no hay token o usuario/tenant ID válido
+  // Si no hay token o usuario, mostrar el componente de login
   if (!token || !user || !user.tenant_id) {
-    console.log("App.jsx: Mostrando LoginComponent (no autenticado)."); // Debug log
+    console.log("App.jsx: Mostrando LoginComponent (no autenticado).");
     return (
       <LoginComponent setToken={updateToken} setUser={updateUser} />
     );
   }
 
-  // Contenido principal de la aplicación (después de autenticación exitosa)
+  // Si está autenticado, mostrar el contenido principal
   let mainContent = null;
   const currentTenantId = user.tenant_id;
-  console.log("App.jsx: Usuario autenticado. Tenant ID actual:", currentTenantId, "App ready:", isAppReady); // Debug log
+  console.log("App.jsx: Usuario autenticado. Tenant ID actual:", currentTenantId, "App ready:", isAppReady);
 
   if (activeMenu === "empresas") {
     mainContent = <EmpresasCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
+  } else if (activeMenu === "cultivo") {
+    mainContent = <CultivationPage tenantId={currentTenantId} isAppReady={isAppReady} />;
+  } else if (activeMenu === "calendario") {
+    mainContent = <CalendarioModuleWrapper tenantId={currentTenantId} isAppReady={isAppReady} />;
   } else if (activeMenu === "usuarios") {
     mainContent = <RolesPermisosCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
-  } else if (activeMenu === "calendario") { // Nueva condición para Calendario
-    mainContent = <CalendarioModuleWrapper tenantId={currentTenantId} isAppReady={isAppReady} />;
+  } else if (activeMenu === "roles-permisos") {
+      mainContent = <RolesPermisosCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
   }
 
   return (
@@ -292,6 +351,31 @@ export default function App() {
         <Toolbar />
         {mainContent}
       </Box>
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={6000}
+        onClose={() => setSnack({ ...snack, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnack({ ...snack, open: false })} severity={snack.severity} sx={{ width: '100%' }}>
+          {snack.message}
+        </Alert>
+      </Snackbar>
     </Box>
+  );
+}
+
+// --- Componente principal de la aplicación que se exporta por defecto ---
+// Este componente envuelve AppContent en BrowserRouter y ThemeProvider
+// para que useNavigate y otros hooks de React Router funcionen correctamente.
+// Asegúrate de que este componente 'AppWrapper' sea el que se exporta por defecto.
+export default function AppWrapper() {
+  return (
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <Router> {/* BrowserRouter envuelve todo el contenido que usa hooks de React Router */}
+        <AppContent />
+      </Router>
+    </ThemeProvider>
   );
 }
