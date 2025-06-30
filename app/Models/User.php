@@ -60,4 +60,9 @@ class User extends Authenticatable
     {
         return 'sanctum'; // This tells Spatie to use the 'sanctum' guard by default for this user model.
     }
+
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
 }

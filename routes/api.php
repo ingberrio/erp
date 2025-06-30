@@ -10,17 +10,33 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\BoardController;
 use App\Http\Controllers\LListController;
 use App\Http\Controllers\CardController;
+use App\Http\Controllers\FacilityController;
+use App\Http\Controllers\StageController;
+use App\Http\Controllers\CultivationAreaController;
+use App\Http\Controllers\BatchController;
+
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "api" middleware group. Make something great!
+|
+*/
 
 // Rutas públicas: NO requieren tenant ni autenticación
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
 
-// Rutas protegidas: requieren autenticación y TENANT
+// Rutas protegidas: requieren autenticación (Sanctum) y TENANT
 Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // Info del usuario autenticado
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        // Asegurarse de que el usuario y el tenant se carguen si es necesario
+        return $request->user()->load('tenant');
     });
 
     // Cerrar sesión
@@ -30,6 +46,8 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::apiResource('users', UserController::class);
 
     // CRUD de empresas (tenants)
+    // Nota: El acceso a este recurso podría requerir permisos de super-administrador
+    // Si tu aplicación es multi-tenant y los usuarios normales no deben gestionar tenants.
     Route::apiResource('tenants', TenantController::class);
 
     // CRUD de roles
@@ -43,28 +61,41 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::apiResource('permissions', PermissionController::class);
 
     // --- Módulo de Calendario (Tipo Trello) API Routes ---
-    // Boards CRUD (Tableros principales del calendario/proyecto)
     Route::apiResource('boards', BoardController::class);
-
-    // Lists CRUD (Columnas/listas dentro de un tablero) - Rutas anidadas y singulares
     Route::prefix('boards/{board}')->group(function () {
-        // Rutas para crear y listar listas dentro de un tablero específico
         Route::apiResource('lists', LListController::class)->except(['show', 'update', 'destroy']);
     });
-    // Rutas para mostrar, actualizar y eliminar una lista individual
     Route::apiResource('lists', LListController::class)->only(['show', 'update', 'destroy']);
-
-    // Cards CRUD (Tarjetas/tareas dentro de una lista) - Rutas anidadas y singulares
     Route::prefix('lists/{list}')->group(function () {
-        // Rutas para crear y listar tarjetas dentro de una lista específica
         Route::apiResource('cards', CardController::class)->except(['show', 'update', 'destroy']);
-        // AÑADIR LA RUTA DE REORDENAR AQUÍ, DENTRO DEL PREFIJO DE LISTA
-        // Esto asegura que {list} esté disponible en el controlador
-        Route::put('cards/reorder', [CardController::class, 'reorderCardsInList']); // Cambiado a PUT y nombre de método diferente
+        Route::put('cards/reorder', [CardController::class, 'reorderCardsInList']);
     });
-    // Rutas para mostrar, actualizar y eliminar una tarjeta individual
     Route::apiResource('cards', CardController::class)->only(['show', 'update', 'destroy']);
 
-    // ELIMINAR ESTA RUTA GLOBAL DUPLICADA:
-    // Route::post('cards/reorder', [CardController::class, 'reorder']); // <-- ¡ELIMINAR ESTA LÍNEA!
+    // --- MÓDULO DE CULTIVO ---
+    // Facilities CRUD
+    Route::apiResource('facilities', FacilityController::class);
+
+    // Stages CRUD (Etapas)
+    Route::apiResource('stages', StageController::class);
+    Route::put('stages/reorder', [StageController::class, 'reorder']); // Ruta para reordenar etapas
+
+    // Cultivation Areas CRUD
+    Route::apiResource('cultivation-areas', CultivationAreaController::class);
+    // Rutas anidadas para Cultivation Areas bajo Facilities y Stages
+    Route::prefix('facilities/{facility}')->group(function () {
+        Route::apiResource('cultivation-areas', CultivationAreaController::class)->only(['index']);
+    });
+    Route::prefix('stages/{stage}')->group(function () {
+        Route::apiResource('cultivation-areas', CultivationAreaController::class)->only(['index']);
+        // Nueva ruta para reordenar áreas dentro de una etapa
+        Route::put('cultivation-areas/reorder', [CultivationAreaController::class, 'reorder']);
+    });
+
+    // Batches CRUD
+    Route::apiResource('batches', BatchController::class);
+    // Rutas anidadas para Batches bajo Cultivation Areas
+    Route::prefix('cultivation-areas/{cultivationArea}')->group(function () {
+        Route::apiResource('batches', BatchController::class)->only(['index']);
+    });
 });
