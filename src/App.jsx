@@ -18,22 +18,20 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
-import { createTheme, ThemeProvider } from '@mui/material/styles'; // Importar ThemeProvider y createTheme
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 import BusinessIcon from "@mui/icons-material/Business";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PeopleIcon from "@mui/icons-material/People";
-import EventNoteIcon from "@mui/icons-material/EventNote"; // Icono para Calendario
-import GrassIcon from '@mui/icons-material/Grass'; // Nuevo icono para Cultivo
-import SecurityIcon from '@mui/icons-material/Security'; // Icono para Roles/Permisos
+import EventNoteIcon from "@mui/icons-material/EventNote";
+import GrassIcon from '@mui/icons-material/Grass';
 
-// Importaciones de componentes (asegúrate de que los nombres de archivo coincidan)
+// Importaciones de componentes
 import LoginComponent from "./components/LoginComponent";
 import EmpresasCrud from "./components/EmpresasCrud";
-import RolesPermisosCrud from "./components/RolesPermisosCrud";
 import CalendarioModuleWrapper from './components/CalendarioModuleWrapper';
 import CultivationPage from './components/CultivationPage';
+import UsuariosCrudInternal from './components/UsuariosCrudInternal'; // Asegúrate de que este sea el nombre correcto
 
-// Importar BrowserRouter y useNavigate desde react-router-dom
 import { BrowserRouter as Router, useNavigate } from 'react-router-dom';
 
 // --- Configuración Global de Axios ---
@@ -42,10 +40,9 @@ export const api = axios.create({
   headers: {
     "Accept": "application/json",
   },
-  withCredentials: true, // ¡CRÍTICO! Permite el envío y recepción de cookies
+  withCredentials: true,
 });
 
-// setGlobalAxiosHeaders se usa para inicializar y limpiar los headers por defecto
 export const setGlobalAxiosHeaders = (token, tenantId) => {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -67,12 +64,11 @@ const menuItems = [
   { key: "cultivo", label: "Cultivo", icon: <GrassIcon /> },
   { key: "calendario", label: "Calendario", icon: <EventNoteIcon /> },
   { key: "usuarios", label: "Usuarios", icon: <PeopleIcon /> },
-  { key: "roles-permisos", label: "Roles y Permisos", icon: <SecurityIcon /> }, // Nuevo item de menú
 ];
 
 const drawerWidth = 220;
 
-// Tema de Material-UI (definido aquí para que ThemeProvider pueda usarlo)
+// Tema de Material-UI
 const darkTheme = createTheme({
   palette: {
     mode: 'dark',
@@ -87,17 +83,20 @@ const darkTheme = createTheme({
   },
 });
 
-// --- Nuevo componente AppContent que contiene la lógica principal ---
 function AppContent() {
-  const [token, setTokenState] = useState("");
-  const [user, setUserState] = useState(null);
+  const [token, setTokenState] = useState(localStorage.getItem("token") || "");
+  const [user, setUserState] = useState(() => {
+    const storedUser = localStorage.getItem("user");
+    return storedUser ? JSON.parse(storedUser) : null;
+  });
   const [appLoading, setAppLoading] = useState(true);
   const [isAppReady, setIsAppReady] = useState(false);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
+  const [allFacilities, setAllFacilities] = useState([]);
 
-  const [activeMenu, setActiveMenu] = useState("empresas"); // Mantener "empresas" como activo por defecto
+  const [activeMenu, setActiveMenu] = useState("empresas");
 
-  const navigate = useNavigate(); // useNavigate ahora está dentro de AppContent, que es hijo de Router
+  const navigate = useNavigate();
 
   const updateToken = useCallback((newToken) => {
     setTokenState(newToken);
@@ -108,108 +107,142 @@ function AppContent() {
   const updateUser = useCallback((newUser) => {
     setUserState(newUser);
     localStorage.setItem("user", JSON.stringify(newUser));
+    localStorage.setItem("tenantId", newUser?.tenant_id || '');
     console.log("App.jsx: Usuario actualizado en estado y localStorage. Tenant ID:", newUser?.tenant_id);
-    // Si el usuario se actualiza (ej. login), la app está lista
     if (newUser && newUser.tenant_id) {
-        setIsAppReady(true);
+      setIsAppReady(true);
+    } else {
+      setIsAppReady(false);
     }
   }, []);
 
   const handleLogout = useCallback(async () => {
     console.log("App.jsx: Iniciando Logout.");
-    setAppLoading(true); // Activar loading para el logout
+    setAppLoading(true);
     try {
-      await api.post('/logout'); // Usar la instancia 'api' para que adjunte el token
+      await api.post('/logout');
     } catch (error) {
       console.error("App.jsx: Error al cerrar sesión en el backend:", error);
-      // No es crítico si el logout del backend falla después de limpiar el frontend
     } finally {
       setTokenState("");
       setUserState(null);
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      localStorage.removeItem("tenantId"); // Asegúrate de limpiar también tenantId
+      localStorage.removeItem("tenantId");
       setGlobalAxiosHeaders(null, null);
       setIsAppReady(false);
       setAppLoading(false);
       setSnack({ open: true, message: "Sesión cerrada.", severity: "info" });
-      navigate('/login'); // Redirigir a la página de login
+      navigate('/login');
     }
-  }, [navigate]);
+  }, [navigate, setSnack]);
 
-  // Efecto para la carga inicial de la aplicación y validación de sesión
+  const fetchAllFacilities = useCallback(async () => {
+    console.log('App.jsx: fetchAllFacilities iniciado.');
+    try {
+      const response = await api.get('/facilities');
+      const fetchedFacilities = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
+      setAllFacilities(fetchedFacilities);
+      console.log('App.jsx: Todas las instalaciones cargadas:', fetchedFacilities.length);
+    } catch (error) {
+      console.error('App.jsx: Error fetching all facilities:', error);
+      setSnack({ open: true, message: "Error al cargar todas las instalaciones.", severity: "error" });
+    }
+  }, [setSnack]);
+
   useEffect(() => {
+    let isMounted = true;
+
     const initializeApp = async () => {
+      if (!isMounted) return;
+
+      console.log('App.jsx: initializeApp se está ejecutando.');
       setAppLoading(true);
+
       try {
-        // 1. Obtener la cookie CSRF (CRÍTICO para Sanctum SPA)
         console.log("App.jsx: Intentando obtener CSRF cookie...");
         await axios.get('http://127.0.0.1:8000/sanctum/csrf-cookie', { withCredentials: true });
         console.log("App.jsx: CSRF cookie obtenida exitosamente.");
 
-        // 2. Cargar token y usuario de localStorage
-        const storedToken = localStorage.getItem("token");
-        const storedUser = localStorage.getItem("user");
-        let initialUser = null;
-        let initialTenantId = null;
-
-        if (storedToken && storedUser) {
+        const currentToken = localStorage.getItem("token");
+        const currentUserData = localStorage.getItem("user");
+        let parsedUser = null;
+        if (currentUserData) {
           try {
-            const parsedUser = JSON.parse(storedUser);
-            initialUser = parsedUser;
-            initialTenantId = parsedUser.tenant_id;
-            // Configurar headers de Axios antes de cualquier otra llamada API
-            setGlobalAxiosHeaders(storedToken, initialTenantId);
+            parsedUser = JSON.parse(currentUserData);
+          } catch (e) {
+            console.error("App.jsx: Error al parsear usuario de localStorage:", e);
+            localStorage.removeItem("user");
+          }
+        }
 
-            // 3. Validar el token y obtener usuario del backend
-            console.log("App.jsx: Validando sesión con /user...");
-            const response = await api.get("/user"); // Usar 'api' para que el interceptor adjunte el token
-            const fetchedUser = response.data;
-            setTokenState(storedToken);
+        if (currentToken && parsedUser && parsedUser.tenant_id) {
+          setGlobalAxiosHeaders(currentToken, parsedUser.tenant_id);
+
+          console.log("App.jsx: Validando sesión con /user...");
+          const response = await api.get("/user");
+          const fetchedUser = response.data;
+
+          if (isMounted) {
+            setTokenState(currentToken);
             setUserState(fetchedUser);
-            localStorage.setItem("user", JSON.stringify(fetchedUser)); // Actualizar user en localStorage si es necesario
+            localStorage.setItem("user", JSON.stringify(fetchedUser));
+            localStorage.setItem("tenantId", fetchedUser.tenant_id);
             setIsAppReady(true);
             console.log("App.jsx: Sesión validada y App lista. Usuario:", fetchedUser.email);
-          } catch (error) {
-            console.error("App.jsx: La sesión ha expirado o es inválida (error en /user):", error);
-            // Si hay un error al validar el usuario, limpiar la sesión
-            handleLogout(); // Llama a handleLogout para limpiar todo y redirigir
-            setSnack({ open: true, message: "Su sesión ha expirado. Por favor, inicie sesión de nuevo.", severity: "warning" });
+
+            await fetchAllFacilities();
           }
         } else {
-          console.log("App.jsx: No hay token o usuario en localStorage. Usuario no autenticado.");
-          setUserState(null);
-          setTokenState("");
-          setGlobalAxiosHeaders(null, null); // Limpiar headers si no hay token
-          setIsAppReady(false);
+          console.log("App.jsx: No hay token o usuario válido en localStorage. Mostrando login.");
+          if (isMounted) {
+            setTokenState("");
+            setUserState(null);
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            localStorage.removeItem("tenantId");
+            setGlobalAxiosHeaders(null, null);
+            setIsAppReady(false);
+          }
         }
       } catch (error) {
-        console.error("App.jsx: Error fatal al inicializar la aplicación (CSRF o red):", error);
-        setSnack({ open: true, message: "Error de conexión o al iniciar la aplicación. Intente de nuevo.", severity: "error" });
-        setUserState(null);
-        setTokenState("");
-        setGlobalAxiosHeaders(null, null);
-        setIsAppReady(false);
+        console.error("App.jsx: Error fatal al inicializar la aplicación (CSRF o red/API):", error);
+        if (isMounted) {
+          setSnack({ open: true, message: "Error de conexión o al iniciar la aplicación. Intente de nuevo.", severity: "error" });
+          setTokenState("");
+          setUserState(null);
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          localStorage.removeItem("tenantId");
+          setGlobalAxiosHeaders(null, null);
+          setIsAppReady(false);
+        }
       } finally {
-        setAppLoading(false); // Desactivar el spinner de carga inicial
+        if (isMounted) {
+          setAppLoading(false);
+          console.log('App.jsx: initializeApp finalizado. appLoading:', false);
+        }
       }
     };
 
     initializeApp();
 
-    // Interceptor de solicitudes de Axios (asegura que los headers estén siempre actualizados)
     const requestInterceptor = api.interceptors.request.use(
       (config) => {
-        // Excluir login, register y csrf-cookie del interceptor de token/tenantId
         if (!config.url.includes('/login') && !config.url.includes('/register') && !config.url.includes('/sanctum/csrf-cookie')) {
           const currentToken = localStorage.getItem("token");
-          const currentUser = localStorage.getItem("user");
+          const currentUserData = localStorage.getItem("user");
           let currentTenantId = null;
-          if (currentUser) {
+          if (currentUserData) {
             try {
-              currentTenantId = JSON.parse(currentUser).tenant_id;
+              currentTenantId = JSON.parse(currentUserData).tenant_id;
             } catch (e) {
               console.error("App.jsx [Interceptor]: Error al parsear usuario de localStorage:", e);
+              localStorage.removeItem("user");
             }
           }
 
@@ -232,19 +265,17 @@ function AppContent() {
       }
     );
 
-    // Interceptor de respuestas de Axios (manejo de 401 global)
     const responseInterceptor = api.interceptors.response.use(
       (response) => response,
       async (error) => {
         if (error.response && error.response.status === 401) {
-          // Si es 401 y el usuario estaba logueado, significa que el token expiró o es inválido
-          if (user) { // Solo si el usuario estaba previamente autenticado en el estado
+          const currentToken = localStorage.getItem("token");
+          if (currentToken && isMounted) {
             console.warn("App.jsx [Interceptor]: 401 Unauthorized. Token expirado o inválido. Redirigiendo a login.");
             setSnack({ open: true, message: "Su sesión ha expirado. Por favor, inicie sesión de nuevo.", severity: "warning" });
-            handleLogout(); // Llama a la función de logout para limpiar el estado y redirigir
+            handleLogout();
           } else {
-            // Si no estaba logueado, es un 401 esperado (ej. intentando acceder a ruta protegida sin login)
-            console.log("App.jsx [Interceptor]: 401 Unauthorized para usuario no logueado.");
+            console.log("App.jsx [Interceptor]: 401 Unauthorized para usuario no logueado (esperado).");
           }
         }
         return Promise.reject(error);
@@ -253,13 +284,14 @@ function AppContent() {
 
     return () => {
       console.log("App.jsx: Limpiando interceptores de Axios.");
+      isMounted = false;
       api.interceptors.request.eject(requestInterceptor);
       api.interceptors.response.eject(responseInterceptor);
     };
-  }, [handleLogout]); // Dependencia handleLogout para evitar bucles si se actualiza
+  }, [handleLogout, fetchAllFacilities, updateUser]);
 
-  // Renderizado condicional basado en el estado de autenticación y carga
   if (appLoading) {
+    console.log('App.jsx: Renderizando pantalla de carga.');
     return (
       <Box sx={{
         display: "flex", justifyContent: "center", alignItems: "center",
@@ -271,29 +303,28 @@ function AppContent() {
     );
   }
 
-  // Si no hay token o usuario, mostrar el componente de login
   if (!token || !user || !user.tenant_id) {
-    console.log("App.jsx: Mostrando LoginComponent (no autenticado).");
+    console.log("App.jsx: Mostrando LoginComponent (no autenticado). Token:", token ? "presente" : "ausente", "User:", user, "Tenant ID:", user?.tenant_id);
     return (
       <LoginComponent setToken={updateToken} setUser={updateUser} />
     );
   }
 
-  // Si está autenticado, mostrar el contenido principal
   let mainContent = null;
   const currentTenantId = user.tenant_id;
-  console.log("App.jsx: Usuario autenticado. Tenant ID actual:", currentTenantId, "App ready:", isAppReady);
+  const userFacilityId = user.facility_id || null;
+
+  console.log("App.jsx: Usuario autenticado. Tenant ID actual:", currentTenantId, "App ready:", isAppReady, "User Facility ID:", userFacilityId);
 
   if (activeMenu === "empresas") {
     mainContent = <EmpresasCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
   } else if (activeMenu === "cultivo") {
-    mainContent = <CultivationPage tenantId={currentTenantId} isAppReady={isAppReady} />;
+    mainContent = <CultivationPage tenantId={currentTenantId} isAppReady={isAppReady} userFacilityId={userFacilityId} />;
   } else if (activeMenu === "calendario") {
     mainContent = <CalendarioModuleWrapper tenantId={currentTenantId} isAppReady={isAppReady} />;
   } else if (activeMenu === "usuarios") {
-    mainContent = <RolesPermisosCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
-  } else if (activeMenu === "roles-permisos") {
-      mainContent = <RolesPermisosCrud tenantId={currentTenantId} isAppReady={isAppReady} />;
+    // ¡CORRECCIÓN! Renderizar UsuariosCrudInternal aquí, pasando las facilities
+    mainContent = <UsuariosCrudInternal tenantId={currentTenantId} isAppReady={isAppReady} facilities={allFacilities} />;
   }
 
   return (
@@ -365,15 +396,11 @@ function AppContent() {
   );
 }
 
-// --- Componente principal de la aplicación que se exporta por defecto ---
-// Este componente envuelve AppContent en BrowserRouter y ThemeProvider
-// para que useNavigate y otros hooks de React Router funcionen correctamente.
-// Asegúrate de que este componente 'AppWrapper' sea el que se exporta por defecto.
 export default function AppWrapper() {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Router> {/* BrowserRouter envuelve todo el contenido que usa hooks de React Router */}
+      <Router>
         <AppContent />
       </Router>
     </ThemeProvider>

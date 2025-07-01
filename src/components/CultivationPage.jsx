@@ -67,11 +67,11 @@ ConfirmationDialog.propTypes = {
 };
 
 // --- Componente principal del Módulo de Cultivo ---
-const CultivationPage = ({ tenantId, isAppReady }) => {
+const CultivationPage = ({ tenantId, isAppReady, userFacilityId }) => {
   const [facilities, setFacilities] = useState([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
   const [stages, setStages] = useState([]);
-  const [rawAreas, setRawAreas] = useState([]); // New state for raw fetched areas
+  const [rawAreas, setRawAreas] = useState([]);
   const [cultivationAreas, setCultivationAreas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
@@ -83,13 +83,22 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
   const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
   const [activeDraggableId, setActiveDraggableId] = useState(null);
 
-  // Utilidad para manejar notificaciones
+  // New states for Facility Dialog
+  const [openFacilityDialog, setOpenFacilityDialog] = useState(false);
+  const [newFacilityName, setNewFacilityName] = useState('');
+  const [facilityDialogLoading, setFacilityDialogLoading] = useState(false);
+
+  // Check if the current user is a facility operator (simulated)
+  const isFacilityOperator = !!userFacilityId;
+
+  // Utility to handle notifications
   const showSnack = useCallback((message, severity = 'success') => {
     setSnack({ open: true, message, severity });
   }, []);
 
-  // Memoize organized areas
+  // Memoize organized areas based on stages and rawAreas
   const organizedAreas = useMemo(() => {
+    console.log("CultivationPage: Recalculando organizedAreas. Stages count:", stages.length, "Raw Areas count:", rawAreas.length);
     return stages.length > 0
       ? stages.map(stage => ({
           ...stage,
@@ -100,34 +109,53 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
       : [];
   }, [stages, rawAreas]);
 
-  // Update cultivationAreas when organizedAreas changes
+  // Update cultivationAreas state when organizedAreas changes
   useEffect(() => {
+    console.log("CultivationPage: organizedAreas changed. Updating cultivationAreas state.");
     setCultivationAreas(organizedAreas);
   }, [organizedAreas]);
 
-  // Fetchers de datos
+  // Fetchers for data
   const fetchFacilities = useCallback(async () => {
     console.log('CultivationPage: fetchFacilities iniciado.');
     try {
       const response = await api.get('/facilities');
-      const fetchedFacilities = Array.isArray(response.data)
+      let fetchedFacilities = Array.isArray(response.data)
         ? response.data
         : Array.isArray(response.data?.data)
         ? response.data.data
         : [];
+
+      // --- OPERATOR SIMULATION: Filter facilities if userFacilityId is present ---
+      if (isFacilityOperator && userFacilityId) {
+        fetchedFacilities = fetchedFacilities.filter(f => f.id === userFacilityId);
+        console.log("CultivationPage: Operador de instalación detectado. Filtrando instalaciones a:", fetchedFacilities);
+      }
+      // --- END OPERATOR SIMULATION ---
+
       setFacilities(fetchedFacilities);
-      if (fetchedFacilities.length > 0 && !selectedFacilityId) {
-        setSelectedFacilityId(fetchedFacilities[0].id);
-        console.log('CultivationPage: Instalación seleccionada por defecto:', fetchedFacilities[0].id);
+
+      // Logic to set or adjust selectedFacilityId
+      // IMPORTANT: This part directly updates selectedFacilityId,
+      // but selectedFacilityId is NOT in fetchFacilities's useCallback dependencies
+      // to prevent infinite loops.
+      if (fetchedFacilities.length > 0) {
+        const currentFacilityExists = fetchedFacilities.some(f => f.id === selectedFacilityId);
+        if (!selectedFacilityId || !currentFacilityExists) {
+          setSelectedFacilityId(fetchedFacilities[0].id); // Default to the first facility
+          console.log("CultivationPage: Defaulting selected facility to:", fetchedFacilities[0].id);
+        } else {
+          console.log("CultivationPage: Selected facility remains:", selectedFacilityId);
+        }
       } else {
-        setSelectedFacilityId('');
-        console.log('CultivationPage: No hay instalaciones disponibles.');
+        setSelectedFacilityId(''); // Clear if no facilities are available
+        console.log("CultivationPage: No facilities available. Clearing selectedFacilityId.");
       }
     } catch (error) {
       console.error('CultivationPage: Error fetching facilities:', error);
-      showSnack('Error al cargar instalaciones.', 'error');
+      showSnack('Error loading facilities.', 'error');
     }
-  }, [selectedFacilityId, showSnack]);
+  }, [showSnack, isFacilityOperator, userFacilityId]); // Removed selectedFacilityId from dependencies
 
   const fetchStages = useCallback(async () => {
     console.log('CultivationPage: fetchStages iniciado.');
@@ -142,68 +170,86 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
       console.log('CultivationPage: Etapas cargadas:', fetchedStages.length);
     } catch (error) {
       console.error('CultivationPage: Error fetching stages:', error);
-      showSnack('Error al cargar etapas.', 'error');
+      showSnack('Error loading stages.', 'error');
     }
   }, [showSnack]);
 
   const fetchCultivationAreas = useCallback(async () => {
     if (!tenantId || !isAppReady) {
+      console.log("CultivationPage: Skipping fetchCultivationAreas due to tenantId/isAppReady. Tenant ID:", tenantId, "App Ready:", isAppReady);
       setLoading(false);
       return;
     }
+
+    // Only fetch areas if a facility is selected, or if there are no facilities at all
+    if (facilities.length > 0 && !selectedFacilityId) {
+      console.log("CultivationPage: Waiting for facility selection to fetch areas.");
+      setLoading(false);
+      return;
+    }
+    
+    console.log("CultivationPage: fetchCultivationAreas initiated for facility:", selectedFacilityId || "All");
     setLoading(true);
     try {
-      const url = selectedFacilityId
-        ? `/facilities/${selectedFacilityId}/cultivation-areas`
-        : '/cultivation-areas';
+      let url = '/cultivation-areas';
+      if (selectedFacilityId) {
+        url = `/facilities/${selectedFacilityId}/cultivation-areas`;
+      }
       const response = await api.get(url);
       const fetchedAreas = Array.isArray(response.data)
         ? response.data
         : Array.isArray(response.data?.data)
         ? response.data.data
         : [];
-      setRawAreas(fetchedAreas); // <-- Updates rawAreas
+      setRawAreas(fetchedAreas);
+      console.log("CultivationPage: Cultivation areas loaded for facility:", selectedFacilityId || "All", "Count:", fetchedAreas.length);
     } catch (error) {
       console.error('CultivationPage: Error fetching cultivation areas:', error);
-      showSnack('Error al cargar áreas de cultivo.', 'error');
+      showSnack('Error loading cultivation areas.', 'error');
     } finally {
       setLoading(false);
+      console.log('CultivationPage: setLoading(false) called in fetchCultivationAreas.');
     }
-  }, [tenantId, isAppReady, selectedFacilityId, showSnack]);
+  }, [tenantId, isAppReady, selectedFacilityId, facilities.length, showSnack]);
 
-  // Efecto para la carga inicial de todos los datos
+  // Effect for initial data load (facilities and stages)
   useEffect(() => {
-    const loadAllInitialData = async () => {
+    const loadInitialData = async () => {
       if (!tenantId || !isAppReady) {
         setLoading(false);
         return;
       }
 
-      console.log('CultivationPage: Iniciando carga inicial de todos los datos.');
-      setLoading(true); // Activar loading para la carga inicial
+      console.log('CultivationPage: Initiating initial data load (facilities and stages).');
+      setLoading(true);
       try {
         await fetchFacilities();
         await fetchStages();
-        await fetchCultivationAreas(); // Llama a fetchCultivationAreas después de stages y facilities
       } catch (error) {
-        console.error('CultivationPage: Error en carga inicial de todos los datos:', error);
-        showSnack('Error al cargar datos iniciales.', 'error');
-      } finally {
-        setLoading(false); // Desactivar loading al finalizar la carga inicial
-        console.log('CultivationPage: Carga inicial completa. setLoading(false).');
+        console.error('CultivationPage: Error in initial data load:', error);
+        showSnack('Error loading initial data.', 'error');
+        setLoading(false);
       }
     };
 
-    loadAllInitialData();
-  }, [tenantId, isAppReady, fetchFacilities, fetchStages, fetchCultivationAreas, showSnack]); // Dependencies for this effect
+    loadInitialData();
+  }, [tenantId, isAppReady, fetchFacilities, fetchStages, showSnack]);
 
-  // Handlers de UI y Diálogos
+  // Effect to load cultivation areas when selectedFacilityId or stages change
+  useEffect(() => {
+    if (tenantId && isAppReady) {
+        console.log("CultivationPage: Triggering fetchCultivationAreas due to change in selectedFacilityId or stages.");
+        fetchCultivationAreas();
+    }
+  }, [selectedFacilityId, stages, tenantId, isAppReady, fetchCultivationAreas]);
+
+  // Handlers for Stage UI and Dialogs
   const handleOpenStageDialog = (stage = null) => {
     setEditingStage(stage);
     setStageName(stage ? stage.name : '');
     setOpenStageDialog(true);
     setStageDialogLoading(false);
-    console.log('CultivationPage: Diálogo de etapa abierto. Editando:', !!stage);
+    console.log('CultivationPage: Stage dialog opened. Editing:', !!stage);
   };
 
   const handleCloseStageDialog = () => {
@@ -211,87 +257,134 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
     setEditingStage(null);
     setStageName('');
     setStageDialogLoading(false);
-    console.log('CultivationPage: Diálogo de etapa cerrado.');
+    console.log('CultivationPage: Stage dialog closed.');
   };
 
   const handleSaveStage = async (e) => {
     e.preventDefault();
     if (!stageName.trim()) {
-      showSnack('El nombre de la etapa es obligatorio.', 'warning');
+      showSnack('Stage name is required.', 'warning');
       return;
     }
     if (stageName.length > 100) {
-      showSnack('El nombre de la etapa no puede exceder los 100 caracteres.', 'warning');
+      showSnack('Stage name cannot exceed 100 characters.', 'warning');
       return;
     }
     if (/[<>{}]/.test(stageName)) {
-      showSnack('El nombre no puede contener caracteres especiales como <, >, o {}.', 'warning');
+      showSnack('Name cannot contain special characters like <, >, or {}.', 'warning');
       return;
     }
     setStageDialogLoading(true);
-    console.log('CultivationPage: Intentando guardar etapa:', stageName);
+    console.log('CultivationPage: Attempting to save stage:', stageName);
     try {
       const stageData = { name: stageName };
       if (editingStage) {
         await api.put(`/stages/${editingStage.id}`, stageData);
-        showSnack('Etapa actualizada.', 'success');
+        showSnack('Stage updated.', 'success');
       } else {
         await api.post('/stages', stageData);
-        showSnack('Etapa creada.', 'success');
+        showSnack('Stage created.', 'success');
       }
-      await fetchStages(); // Refresca las etapas
-      await fetchCultivationAreas(); // Refresca las áreas de cultivo (importante si la nueva etapa afecta la organización)
+      await fetchStages();
       handleCloseStageDialog();
     } catch (err) {
-      console.error('CultivationPage: Error al guardar etapa:', err);
+      console.error('CultivationPage: Error saving stage:', err);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 400) {
-        showSnack(`Datos inválidos: ${errorMessage}`, 'error');
+        showSnack(`Invalid data: ${errorMessage}`, 'error');
       } else if (err.response?.status === 403) {
-        showSnack('No tienes permisos para realizar esta acción.', 'error');
+        showSnack('You do not have permission to perform this action.', 'error');
       } else {
-        showSnack(`Error al guardar etapa: ${errorMessage}`, 'error');
+        showSnack(`Error saving stage: ${errorMessage}`, 'error');
       }
     } finally {
       setStageDialogLoading(false);
-      console.log('CultivationPage: setStageDialogLoading(false) llamado en handleSaveStage.');
+      console.log('CultivationPage: setStageDialogLoading(false) called in handleSaveStage.');
     }
   };
 
   const handleDeleteStageConfirm = useCallback(async (stageToDelete) => {
     setLoading(true);
-    console.log('CultivationPage: Confirmando eliminación de etapa:', stageToDelete.name);
+    console.log('CultivationPage: Confirming stage deletion:', stageToDelete.name);
     try {
       await api.delete(`/stages/${stageToDelete.id}`);
-      showSnack('Etapa eliminada.', 'info');
-      await fetchStages(); // Refresca las etapas
-      await fetchCultivationAreas(); // Refresca las áreas de cultivo
+      showSnack('Stage deleted.', 'info');
+      await fetchStages();
     } catch (err) {
-      console.error('CultivationPage: Error al eliminar etapa:', err);
+      console.error('CultivationPage: Error deleting stage:', err);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 400) {
-        showSnack(`Datos inválidos: ${errorMessage}`, 'error');
+        showSnack(`Invalid data: ${errorMessage}`, 'error');
       } else if (err.response?.status === 403) {
-        showSnack('No tienes permisos para realizar esta acción.', 'error');
+        showSnack('You do not have permission to perform this action.', 'error');
       } else {
-        showSnack(`Error al eliminar etapa: ${errorMessage}`, 'error');
+        showSnack(`Error deleting stage: ${errorMessage}`, 'error');
       }
     } finally {
       setLoading(false);
       setConfirmDialogOpen(false);
-      console.log('CultivationPage: setLoading(false) llamado en handleDeleteStageConfirm.');
+      console.log('CultivationPage: setLoading(false) called in handleDeleteStageConfirm.');
     }
-  }, [fetchStages, fetchCultivationAreas, showSnack]);
+  }, [fetchStages, showSnack]);
 
   const handleDeleteStageClick = (stageToDelete) => {
     setConfirmDialogData({
-      title: 'Confirmar Eliminación de Etapa',
-      message: `¿Estás seguro de eliminar la etapa "${stageToDelete.name}"? Esto fallará si tiene áreas de cultivo asociadas.`,
+      title: 'Confirm Stage Deletion',
+      message: `Are you sure you want to delete stage "${stageToDelete.name}"? This will fail if it has associated cultivation areas.`,
       onConfirm: () => handleDeleteStageConfirm(stageToDelete),
     });
     setConfirmDialogOpen(true);
-    console.log('CultivationPage: Diálogo de confirmación de eliminación de etapa abierto.');
+    console.log('CultivationPage: Stage deletion confirmation dialog opened.');
   };
+
+  // Handlers for Facility Dialog
+  const handleOpenFacilityDialog = () => {
+    setNewFacilityName('');
+    setOpenFacilityDialog(true);
+    setFacilityDialogLoading(false);
+  };
+
+  const handleCloseFacilityDialog = () => {
+    setOpenFacilityDialog(false);
+    setNewFacilityName('');
+    setFacilityDialogLoading(false);
+  };
+
+  const handleSaveFacility = async (e) => {
+    e.preventDefault();
+    if (!newFacilityName.trim()) {
+      showSnack('Facility name is required.', 'warning');
+      return;
+    }
+    if (newFacilityName.length > 100) {
+      showSnack('Facility name cannot exceed 100 characters.', 'warning');
+      return;
+    }
+    if (/[<>{}]/.test(newFacilityName)) {
+      showSnack('Name cannot contain special characters like <, >, or {}.', 'warning');
+      return;
+    }
+    setFacilityDialogLoading(true);
+    try {
+      await api.post('/facilities', { name: newFacilityName });
+      showSnack('Facility created successfully.', 'success');
+      await fetchFacilities();
+      handleCloseFacilityDialog();
+    } catch (err) {
+      console.error('Error creating facility:', err);
+      const errorMessage = err.response?.data?.message || err.message;
+      if (err.response?.status === 400) {
+        showSnack(`Invalid data: ${errorMessage}`, 'error');
+      } else if (err.response?.status === 403) {
+        showSnack('You do not have permission to perform this action.', 'error');
+      } else {
+        showSnack(`Error creating facility: ${errorMessage}`, 'error');
+      }
+    } finally {
+      setFacilityDialogLoading(false);
+    }
+  };
+
 
   // Dnd-Kit Handlers
   const sensors = useSensors(
@@ -315,7 +408,7 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
   };
 
   const parseDragDestination = (over) => {
-    let targetStageId = over.id; // Corrected: over.id is the droppable ID
+    let targetStageId = over.id;
     let targetAreaId = null;
     if (over.data.current?.type === 'CultivationArea') {
       targetStageId = over.data.current.cultivationArea.current_stage_id;
@@ -375,17 +468,24 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
       return;
     }
 
+    // --- OPERATOR SIMULATION: Prevent drag if user is operator ---
+    if (isFacilityOperator) {
+      showSnack('No tienes permiso para mover áreas como Operador de Instalación.', 'error');
+      return;
+    }
+    // --- END OPERATOR SIMULATION ---
+
     const newCultivationAreasState = JSON.parse(JSON.stringify(cultivationAreas));
     const { draggedArea, sourceStage, sourceAreaIndex } = findDraggedArea(newCultivationAreasState, active.id);
     if (!draggedArea || !sourceStage) {
-      console.error('CultivationPage: No se encontró el área arrastrada o la etapa de origen.');
+      console.error('CultivationPage: Dragged area or source stage not found.');
       return;
     }
 
     const { targetStageId, targetAreaId } = parseDragDestination(over);
     const destinationStage = newCultivationAreasState.find(stage => stage.id === targetStageId);
     if (!destinationStage) {
-      console.error('CultivationPage: No se pudo encontrar la etapa de destino.');
+      console.error('CultivationPage: Destination stage not found.');
       return;
     }
 
@@ -396,14 +496,14 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
       } else {
         await handleCrossStageDrag(draggedArea, sourceStage, destinationStage, sourceAreaIndex, targetAreaId, newCultivationAreasState);
       }
-      setCultivationAreas(newCultivationAreasState); // Update local state immediately for visual feedback
-      showSnack('Área de cultivo movida.', 'success');
+      setCultivationAreas(newCultivationAreasState);
+      showSnack('Cultivation area moved.', 'success');
     } catch (error) {
-      console.error('CultivationPage: Error en operación de arrastre:', error);
-      showSnack('Error al arrastrar. Recargando datos...', 'error');
+      console.error('CultivationPage: Error in drag operation:', error);
+      showSnack('Error dragging. Reloading data...', 'error');
     } finally {
-      await fetchCultivationAreas(); // Recargar datos para reflejar cambios y desactivar loading
-      console.log('CultivationPage: setLoading(false) llamado en handleDragEnd.');
+      await fetchCultivationAreas();
+      console.log('CultivationPage: setLoading(false) called in handleDragEnd.');
     }
   };
 
@@ -416,7 +516,7 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
     return null;
   }, [activeDraggableId, cultivationAreas]);
 
-  // Renderizado
+  // Render
   return (
     <Box sx={{
       p: { xs: 2, sm: 3 },
@@ -430,14 +530,17 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
           Gestión de Cultivo
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
-        <FormControl sx={{ minWidth: 200 }}>
+        <FormControl sx={{ minWidth: 200, mr: 1 }}>
           <InputLabel id="facility-select-label" sx={{ color: '#fff' }}>Instalación</InputLabel>
           <Select
             labelId="facility-select-label"
             value={selectedFacilityId}
             label="Instalación"
-            onChange={(e) => setSelectedFacilityId(e.target.value)}
-            disabled={loading || facilities.length === 0}
+            onChange={(e) => {
+                console.log("CultivationPage: Cambio de instalación detectado:", e.target.value);
+                setSelectedFacilityId(e.target.value);
+            }}
+            disabled={loading || facilities.length === 0 || isFacilityOperator}
             sx={{
               color: '#fff',
               '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
@@ -465,10 +568,27 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
           </Select>
         </FormControl>
         <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={handleOpenFacilityDialog}
+          disabled={loading || isFacilityOperator}
+          sx={{
+            borderRadius: 2,
+            borderColor: '#b0c4de',
+            color: '#b0c4de',
+            '&:hover': {
+              bgcolor: 'rgba(255,255,255,0.1)',
+              borderColor: '#fff',
+            },
+          }}
+        >
+          Añadir Instalación
+        </Button>
+        <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenStageDialog(null)}
-          disabled={loading}
+          disabled={loading || isFacilityOperator}
           sx={{
             borderRadius: 2,
             bgcolor: '#4CAF50',
@@ -519,6 +639,7 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
                   setParentConfirmDialogOpen={setConfirmDialogOpen}
                   selectedFacilityId={selectedFacilityId}
                   facilities={facilities}
+                  isFacilityOperator={isFacilityOperator}
                 />
               ))
             )}
@@ -581,6 +702,32 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
         </form>
       </Dialog>
 
+      {/* New Facility Dialog */}
+      <Dialog open={openFacilityDialog} onClose={handleCloseFacilityDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>Crear Nueva Instalación</DialogTitle>
+        <form onSubmit={handleSaveFacility}>
+          <DialogContent>
+            <TextField
+              label="Nombre de la Instalación"
+              value={newFacilityName}
+              onChange={e => setNewFacilityName(e.target.value)}
+              fullWidth
+              required
+              sx={{ mt: 1, mb: 2 }}
+              disabled={facilityDialogLoading}
+              inputProps={{ maxLength: 100 }}
+              aria-label="Nombre de la instalación"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseFacilityDialog} disabled={facilityDialogLoading}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={facilityDialogLoading || !newFacilityName.trim()}>
+              {facilityDialogLoading ? <CircularProgress size={24} /> : 'Crear Instalación'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
       <ConfirmationDialog
         open={confirmDialogOpen}
         title={confirmDialogData.title}
@@ -592,8 +739,14 @@ const CultivationPage = ({ tenantId, isAppReady }) => {
   );
 };
 
+CultivationPage.propTypes = {
+  tenantId: PropTypes.string.isRequired,
+  isAppReady: PropTypes.bool.isRequired,
+  userFacilityId: PropTypes.string,
+};
+
 // --- Componente: StageView ---
-const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultivationAreas, handleDeleteStage, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, selectedFacilityId, facilities }) => {
+const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultivationAreas, handleDeleteStage, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, selectedFacilityId, facilities, isFacilityOperator }) => {
   const [openAddAreaDialog, setOpenAddAreaDialog] = useState(false);
   const [areaName, setAreaName] = useState('');
   const [areaDescription, setAreaDescription] = useState('');
@@ -612,8 +765,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
   });
 
   useEffect(() => {
-    setAreaFacilityId(facilities.length > 0 ? selectedFacilityId : '');
-  }, [selectedFacilityId, facilities]);
+    setAreaFacilityId(selectedFacilityId);
+  }, [selectedFacilityId]);
+
 
   const handleOpenAddAreaDialog = (area = null) => {
     setEditingArea(area);
@@ -633,7 +787,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
     setAreaDescription('');
     setAreaCapacityUnits('');
     setAreaCapacityUnitType('');
-    setAreaFacilityId(facilities.length > 0 ? selectedFacilityId : '');
+    setAreaFacilityId(selectedFacilityId);
     setAreaDialogLoading(false);
   };
 
@@ -741,8 +895,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
           size="small"
           onClick={() => handleDeleteStage(stage)}
           aria-label={`Eliminar etapa ${stage.name}`}
+          disabled={isFacilityOperator}
         >
-          <DeleteIcon sx={{ fontSize: 18, color: '#aaa' }} />
+          <DeleteIcon sx={{ fontSize: 18, color: isFacilityOperator ? '#666' : '#aaa' }} />
         </IconButton>
       </Box>
       <Divider sx={{ mb: 1.5, bgcolor: 'rgba(255,255,255,0.2)' }} />
@@ -765,6 +920,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
             handleEdit={handleOpenAddAreaDialog}
             handleDelete={handleDeleteAreaClick}
             setParentSnack={setParentSnack}
+            isFacilityOperator={isFacilityOperator}
           />
         ))}
         {cultivationAreas.length === 0 && !isOver && (
@@ -778,7 +934,8 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         startIcon={<AddIcon />}
         onClick={() => handleOpenAddAreaDialog(null)}
         fullWidth
-        sx={{ mt: 1, color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}
+        disabled={isFacilityOperator}
+        sx={{ mt: 1, color: isFacilityOperator ? '#666' : '#b0c4de', '&:hover': { bgcolor: isFacilityOperator ? 'transparent' : 'rgba(255,255,255,0.1)' } }}
       >
         Añadir un Área de Cultivo
       </Button>
@@ -794,7 +951,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               fullWidth
               required
               sx={{ mt: 1, mb: 2 }}
-              disabled={areaDialogLoading}
+              disabled={areaDialogLoading || isFacilityOperator}
               inputProps={{ maxLength: 100 }}
               aria-label="Nombre del área de cultivo"
             />
@@ -806,7 +963,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               multiline
               rows={3}
               sx={{ mb: 2 }}
-              disabled={areaDialogLoading}
+              disabled={areaDialogLoading || isFacilityOperator}
               aria-label="Descripción del área de cultivo"
             />
             <TextField
@@ -816,7 +973,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               type="number"
               fullWidth
               sx={{ mb: 2 }}
-              disabled={areaDialogLoading}
+              disabled={areaDialogLoading || isFacilityOperator}
               aria-label="Unidades de capacidad"
             />
             <TextField
@@ -825,7 +982,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               onChange={e => setAreaCapacityUnitType(e.target.value)}
               fullWidth
               sx={{ mb: 2 }}
-              disabled={areaDialogLoading}
+              disabled={areaDialogLoading || isFacilityOperator}
               aria-label="Tipo de unidad de capacidad"
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
@@ -836,7 +993,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
                 label="Instalación Asignada"
                 onChange={(e) => setAreaFacilityId(e.target.value)}
                 required
-                disabled={areaDialogLoading}
+                disabled={areaDialogLoading || isFacilityOperator}
                 aria-label="Seleccionar instalación asignada"
               >
                 {facilities.length === 0 ? (
@@ -852,8 +1009,8 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
             </FormControl>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseAddAreaDialog} disabled={areaDialogLoading}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={areaDialogLoading || !areaName.trim()}>
+            <Button onClick={handleCloseAddAreaDialog} disabled={areaDialogLoading || isFacilityOperator}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={areaDialogLoading || !areaName.trim() || isFacilityOperator}>
               {areaDialogLoading ? <CircularProgress size={24} /> : (editingArea ? 'Guardar Cambios' : 'Crear Área')}
             </Button>
           </DialogActions>
@@ -874,10 +1031,11 @@ StageView.propTypes = {
   setParentConfirmDialogOpen: PropTypes.func.isRequired,
   selectedFacilityId: PropTypes.string.isRequired,
   facilities: PropTypes.array.isRequired,
+  isFacilityOperator: PropTypes.bool.isRequired,
 };
 
 // --- Componente: CultivationAreaItem ---
-const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setParentSnack }) => {
+const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setParentSnack, isFacilityOperator }) => {
   const {
     attributes,
     listeners,
@@ -891,6 +1049,7 @@ const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setPar
       type: 'CultivationArea',
       cultivationArea: area,
     },
+    disabled: isFacilityOperator,
   });
 
   const style = {
@@ -903,7 +1062,7 @@ const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setPar
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
     backgroundColor: 'white',
     padding: '12px',
-    cursor: isDragging ? 'grabbing' : 'grab',
+    cursor: isFacilityOperator ? 'default' : (isDragging ? 'grabbing' : 'grab'),
   };
 
   const [openAreaDetailDialog, setOpenAreaDetailDialog] = useState(false);
@@ -918,7 +1077,7 @@ const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setPar
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={handleOpenAreaDetail}>
-      <CultivationAreaContent area={area} handleEdit={handleEdit} handleDelete={handleDelete} />
+      <CultivationAreaContent area={area} handleEdit={handleEdit} handleDelete={handleDelete} isFacilityOperator={isFacilityOperator} />
       <Dialog open={openAreaDetailDialog} onClose={handleCloseAreaDetail} maxWidth="md" fullWidth>
         <DialogTitle>Detalle del Área: {area.name}</DialogTitle>
         <DialogContent>
@@ -935,14 +1094,14 @@ const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setPar
           <Typography variant="h6" sx={{ mb: 2 }}>Lotes en esta Área:</Typography>
           {area.batches && area.batches.length > 0 ? (
             area.batches.map(batch => (
-              <BatchItem key={batch.id} batch={batch} setParentSnack={setParentSnack} />
+              <BatchItem key={batch.id} batch={batch} setParentSnack={setParentSnack} isFacilityOperator={isFacilityOperator} />
             ))
           ) : (
             <Typography variant="body2" color="text.secondary">
               No hay lotes en esta área.
             </Typography>
           )}
-          <Button variant="contained" startIcon={<AddIcon />} sx={{ mt: 2 }}>
+          <Button variant="contained" startIcon={<AddIcon />} sx={{ mt: 2 }} disabled={isFacilityOperator}>
             Añadir Nuevo Lote
           </Button>
         </DialogContent>
@@ -959,10 +1118,11 @@ CultivationAreaItem.propTypes = {
   handleEdit: PropTypes.func.isRequired,
   handleDelete: PropTypes.func.isRequired,
   setParentSnack: PropTypes.func.isRequired,
+  isFacilityOperator: PropTypes.bool.isRequired,
 };
 
 // --- Componente: CultivationAreaContent ---
-const CultivationAreaContent = ({ area, handleEdit, handleDelete }) => {
+const CultivationAreaContent = ({ area, handleEdit, handleDelete, isFacilityOperator }) => {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -976,16 +1136,18 @@ const CultivationAreaContent = ({ area, handleEdit, handleDelete }) => {
             onClick={(e) => { e.stopPropagation(); handleEdit(area); }}
             sx={{ p: 0.5 }}
             aria-label={`Editar área ${area.name}`}
+            disabled={isFacilityOperator}
           >
-            <EditIcon sx={{ fontSize: 16, color: '#004d80' }} />
+            <EditIcon sx={{ fontSize: 16, color: isFacilityOperator ? '#666' : '#004d80' }} />
           </IconButton>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); handleDelete(area); }}
             sx={{ p: 0.5 }}
             aria-label={`Eliminar área ${area.name}`}
+            disabled={isFacilityOperator}
           >
-            <DeleteIcon sx={{ fontSize: 16, color: '#004d80' }} />
+            <DeleteIcon sx={{ fontSize: 16, color: isFacilityOperator ? '#666' : '#004d80' }} />
           </IconButton>
         </Box>
       </Box>
@@ -1012,10 +1174,11 @@ CultivationAreaContent.propTypes = {
   area: PropTypes.object.isRequired,
   handleEdit: PropTypes.func,
   handleDelete: PropTypes.func,
+  isFacilityOperator: PropTypes.bool.isRequired,
 };
 
 // --- Componente: BatchItem ---
-const BatchItem = ({ batch, setParentSnack }) => {
+const BatchItem = ({ batch, setParentSnack, isFacilityOperator }) => {
   const handleAdvanceStage = () => setParentSnack(`Avanzar etapa del lote: ${batch.name}`, 'info');
   const handleCreateSample = () => setParentSnack(`Crear muestra del lote: ${batch.name}`, 'info');
 
@@ -1036,8 +1199,8 @@ const BatchItem = ({ batch, setParentSnack }) => {
         </Typography>
       )}
       <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        <Button size="small" variant="outlined" onClick={handleAdvanceStage}>Avanzar Etapa</Button>
-        <Button size="small" variant="outlined" onClick={handleCreateSample}>Crear Muestra</Button>
+        <Button size="small" variant="outlined" onClick={handleAdvanceStage} disabled={isFacilityOperator}>Avanzar Etapa</Button>
+        <Button size="small" variant="outlined" onClick={handleCreateSample} disabled={isFacilityOperator}>Crear Muestra</Button>
       </Box>
     </Paper>
   );
@@ -1046,11 +1209,7 @@ const BatchItem = ({ batch, setParentSnack }) => {
 BatchItem.propTypes = {
   batch: PropTypes.object.isRequired,
   setParentSnack: PropTypes.func.isRequired,
-};
-
-CultivationPage.propTypes = {
-  tenantId: PropTypes.string.isRequired,
-  isAppReady: PropTypes.bool.isRequired,
+  isFacilityOperator: PropTypes.bool.isRequired,
 };
 
 export default CultivationPage;
