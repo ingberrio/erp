@@ -14,14 +14,13 @@ class Kernel extends HttpKernel
      * @var array<int, class-string|string>
      */
     protected $middleware = [
-        \Illuminate\Http\Middleware\HandleCors::class,
+        // ¡QUITAR HandleCors de aquí!
         \Illuminate\Http\Middleware\PreventRequestsDuringMaintenance::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
-        // ¡IMPORTANTE! IdentifyTenant y SetTenantForPermissions NO deben ir aquí
-        // si dependen de un usuario autenticado o de Sanctum.
-        // Se moverán al grupo 'api'
+        // Tus middlewares personalizados de tenant NO deben ir aquí si dependen de un usuario autenticado o de Sanctum.
+        // Deben ir en el grupo 'api' para asegurar el orden correcto después de la autenticación/estado.
     ];
 
     /**
@@ -40,15 +39,17 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
-            // 1. Sanctum para manejar el estado/cookies del frontend
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class, // <-- ¡DESCOMENTADO!
+            \Illuminate\Http\Middleware\HandleCors::class, // <-- ¡AÑADIDO AQUÍ AL PRINCIPIO del grupo 'api'!
+            // ¡IMPORTANTE! Coloca IdentifyTenant como el PRIMER middleware personalizado
+            // en el grupo 'api' para asegurar que el tenant_id se establezca lo antes posible.
+            \App\Http\Middleware\IdentifyTenant::class,
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            // 2. Tus middlewares de tenant, después de que Sanctum haya manejado el estado
-            // y antes de 'auth:sanctum' en routes/api.php (si lo tienes allí)
-            // O si 'auth:sanctum' está aquí, estos van después de 'auth:sanctum'
-            \App\Http\Middleware\IdentifyTenant::class, // <-- MOVIDO AQUÍ
-            \App\Http\Middleware\SetTenantForPermissions::class, // <-- MOVIDO AQUÍ
+            // SetTenantForPermissions debe ir DESPUÉS de IdentifyTenant
+            \App\Http\Middleware\SetTenantForPermissions::class,
+            // Si usas 'auth:sanctum' en el grupo 'api', debería ir después de SetTenantForPermissions
+            // 'auth:sanctum', // Ejemplo: si lo pones aquí
         ],
     ];
 
@@ -60,7 +61,7 @@ class Kernel extends HttpKernel
      * @var array<string, class-string|string>
      */
     protected $routeMiddleware = [
-        'auth' => \Illuminate\Auth\Middleware\Authenticate::class, // Asumiendo que esta es la implementación estándar de Laravel
+        'auth' => \Illuminate\Auth\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
         'can' => \Illuminate\Auth\Middleware\Authorize::class,
@@ -70,10 +71,8 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         // Tus middlewares personalizados ya no necesitan estar aquí si se usan en 'api' group o directamente en Route::middleware()
-        // 'identify.tenant' => \App\Http\Middleware\IdentifyTenant::class, // Ya está en el grupo 'api'
-        // 'settenant.permissions' => \App\Http\Middleware\SetTenantForPermissions::class, // Ya está en el grupo 'api'
-        'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class, // Si usas Spatie
-        'permission' => \Spatie\Permission\Middlewares\PermissionMiddleware::class, // Si usas Spatie
-        'role_or_permission' => \Spatie\Permission\Middlewares\RoleOrPermissionMiddleware::class, // Si usas Spatie
+        'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class,
+        'permission' => \Spatie\Permission\Middlewares\PermissionMiddleware::class,
+        'role_or_permission' => \Spatie\Permission\Middlewares\RoleOrPermissionMiddleware::class,
     ];
 }

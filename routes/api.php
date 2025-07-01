@@ -34,10 +34,7 @@ Route::post('/login',    [AuthController::class, 'login']);
 Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // Info del usuario autenticado
-    Route::get('/user', function (Request $request) {
-        // Asegurarse de que el usuario y el tenant se carguen si es necesario
-        return $request->user()->load('tenant');
-    });
+    Route::get('/user', [AuthController::class, 'user']);
 
     // Cerrar sesión
     Route::post('/logout', [AuthController::class, 'logout']);
