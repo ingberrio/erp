@@ -1,36 +1,35 @@
 <?php
 
 namespace App\Models;
-use Laravel\Sanctum\HasApiTokens;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Traits\BelongsToTenant;
-use Spatie\Permission\Traits\HasRoles;
+use Laravel\Sanctum\HasApiTokens;
+use App\Scopes\TenantScope; // Importa el scope
+use Spatie\Permission\Traits\HasRoles; // Importa el trait de Spatie
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens,HasFactory, Notifiable, BelongsToTenant, HasRoles;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     /**
      * The attributes that are mass assignable.
      *
-     * @var list<string>
+     * @var array<int, string>
      */
     protected $fillable = [
         'name',
         'email',
         'password',
-        'tenant_id',
+        'tenant_id', // Asegúrate de que tenant_id esté fillable
+        'is_global_admin',
     ];
 
     /**
      * The attributes that should be hidden for serialization.
      *
-     * @var list<string>
+     * @var array<int, string>
      */
     protected $hidden = [
         'password',
@@ -38,31 +37,39 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that should be cast.
      *
-     * @return array<string, string>
+     * @var array<string, string>
      */
-    protected function casts(): array
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'is_global_admin' => 'boolean',
+    ];
+
+    // Aplicar el TenantScope globalmente
+    protected static function booted()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        static::addGlobalScope(new TenantScope);
     }
 
-    /**
-     * Get the guard that should be used for the user.
-     * This is crucial for Spatie in multi-guard setups.
-     *
-     * @return string
-     */
-    protected function getDefaultGuardName(): string
-    {
-        return 'sanctum'; // This tells Spatie to use the 'sanctum' guard by default for this user model.
-    }
-
+    // Definir la relación con el tenant (opcional, pero buena práctica)
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
     }
+
+    // Sobrescribir el método teamsId para Spatie si usas equipos
+    // Esto es crucial para que Spatie sepa qué tenant_id usar para roles/permisos
+    public function getTeamId(): ?int
+    {
+        return $this->tenant_id;
+    }
+
+    // Si tu modelo User tiene un método para cargar permisos directamente, asegúrate de que sea compatible
+    // con la estructura de Spatie.
+    // public function permissions()
+    // {
+    //     // Esto es manejado por HasRoles y HasPermissions de Spatie
+    // }
 }

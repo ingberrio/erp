@@ -30,13 +30,18 @@ return new class extends Migration
         Schema::create($tableNames['roles'], static function (Blueprint $table) use ($teams, $columnNames) {
             $table->bigIncrements('id');
             if ($teams || config('permission.testing')) {
-                $table->unsignedBigInteger('tenant_id')->nullable();
+                // Hacemos tenant_id nullable en la tabla roles también, por si acaso.
+                $table->unsignedBigInteger('tenant_id')->nullable(); // <-- ¡AQUÍ! HACER NULLABLE
                 $table->index('tenant_id', 'roles_tenant_id_index');
             }
             $table->string('name');
             $table->string('guard_name');
             $table->timestamps();
             if ($teams || config('permission.testing')) {
+                // La clave única también debe ser consciente de que tenant_id puede ser NULL
+                // Si tenant_id es NULL, la unicidad se aplica solo a name y guard_name.
+                // Esto es manejado por la base de datos si tenant_id es parte de la clave única.
+                // Para PostgreSQL, un UNIQUE constraint con NULLs permite múltiples NULLs.
                 $table->unique(['tenant_id', 'name', 'guard_name']);
             } else {
                 $table->unique(['name', 'guard_name']);
@@ -54,9 +59,12 @@ return new class extends Migration
                 ->on($tableNames['permissions'])
                 ->onDelete('cascade');
             if ($teams) {
-                $table->unsignedBigInteger('tenant_id');
+                // ¡CRÍTICO! Hacer tenant_id nullable
+                $table->unsignedBigInteger('tenant_id')->nullable(); // <-- ¡AQUÍ! HACER NULLABLE
                 $table->index('tenant_id', 'model_has_permissions_tenant_id_index');
-                $table->primary(['tenant_id', $pivotPermission, $columnNames['model_morph_key'], 'model_type'],
+                
+                // ¡CRÍTICO! Eliminar 'tenant_id' de la clave primaria compuesta
+                $table->primary([$pivotPermission, $columnNames['model_morph_key'], 'model_type'], // <-- ¡AQUÍ! ELIMINAR 'tenant_id'
                     'model_has_permissions_permission_model_type_primary');
             } else {
                 $table->primary([$pivotPermission, $columnNames['model_morph_key'], 'model_type'],
@@ -75,9 +83,12 @@ return new class extends Migration
                 ->on($tableNames['roles'])
                 ->onDelete('cascade');
             if ($teams) {
-                $table->unsignedBigInteger('tenant_id');
+                // ¡CRÍTICO! Hacer tenant_id nullable
+                $table->unsignedBigInteger('tenant_id')->nullable(); // <-- ¡AQUÍ! HACER NULLABLE
                 $table->index('tenant_id', 'model_has_roles_tenant_id_index');
-                $table->primary(['tenant_id', $pivotRole, $columnNames['model_morph_key'], 'model_type'],
+                
+                // ¡CRÍTICO! Eliminar 'tenant_id' de la clave primaria compuesta
+                $table->primary([$pivotRole, $columnNames['model_morph_key'], 'model_type'], // <-- ¡AQUÍ! ELIMINAR 'tenant_id'
                     'model_has_roles_role_model_type_primary');
             } else {
                 $table->primary([$pivotRole, $columnNames['model_morph_key'], 'model_type'],
@@ -121,7 +132,3 @@ return new class extends Migration
         Schema::drop($tableNames['permissions']);
     }
 };
-
-// This migration creates the necessary tables for the Spatie Laravel Permission package.
-// It includes tables for roles, permissions, and their relationships with models.
-// The migration also handles tenant-specific roles if the teams feature is enabled.

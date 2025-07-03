@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserController as AppUserController; // <-- ¡Esta línea es crucial!
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
@@ -40,12 +40,12 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // CRUD de usuarios (filtrados por tenant)
-    Route::apiResource('users', UserController::class);
+    Route::apiResource('users', AppUserController::class, ['only' => ['index', 'show', 'store', 'update', 'destroy']]); // O solo 'index' si solo quieres listar
 
     // CRUD de empresas (tenants)
     // Nota: El acceso a este recurso podría requerir permisos de super-administrador
     // Si tu aplicación es multi-tenant y los usuarios normales no deben gestionar tenants.
-    Route::apiResource('tenants', TenantController::class);
+    Route::apiResource('tenants', TenantController::class, ['only' => ['index', 'show', 'store', 'update', 'destroy']]);
 
     // CRUD de roles
     Route::apiResource('roles', RoleController::class);
@@ -71,7 +71,7 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // --- MÓDULO DE CULTIVO ---
     // Facilities CRUD
-    Route::apiResource('facilities', FacilityController::class);
+    Route::apiResource('facilities', FacilityController::class, ['only' => ['index', 'show', 'store', 'update', 'destroy']]);
 
     // Stages CRUD (Etapas)
     Route::apiResource('stages', StageController::class);
