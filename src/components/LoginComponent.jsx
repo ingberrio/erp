@@ -1,172 +1,149 @@
 // src/components/LoginComponent.jsx
-
-import React, { useState } from "react"; // <-- Removido useContext, ya no es necesario aquí
+import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import {
-  Box, Paper, Typography, TextField, Button,
-  Snackbar, Alert, CircularProgress, InputAdornment,
-} from "@mui/material";
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import PersonIcon from '@mui/icons-material/Person';
-import VpnKeyIcon from '@mui/icons-material/VpnKey';
+  Box, TextField, Button, Typography, Paper, CircularProgress, Snackbar, Alert
+} from '@mui/material';
 
-import { api } from "../App"; // Importa la instancia global de Axios
+const LoginComponent = ({ onLogin, loading, error, setParentSnack }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [internalError, setInternalError] = useState(null); // Para errores internos del componente
 
-// LoginComponent ahora recibe setToken y setUser como props desde App.js
-const LoginComponent = ({ setToken, setUser }) => { // <-- Asegúrate de que las props setToken y setUser están aquí
-  const [email, setEmail] = useState("demo@demo.com"); // Email pre-rellenado para comodidad
-  const [password, setPassword] = useState("12345678"); // Contraseña pre-rellenada para comodidad
-  const [loading, setLoading] = useState(false);
-  const [snack, setSnack] = useState({ open: false, message: "", severity: "error" });
-
-  // const { handleLogin } = useContext(AuthContext); // <-- ¡ESTA LÍNEA DEBE SER ELIMINADA!
-                                                 // LoginComponent ya no usa AuthContext para la función de login.
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSnack({ ...snack, open: false });
-    setLoading(true);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setInternalError(null); // Limpiar errores internos
+    if (!email || !password) {
+      setInternalError("Por favor, introduce tu correo y contraseña.");
+      return;
+    }
+    
+    // Llama a la función onLogin pasada como prop desde App.jsx
+    // Esta es la función que maneja la lógica de autenticación con el backend.
     try {
-      const response = await api.post('/login', { email, password }); // <-- LoginComponent hace la llamada directamente
-      const { user: fetchedUser, token: fetchedToken } = response.data;
-
-      setToken(fetchedToken); // Llama a la prop setToken de App.js
-      setUser(fetchedUser);   // Llama a la prop setUser de App.js
-
-      setSnack({ open: true, message: "Inicio de sesión exitoso!", severity: "success" });
-
-    } catch (err) {
-      console.error("Error de login en LoginComponent:", err.response?.data || err.message);
-      const errorMessage = err.response?.data?.message || "Error inesperado al iniciar sesión.";
-      setSnack({ open: true, message: errorMessage, severity: "error" });
-    } finally {
-      setLoading(false);
+      await onLogin(email, password);
+    } catch (e) {
+      // onLogin ya maneja los errores y muestra el snackbar,
+      // pero si por alguna razón un error no se propaga bien,
+      // puedes manejarlo aquí también.
+      console.error("Error al llamar a onLogin:", e);
+      setInternalError("Ocurrió un error inesperado al intentar iniciar sesión.");
     }
   };
 
   return (
     <Box
       sx={{
-        minHeight: "100vh",
-        bgcolor: "#1a1a1a",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        bgcolor: '#1a202c',
+        p: 2,
       }}
     >
       <Paper
         elevation={6}
         sx={{
-          p: { xs: 3, sm: 5 },
-          borderRadius: 2,
+          p: 4,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          bgcolor: '#212224',
-          color: '#fff',
+          gap: 2,
+          width: '100%',
           maxWidth: 400,
-          width: '90%',
+          borderRadius: 2,
+          bgcolor: '#2d3748', // Color de fondo del Paper
+          color: '#e2e8f0', // Color del texto
+          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
         }}
       >
-        <LockOutlinedIcon sx={{ fontSize: 48, mb: 2, color: '#fff' }} />
-        <Typography component="h1" variant="h5" sx={{ mb: 3, fontWeight: 'bold' }}>
+        <Typography variant="h5" component="h1" align="center" sx={{ mb: 2, color: '#e2e8f0' }}>
           Iniciar Sesión
         </Typography>
-        <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+        <form onSubmit={handleSubmit}>
           <TextField
-            margin="normal"
-            required
-            fullWidth
-            id="email"
             label="Correo Electrónico"
-            name="email"
-            autoComplete="email"
-            autoFocus
+            type="email"
+            fullWidth
+            margin="normal"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <PersonIcon sx={{ color: '#aaa' }} />
-                </InputAdornment>
-              ),
-              style: { color: '#fff' },
-            }}
-            InputLabelProps={{ style: { color: '#aaa' } }}
+            required
+            variant="outlined"
             sx={{
               '& .MuiOutlinedInput-root': {
-                '& fieldset': { borderColor: '#444' },
-                '&:hover fieldset': { borderColor: '#666' },
-                '&.Mui-focused fieldset': { borderColor: '#fff' },
+                '& fieldset': { borderColor: '#4a5568' },
+                '&:hover fieldset': { borderColor: '#63b3ed' },
+                '&.Mui-focused fieldset': { borderColor: '#4299e1' },
+                color: '#e2e8f0',
               },
+              '& .MuiInputLabel-root': { color: '#a0aec0' },
+            }}
+            InputProps={{
+              style: { color: '#e2e8f0' } // Color del texto de entrada
+            }}
+            InputLabelProps={{
+              style: { color: '#a0aec0' } // Color de la etiqueta
             }}
           />
           <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="password"
             label="Contraseña"
             type="password"
-            id="password"
-            autoComplete="current-password"
+            fullWidth
+            margin="normal"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <VpnKeyIcon sx={{ color: '#aaa' }} />
-                </InputAdornment>
-              ),
-              style: { color: '#fff' },
-            }}
-            InputLabelProps={{ style: { color: '#aaa' } }}
+            required
+            variant="outlined"
             sx={{
               '& .MuiOutlinedInput-root': {
-                '& fieldset': { borderColor: '#444' },
-                '&:hover fieldset': { borderColor: '#666' },
-                '&.Mui-focused fieldset': { borderColor: '#fff' },
+                '& fieldset': { borderColor: '#4a5568' },
+                '&:hover fieldset': { borderColor: '#63b3ed' },
+                '&.Mui-focused fieldset': { borderColor: '#4299e1' },
+                color: '#e2e8f0',
               },
+              '& .MuiInputLabel-root': { color: '#a0aec0' },
+            }}
+            InputProps={{
+              style: { color: '#e2e8f0' }
+            }}
+            InputLabelProps={{
+              style: { color: '#a0aec0' }
             }}
           />
+          {(error || internalError) && (
+            <Alert severity="error" sx={{ mt: 2, mb: 1, width: '100%' }}>
+              {error || internalError}
+            </Alert>
+          )}
           <Button
             type="submit"
             fullWidth
             variant="contained"
             sx={{
               mt: 3,
-              mb: 2,
               py: 1.5,
-              bgcolor: '#4a90e2',
-              '&:hover': {
-                bgcolor: '#3a7bd5',
-              },
-              color: '#fff',
+              bgcolor: '#4299e1', // Color de fondo del botón
+              '&:hover': { bgcolor: '#3182ce' }, // Color de fondo al pasar el ratón
+              color: '#fff', // Color del texto del botón
+              borderRadius: 1,
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
             }}
             disabled={loading}
           >
-            {loading ? <CircularProgress size={24} color="inherit" /> : "ENTRAR"}
+            {loading ? <CircularProgress size={24} color="inherit" /> : 'ENTRAR'}
           </Button>
         </form>
-
-        <Snackbar
-          open={snack.open}
-          autoHideDuration={4000}
-          onClose={() => setSnack({ ...snack, open: false })}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert
-            severity={snack.severity}
-            onClose={() => setSnack({ ...snack, open: false })}
-            sx={{ width: '100%' }}
-          >
-            {snack.message}
-          </Alert>
-        </Snackbar>
       </Paper>
     </Box>
   );
+};
+
+LoginComponent.propTypes = {
+  onLogin: PropTypes.func.isRequired,
+  loading: PropTypes.bool.isRequired,
+  error: PropTypes.string,
+  setParentSnack: PropTypes.func.isRequired,
 };
 
 export default LoginComponent;

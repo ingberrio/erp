@@ -31,18 +31,19 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
       onClose={onCancel}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
+      PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
     >
-      <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
+      <DialogTitle id="alert-dialog-title" sx={{ color: '#e2e8f0' }}>{title}</DialogTitle>
       <DialogContent>
-        <Typography id="alert-dialog-description">
+        <Typography id="alert-dialog-description" sx={{ color: '#a0aec0' }}>
           {message}
         </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} color="primary">
+        <Button onClick={onCancel} sx={{ color: '#a0aec0' }}>
           Cancelar
         </Button>
-        <Button onClick={onConfirm} color="error" autoFocus>
+        <Button onClick={onConfirm} color="error" autoFocus sx={{ color: '#fc8181' }}>
           Confirmar
         </Button>
       </DialogActions>
@@ -59,10 +60,12 @@ ConfirmationDialog.propTypes = {
 };
 
 // --- Componente principal de CRUD de Usuarios, Roles y Permisos ---
-const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack }) => {
+const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack, isGlobalAdmin }) => {
   const [activeTab, setActiveTab] = useState(0);
 
   console.log("UsuariosCrudInternal: Componente renderizado. Pestaña activa:", activeTab);
+  console.log("UsuariosCrudInternal: Props recibidas: tenantId:", tenantId, "isAppReady:", isAppReady, "isGlobalAdmin:", isGlobalAdmin);
+
 
   // --- Estados para Usuarios ---
   const [users, setUsers] = useState([]);
@@ -172,52 +175,71 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 
   // --- Fetchers de datos ---
   const fetchUsers = useCallback(async () => {
-    if (!tenantId || !isAppReady) { setLoadingUsers(false); return; }
+    if (!isAppReady || (!isGlobalAdmin && !tenantId)) {
+      console.log('UsuariosCrudInternal: Saltando fetchUsers. Tenant ID:', tenantId, 'Is Global Admin:', isGlobalAdmin, 'App Ready:', isAppReady);
+      setLoadingUsers(false);
+      return;
+    }
     setLoadingUsers(true);
     try {
       const res = await api.get("/users?with_roles=true");
       setUsers(Array.isArray(res.data) ? res.data : res.data.data || []);
+      showSnack('Usuarios cargados exitosamente.', 'success');
     } catch (err) {
       console.error("Error loading users:", err);
-      showSnack("No se pudieron cargar los usuarios", "error");
+      const errorMessage = err.response?.data?.message || err.message;
+      showSnack(`No se pudieron cargar los usuarios: ${errorMessage}`, "error");
     } finally { setLoadingUsers(false); }
-  }, [tenantId, isAppReady, showSnack]);
+  }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
   const fetchRoles = useCallback(async () => {
-    if (!tenantId || !isAppReady) { setLoadingRoles(false); return; }
+    if (!isAppReady || (!isGlobalAdmin && !tenantId)) {
+      setLoadingRoles(false);
+      return;
+    }
     setLoadingRoles(true);
     try {
       const res = await api.get("/roles?with_permissions=true");
       setRoles(Array.isArray(res.data) ? res.data : res.data.data || []);
+      showSnack('Roles cargados exitosamente.', 'success');
     } catch (err) {
       console.error("Error loading roles:", err);
-      showSnack("No se pudieron cargar los roles", "error");
+      const errorMessage = err.response?.data?.message || err.message;
+      showSnack(`No se pudieron cargar los roles: ${errorMessage}`, "error");
     } finally { setLoadingRoles(false); }
-  }, [tenantId, isAppReady, showSnack]);
+  }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
   const fetchPermissions = useCallback(async () => {
-    if (!tenantId || !isAppReady) { setLoadingPermissions(false); return; }
+    if (!isAppReady || (!isGlobalAdmin && !tenantId)) {
+      setLoadingPermissions(false);
+      return;
+    }
     setLoadingPermissions(true);
     try {
       const res = await api.get("/permissions");
       setPermissions(Array.isArray(res.data) ? res.data : res.data.data || []);
+      showSnack('Permisos cargados exitosamente.', 'success');
     } catch (err) {
       console.error("Error loading permissions:", err);
-      showSnack("No se pudieron cargar los permisos", "error");
+      const errorMessage = err.response?.data?.message || err.message;
+      showSnack(`No se pudieron cargar los permisos: ${errorMessage}`, "error");
     } finally { setLoadingPermissions(false); }
-  }, [tenantId, isAppReady, showSnack]);
+  }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
   // --- useEffects para cargar datos al montar y al cambiar la pestaña ---
   useEffect(() => {
-    if (tenantId && isAppReady) {
-      console.log("UsuariosCrudInternal: tenantId y isAppReady son true. Cargando datos para la pestaña:", activeTab);
+    if (isAppReady && (isGlobalAdmin || tenantId)) {
+      console.log("UsuariosCrudInternal: isAppReady y (isGlobalAdmin o tenantId) son true. Cargando datos para la pestaña:", activeTab);
       if (activeTab === 0) fetchUsers();
       if (activeTab === 1) fetchRoles();
       if (activeTab === 2) fetchPermissions();
     } else {
-      console.log("UsuariosCrudInternal: Esperando tenantId o isAppReady. tenantId:", tenantId, "isAppReady:", isAppReady);
+      console.log("UsuariosCrudInternal: Esperando isAppReady o (isGlobalAdmin o tenantId). tenantId:", tenantId, "isAppReady:", isAppReady, "isGlobalAdmin:", isGlobalAdmin);
+      setLoadingUsers(false);
+      setLoadingRoles(false);
+      setLoadingPermissions(false);
     }
-  }, [activeTab, tenantId, isAppReady, fetchUsers, fetchRoles, fetchPermissions]);
+  }, [activeTab, tenantId, isAppReady, isGlobalAdmin, fetchUsers, fetchRoles, fetchPermissions]);
 
   // --- Lógica de filtrado de usuarios ---
   const filteredUsers = users.filter(user =>
@@ -231,7 +253,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setUserName(user ? user.name : "");
     setUserEmail(user ? user.email : "");
     setUserPassword("");
-    if (tenantId && isAppReady) { fetchRoles(); }
+    if (isAppReady && (isGlobalAdmin || tenantId)) { fetchRolesForAssignment(); }
     setUserSelectedRoleIds(user ? (user.roles?.map(role => role.id) || []) : []);
     setOpenUserDialog(true);
   };
@@ -245,6 +267,19 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setUserSelectedRoleIds([]);
   };
 
+  // Función específica para cargar roles para el diálogo de asignación de usuarios
+  const fetchRolesForAssignment = useCallback(async () => {
+    if (!isAppReady || (!isGlobalAdmin && !tenantId)) { return; }
+    try {
+      const res = await api.get("/roles");
+      setRolesForAssignment(Array.isArray(res.data) ? res.data : res.data.data || []);
+    } catch (err) {
+      console.error("Error loading roles for assignment:", err);
+      showSnack("No se pudieron cargar los roles para asignación.", "error");
+    }
+  }, [isAppReady, isGlobalAdmin, tenantId, showSnack]);
+
+
   // --- CRUD Operations (Usuarios) ---
   const handleSaveUser = async (e) => {
     e.preventDefault();
@@ -255,6 +290,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
         email: userEmail,
         ...(!editingUser || userPassword.trim() !== "" ? { password: userPassword } : {}),
         roles: userSelectedRoleIds,
+        tenant_id: isGlobalAdmin ? null : tenantId,
       };
       if (editingUser) {
         await api.put(`/users/${editingUser.id}`, userData);
@@ -306,7 +342,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setEditingRole(role);
     setRoleName(role ? role.name : "");
     setRoleDescription(role ? (role.description || "") : "");
-    if (tenantId && isAppReady) { fetchPermissions(); }
+    if (isAppReady && (isGlobalAdmin || tenantId)) { fetchPermissions(); }
     setRoleSelectedPermissionIds(role ? (role.permissions?.map(perm => perm.id) || []) : []);
     setOpenRoleDialog(true);
   };
@@ -328,6 +364,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
         name: roleName,
         description: roleDescription,
         permissions: roleSelectedPermissionIds,
+        tenant_id: isGlobalAdmin ? null : tenantId,
       };
       if (editingRole) {
         await api.put(`/roles/${editingRole.id}`, roleData);
@@ -367,11 +404,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setConfirmDialogOpen(true);
   };
 
-  const toggleRolePermission = (permissionId) => {
+  const toggleRolePermission = (permissionId) => { // <-- Aquí está el cambio
     setRoleSelectedPermissionIds(prevSelected =>
       prevSelected.includes(permissionId)
-        ? prevSelected.filter(id => id !== permissionId)
-        : [...prevSelected, permissionId]
+        ? prevSelected.filter(id => id !== permissionId) // <-- Usar permissionId
+        : [...prevSelected, permissionId] // <-- Usar permissionId
     );
   };
 
@@ -415,6 +452,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       const permissionData = {
         name: permissionName,
         description: permissionDescription,
+        tenant_id: isGlobalAdmin ? null : tenantId,
       };
 
       if (!editingPermission && permissionTemplate.includes('{id}') && !selectedFacilityForPermission) {
@@ -954,7 +992,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
               <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingPermission ? "Editar Permiso" : "Nuevo Permiso"}</DialogTitle>
               <form onSubmit={handleSavePermission}>
                 <DialogContent sx={{ pt: '20px !important' }}>
-                  {!editingPermission && ( // Solo mostrar selectores para nuevos permisos
+                  {!editingPermission && (
                     <>
                       <FormControl fullWidth sx={{ mt: 1, mb: 2 }}>
                         <InputLabel id="permission-template-label">Plantilla de Permiso</InputLabel>
@@ -964,7 +1002,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                           label="Plantilla de Permiso"
                           onChange={(e) => {
                             setPermissionTemplate(e.target.value);
-                            setSelectedFacilityForPermission(''); // Reset facility when template changes
+                            setSelectedFacilityForPermission('');
                           }}
                           disabled={permissionDialogLoading}
                         >
@@ -977,7 +1015,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                         </Select>
                       </FormControl>
 
-                      {permissionTemplate.includes('{id}') && ( // Mostrar selector de instalación si la plantilla lo requiere
+                      {permissionTemplate.includes('{id}') && (
                         <FormControl fullWidth sx={{ mb: 2 }}>
                           <InputLabel id="facility-for-permission-label">Seleccionar Instalación</InputLabel>
                           <Select
@@ -986,19 +1024,18 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                             label="Seleccionar Instalación"
                             onChange={(e) => setSelectedFacilityForPermission(e.target.value)}
                             required={permissionTemplate.includes('{id}')}
-                            disabled={permissionDialogLoading || facilities.length === 0}
+                            disabled={permissionDialogLoading || (facilities && facilities.length === 0)}
                           >
-                            {facilities.length === 0 ? (
+                            {facilities && facilities.length === 0 ? (
                               <MenuItem value="" disabled>
                                 <em>No hay instalaciones disponibles</em>
                               </MenuItem>
-                            ) : (
-                              facilities.map((f) => (
+                            ) : (facilities || []).map((f) => (
                                 <MenuItem key={f.id} value={f.id}>{f.name} (ID: {f.id})</MenuItem>
                               ))
-                            )}
+                            }
                           </Select>
-                          {facilities.length === 0 && (
+                          {facilities && facilities.length === 0 && (
                             <Typography variant="caption" color="error" sx={{ mt: 1 }}>
                               No hay instalaciones para asignar permisos específicos.
                             </Typography>
@@ -1071,7 +1108,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       </Box>
 
       {/* Pestañas de navegación */}
-      <Paper elevation={2} sx={{ mb: 3, borderRadius: 2, bgcolor: '#283e51', boxShadow: '0 1px 0 rgba(9,30,66,.25)', border: '2px solid red' }}>
+      <Paper elevation={2} sx={{ mb: 3, borderRadius: 2, bgcolor: '#283e51', boxShadow: '0 1px 0 rgba(9,30,66,.25)' }}>
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
@@ -1108,10 +1145,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 };
 
 UsuariosCrudInternal.propTypes = {
-  tenantId: PropTypes.string.isRequired,
+  tenantId: PropTypes.string,
   isAppReady: PropTypes.bool.isRequired,
-  facilities: PropTypes.array.isRequired,
+  facilities: PropTypes.array,
   setParentSnack: PropTypes.func.isRequired,
+  isGlobalAdmin: PropTypes.bool.isRequired,
 };
 
 export default UsuariosCrudInternal;

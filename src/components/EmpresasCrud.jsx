@@ -1,5 +1,4 @@
 // src/components/EmpresasCrud.jsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { api } from '../App'; // Importa la instancia global de Axios
@@ -23,18 +22,19 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
       onClose={onCancel}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
+      PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
     >
-      <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
+      <DialogTitle id="alert-dialog-title" sx={{ color: '#e2e8f0' }}>{title}</DialogTitle>
       <DialogContent>
-        <Typography id="alert-dialog-description">
+        <Typography id="alert-dialog-description" sx={{ color: '#a0aec0' }}>
           {message}
         </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} color="primary">
+        <Button onClick={onCancel} sx={{ color: '#a0aec0' }}>
           Cancelar
         </Button>
-        <Button onClick={onConfirm} color="error" autoFocus>
+        <Button onClick={onConfirm} color="error" autoFocus sx={{ color: '#fc8181' }}>
           Confirmar
         </Button>
       </DialogActions>
@@ -51,36 +51,49 @@ ConfirmationDialog.propTypes = {
 };
 
 // --- Componente principal del Módulo de Empresas ---
-const EmpresasCrud = ({ tenantId, isAppReady }) => {
-  const [companies, setCompanies] = useState([]); // Renombrado de 'empresas' a 'companies' para consistencia
-  const [loading, setLoading] = useState(true); // Estado de carga principal
+// Recibe isGlobalAdmin como prop para una lógica más robusta
+const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack }) => {
+  const [companies, setCompanies] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
 
-  // Para crear/editar empresa
-  const [openCompanyDialog, setOpenCompanyDialog] = useState(false); // Renombrado de 'openDialog'
-  const [companyName, setCompanyName] = useState(''); // Renombrado de 'empresaNombre'
-  const [editingCompany, setEditingCompany] = useState(null); // Renombrado de 'editEmpresaId' (ahora guarda el objeto completo)
-  const [companyDialogLoading, setCompanyDialogLoading] = useState(false); // Estado de carga para el diálogo
+  const [openCompanyDialog, setOpenCompanyDialog] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const [companyAddress, setCompanyAddress] = useState(''); // Añadido para la dirección
+  const [editingCompany, setEditingCompany] = useState(null);
+  const [companyDialogLoading, setCompanyDialogLoading] = useState(false);
 
-  // Para el diálogo de confirmación
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
+
+  // Determinar si el usuario es Super Admin.
+  // Es mejor pasarla como prop desde App.jsx, pero si no, se puede leer de localStorage.
+  const isGlobalAdmin = localStorage.getItem('isGlobalAdmin') === 'true';
 
   // Utilidad para manejar notificaciones (memorizada con useCallback)
   const showSnack = useCallback((message, severity = 'success') => {
     setSnack({ open: true, message, severity });
-  }, []);
+    // También llamar al snackbar padre si se proporciona
+    if (setParentSnack) {
+      setParentSnack(message, severity);
+    }
+  }, [setParentSnack]);
 
   // Fetch companies (memorizada con useCallback)
   const fetchCompanies = useCallback(async () => {
-    if (!tenantId || !isAppReady) {
-      console.log('EmpresasCrud: Saltando fetchCompanies. Tenant ID:', tenantId, 'App Ready:', isAppReady);
-      setLoading(false); // Desactiva el loading si no está listo
+    // ¡LÓGICA CLAVE DE CARGA!
+    // Cargar si la app está lista Y (es Super Admin O tiene un tenantId válido)
+    if (!isAppReady || (!isGlobalAdmin && !tenantId)) {
+      console.log('EmpresasCrud: Saltando fetchCompanies. Tenant ID:', tenantId, 'Is Global Admin:', isGlobalAdmin, 'App Ready:', isAppReady);
+      setLoading(false);
       return;
     }
-    setLoading(true); // Activa el loading antes de la llamada API
+
+    setLoading(true);
     try {
-      const response = await api.get('/tenants'); // Endpoint para listar tenants/empresas
+      // Endpoint para listar tenants/empresas
+      // El backend debe manejar si es Super Admin (sin X-Tenant-ID) o admin de tenant (con X-Tenant-ID)
+      const response = await api.get('/tenants'); // Asume que esta ruta lista todas las empresas para Super Admin
       const fetchedCompanies = Array.isArray(response.data)
         ? response.data
         : Array.isArray(response.data?.data) // Manejo de respuesta paginada o directa
@@ -88,33 +101,38 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
         : [];
       setCompanies(fetchedCompanies);
       console.log('EmpresasCrud: Empresas cargadas:', fetchedCompanies.length);
+      showSnack('Empresas cargadas exitosamente.', 'success'); // Notificación de éxito
     } catch (error) {
       console.error('EmpresasCrud: Error al cargar empresas:', error);
-      showSnack('Error al cargar empresas.', 'error');
+      const errorMessage = error.response?.data?.message || error.message;
+      showSnack(`Error al cargar empresas: ${errorMessage}`, 'error');
+      setCompanies([]); // Limpiar la lista en caso de error
     } finally {
-      setLoading(false); // Desactiva el loading SIEMPRE
+      setLoading(false);
       console.log('EmpresasCrud: setLoading(false) llamado en fetchCompanies.');
     }
-  }, [tenantId, isAppReady, showSnack]); // Dependencias para useCallback
+  }, [tenantId, isAppReady, isGlobalAdmin, showSnack]); // Añadir isGlobalAdmin a las dependencias
 
   // Efecto para la carga inicial de empresas
   useEffect(() => {
-    fetchCompanies(); // Llama a fetchCompanies cuando el componente se monta o sus dependencias cambian
-  }, [fetchCompanies]); // fetchCompanies es la única dependencia porque ya está memorizada
+    fetchCompanies();
+  }, [fetchCompanies]);
 
   // Handlers de UI y Diálogos
   const handleOpenCompanyDialog = (company = null) => {
     setEditingCompany(company);
     setCompanyName(company ? company.name : '');
+    setCompanyAddress(company ? company.address : ''); // Cargar dirección si existe
     setOpenCompanyDialog(true);
-    setCompanyDialogLoading(false); // Asegura que el diálogo no esté cargando al abrir
+    setCompanyDialogLoading(false);
   };
 
   const handleCloseCompanyDialog = () => {
     setOpenCompanyDialog(false);
     setEditingCompany(null);
     setCompanyName('');
-    setCompanyDialogLoading(false); // Asegura que el diálogo no esté cargando al cerrar
+    setCompanyAddress(''); // Limpiar dirección
+    setCompanyDialogLoading(false);
   };
 
   const handleSaveCompany = async (e) => {
@@ -131,18 +149,18 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
       showSnack('El nombre no puede contener caracteres especiales como <, >, o {}.', 'warning');
       return;
     }
-    setCompanyDialogLoading(true); // Activa el loading del diálogo
+    setCompanyDialogLoading(true);
     try {
-      const companyData = { name: companyName };
+      const companyData = { name: companyName.trim(), address: companyAddress.trim() }; // Incluir dirección
       if (editingCompany) {
-        await api.put(`/tenants/${editingCompany.id}`, companyData);
+        await api.put(`/tenants/${editingCompany.id}`, companyData); // Usar /tenants para PUT
         showSnack('Empresa actualizada.', 'success');
       } else {
-        await api.post('/tenants', companyData);
+        await api.post('/tenants', companyData); // Usar /tenants para POST
         showSnack('Empresa creada.', 'success');
       }
-      await fetchCompanies(); // Refresca la lista de empresas
-      handleCloseCompanyDialog(); // Cierra el diálogo
+      await fetchCompanies();
+      handleCloseCompanyDialog();
     } catch (err) {
       console.error('EmpresasCrud: Error al guardar empresa:', err);
       const errorMessage = err.response?.data?.message || err.message;
@@ -154,17 +172,16 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
         showSnack(`Error al guardar empresa: ${errorMessage}`, 'error');
       }
     } finally {
-      setCompanyDialogLoading(false); // Desactiva el loading del diálogo SIEMPRE
+      setCompanyDialogLoading(false);
     }
   };
 
-  // Eliminar empresa (memorizada con useCallback para el diálogo de confirmación)
   const handleDeleteCompanyConfirm = useCallback(async (companyToDelete) => {
-    setLoading(true); // Activa el loading principal
+    setLoading(true);
     try {
-      await api.delete(`/tenants/${companyToDelete.id}`);
+      await api.delete(`/tenants/${companyToDelete.id}`); // Usar /tenants para DELETE
       showSnack('Empresa eliminada.', 'info');
-      await fetchCompanies(); // Refresca la lista de empresas
+      await fetchCompanies();
     } catch (err) {
       console.error('EmpresasCrud: Error al eliminar empresa:', err);
       const errorMessage = err.response?.data?.message || err.message;
@@ -176,8 +193,8 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
         showSnack(`Error al eliminar empresa: ${errorMessage}`, 'error');
       }
     } finally {
-      setLoading(false); // Desactiva el loading principal SIEMPRE
-      setConfirmDialogOpen(false); // Cierra el diálogo de confirmación
+      setLoading(false);
+      setConfirmDialogOpen(false);
     }
   }, [fetchCompanies, showSnack]);
 
@@ -193,13 +210,13 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
   return (
     <Box sx={{
       p: { xs: 2, sm: 3 },
-      minHeight: 'calc(100vh - 64px)', // Ajusta a la altura de la AppBar
-      bgcolor: '#004d80', // Color de fondo azul oscuro como Cultivo
-      color: '#fff', // Color de texto blanco para contraste
+      minHeight: 'calc(100vh - 64px)',
+      bgcolor: '#004d80',
+      color: '#fff',
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <BusinessIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} /> {/* Icono blanco */}
-        <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}> {/* Título blanco */}
+        <BusinessIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} />
+        <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}>
           Gestión de Empresas
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
@@ -207,10 +224,10 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenCompanyDialog(null)}
-          disabled={loading} // Deshabilita el botón si la página está cargando
+          disabled={loading}
           sx={{
             borderRadius: 2,
-            bgcolor: '#4CAF50', // Verde como el botón de Cultivo
+            bgcolor: '#4CAF50',
             '&:hover': { bgcolor: '#43A047' }
           }}
         >
@@ -273,6 +290,16 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
               inputProps={{ maxLength: 100 }}
               aria-label="Nombre de la empresa"
             />
+            {/* Añadir campo de dirección */}
+            <TextField
+              label="Dirección"
+              value={companyAddress}
+              onChange={e => setCompanyAddress(e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+              disabled={companyDialogLoading}
+              aria-label="Dirección de la empresa"
+            />
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseCompanyDialog} disabled={companyDialogLoading}>Cancelar</Button>
@@ -295,7 +322,7 @@ const EmpresasCrud = ({ tenantId, isAppReady }) => {
 };
 
 EmpresasCrud.propTypes = {
-  tenantId: PropTypes.string.isRequired,
+  tenantId: PropTypes.string.isRequired, // <-- ¡Este debe ser PropTypes.string o null!
   isAppReady: PropTypes.bool.isRequired,
 };
 
@@ -304,14 +331,14 @@ const CompanyCard = React.memo(({ company, handleEdit, handleDelete }) => {
   return (
     <Paper
       sx={{
-        bgcolor: '#283e51', // Fondo de la tarjeta más oscuro que el fondo general
+        bgcolor: '#283e51',
         borderRadius: 2,
         p: 2,
         boxShadow: '0 1px 0 rgba(9,30,66,.25)',
-        color: '#fff', // Texto de la tarjeta blanco
+        color: '#fff',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%', // Asegura que las tarjetas en el Grid tengan la misma altura
+        height: '100%',
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
@@ -324,21 +351,22 @@ const CompanyCard = React.memo(({ company, handleEdit, handleDelete }) => {
             onClick={(e) => { e.stopPropagation(); handleEdit(company); }}
             aria-label={`Editar empresa ${company.name}`}
           >
-            <EditIcon sx={{ fontSize: 18, color: '#b0c4de' }} /> {/* Icono más claro */}
+            <EditIcon sx={{ fontSize: 18, color: '#b0c4de' }} />
           </IconButton>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); handleDelete(company); }}
             aria-label={`Eliminar empresa ${company.name}`}
           >
-            <DeleteIcon sx={{ fontSize: 18, color: '#b0c4de' }} /> {/* Icono más claro */}
+            <DeleteIcon sx={{ fontSize: 18, color: '#b0c4de' }} />
           </IconButton>
         </Box>
       </Box>
-      <Divider sx={{ mb: 1.5, bgcolor: 'rgba(255,255,255,0.2)' }} /> {/* Divisor más claro */}
-      <Typography variant="body2" sx={{ color: '#b0c4de' }}>ID: {company.id}</Typography> {/* Texto ID más claro */}
-      {/* Puedes añadir más detalles de la empresa aquí si tu modelo los tiene */}
-      {/* Por ejemplo: <Typography variant="body2" sx={{ color: '#b0c4de' }}>Dirección: {company.address}</Typography> */}
+      <Divider sx={{ mb: 1.5, bgcolor: 'rgba(255,255,255,0.2)' }} />
+      <Typography variant="body2" sx={{ color: '#b0c4de' }}>ID: {company.id}</Typography>
+      {company.address && ( // Mostrar dirección solo si existe
+        <Typography variant="body2" sx={{ color: '#b0c4de' }}>Dirección: {company.address}</Typography>
+      )}
     </Paper>
   );
 });
