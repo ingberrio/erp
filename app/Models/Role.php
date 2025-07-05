@@ -2,31 +2,36 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use App\Traits\BelongsToTenant;
+// use App\Scopes\TenantScope; // Esta línea debe estar comentada o eliminada como en la última corrección
 use Spatie\Permission\Models\Role as SpatieRole;
+use Spatie\Permission\Traits\HasPermissions;
 
 class Role extends SpatieRole
 {
-    use HasFactory, BelongsToTenant;
+    use HasPermissions;
 
     protected $fillable = [
-        'name', 'guard_name', 'tenant_id', 'description',
+        'name',
+        'description',
+        'guard_name',
+        'tenant_id',
     ];
 
-    // Esto es crucial y debe permanecer para asegurar 'sanctum' por defecto
-    protected $attributes = [
-        'guard_name' => 'sanctum',
-    ];
+    // El booted() para TenantScope debe estar comentado o eliminado aquí también
+    // protected static function booted()
+    // {
+    //     static::addGlobalScope(new TenantScope);
+    // }
 
-    protected static function booted()
+    public function tenant()
     {
-        static::retrieved(function ($model) {
-            if (empty($model->guard_name)) {
-                $model->guard_name = 'sanctum';
-            }
-        });
-        // Si tu TenantScope se aplica aquí y no en el trait, déjalo.
-        // static::addGlobalScope(new \App\Scopes\TenantScope);
+        return $this->belongsTo(Tenant::class);
     }
+
+    // <-- ¡ELIMINAR ESTE MÉTODO COMPLETO!
+    // public function users()
+    // {
+    //     return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
+    //                 ->where('model_type', User::class);
+    // }
 }

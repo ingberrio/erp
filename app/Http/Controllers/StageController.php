@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Stage;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; // Importa la fachada Log
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class StageController extends Controller
 {
@@ -15,16 +17,12 @@ class StageController extends Controller
      */
     public function index()
     {
-        Log::info('StageController@index: Iniciando método.'); // Log 1
+        Log::info('StageController@index: Iniciando método.');
 
         try {
-            // Asumo que tu modelo Stage ya tiene un Global Scope para tenant_id
-            // Si no lo tiene, deberías filtrar así:
-            // $stages = Stage::where('tenant_id', auth()->user()->tenant_id)->orderBy('order')->get();
-            // Pero lo ideal es usar un Global Scope para evitar repetir el filtro.
             $stages = Stage::orderBy('order')->get();
 
-            Log::info('StageController@index: Etapas obtenidas de la base de datos.', ['count' => $stages->count()]); // Log 2
+            Log::info('StageController@index: Etapas obtenidas de la base de datos.', ['count' => $stages->count()]);
 
             return response()->json($stages);
 
@@ -34,7 +32,7 @@ class StageController extends Controller
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
-            ]); // Log 3
+            ]);
             return response()->json(['message' => 'Error interno del servidor al obtener etapas.'], 500);
         }
     }
@@ -47,17 +45,69 @@ class StageController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $user = auth()->user();
+
+        Log::info('DEBUG_BACKEND: Incoming Stage Creation Request Payload:', $request->all());
+
+        $rules = [
             'name' => 'required|string|max:255',
-        ]);
+            'order' => 'nullable|integer',
+        ];
 
-        $stage = Stage::create([
-            'name' => $request->name,
-            'order' => Stage::max('order') + 1, // Asigna el siguiente orden disponible
-            // tenant_id se asignará automáticamente si tienes un Global Scope
-        ]);
+        if ($user->is_global_admin) {
+            $rules['tenant_id'] = ['required', 'integer', Rule::exists('tenants', 'id')];
+        }
 
-        return response()->json($stage, 201);
+        try {
+            $validatedData = $request->validate($rules);
+
+            $dataToCreate = [
+                'name' => $validatedData['name'],
+                'order' => $validatedData['order'] ?? (Stage::max('order') + 1),
+            ];
+
+            if ($user->is_global_admin) {
+                $dataToCreate['tenant_id'] = $validatedData['tenant_id'];
+            } else {
+                $dataToCreate['tenant_id'] = $user->tenant_id;
+            }
+
+            Log::info('DEBUG_BACKEND: Stage dataToCreate before model creation:', $dataToCreate);
+            // dd($dataToCreate); // <-- ¡COMENTA O ELIMINA ESTA LÍNEA!
+
+            if (empty($dataToCreate['tenant_id'])) {
+                Log::error('HasTenant Trait: Fallo al asignar tenant_id al modelo App\Models\Stage durante la creación. Tenant ID es null. Datos de Request:', [
+                    'request_data' => $request->all(),
+                    'auth_user_id' => $user->id,
+                    'auth_is_global_admin' => $user->is_global_admin,
+                    'auth_tenant_id' => $user->tenant_id,
+                    'data_to_create_at_error' => $dataToCreate
+                ]);
+                return response()->json(['message' => 'No se puede crear la etapa: El ID de inquilino no se proporcionó o es inválido.'], 422);
+            }
+
+            $stage = Stage::create($dataToCreate);
+
+            return response()->json($stage, 201);
+
+        } catch (ValidationException $e) {
+            Log::error('DEBUG_BACKEND: Validation failed during Stage store:', [
+                'errors' => $e->errors(),
+                'request_payload' => $request->all(),
+                'user_id' => $user->id,
+                'is_global_admin' => $user->is_global_admin,
+            ]);
+            return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
+        } catch (\Throwable $e) {
+            Log::error('DEBUG_BACKEND: Unexpected error during Stage store:', [
+                'error_message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_payload' => $request->all(),
+                'user_id' => $user->id,
+                'is_global_admin' => $user->is_global_admin,
+            ]);
+            return response()->json(['error' => 'An unexpected error occurred.', 'details' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -82,7 +132,7 @@ class StageController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'order' => 'nullable|integer', // Permite actualizar el orden
+            'order' => 'nullable|integer',
         ]);
 
         $stage->update($request->all());
@@ -98,11 +148,7 @@ class StageController extends Controller
      */
     public function destroy(Stage $stage)
     {
-        // Antes de eliminar, puedes verificar si hay áreas de cultivo asociadas
-        // y si las hay, puedes lanzar un error o eliminarlas en cascada.
-        // Por ahora, si hay áreas, la eliminación fallará por restricción de clave foránea.
         $stage->delete();
-
         return response()->json(null, 204);
     }
 

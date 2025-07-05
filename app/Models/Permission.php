@@ -1,28 +1,27 @@
 <?php
+
 namespace App\Models;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use App\Traits\BelongsToTenant;
+
+// use App\Scopes\TenantScope; // <-- ¡ELIMINAR O COMENTAR ESTA LÍNEA!
 use Spatie\Permission\Models\Permission as SpatiePermission;
 
 class Permission extends SpatiePermission
 {
-    use HasFactory, BelongsToTenant;
-
     protected $fillable = [
-        'name', 'guard_name', 'tenant_id', 'description',
+        'name',
+        'description',
+        'guard_name',
+        'tenant_id', // Asegúrate de que tenant_id esté fillable
     ];
 
-    // Esto es crucial y debe permanecer
-    protected $attributes = [
-        'guard_name' => 'sanctum',
-    ];
+    // <-- ¡ELIMINAR O COMENTAR ESTE BLOQUE!
+    // protected static function booted()
+    // {
+    //     static::addGlobalScope(new TenantScope);
+    // }
 
-    protected static function booted()
+    public function tenant()
     {
-        static::retrieved(function ($model) {
-            if (empty($model->guard_name)) {
-                $model->guard_name = 'sanctum';
-            }
-        });
+        return $this->belongsTo(Tenant::class);
     }
 }

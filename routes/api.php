@@ -95,4 +95,10 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::prefix('cultivation-areas/{cultivationArea}')->group(function () {
         Route::apiResource('batches', BatchController::class)->only(['index']);
     });
+
+    Route::get('/test-cors', function () {
+        // dd() detendrá la ejecución y mostrará esto en el navegador
+        dd(['message' => 'CORS test successful!', 'headers_sent' => headers_sent()]);
+        // return response()->json(['message' => 'CORS test successful!']); // Esta línea no se ejecutará
+    });
 });
