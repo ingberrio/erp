@@ -1,95 +1,270 @@
 // src/App.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import PropTypes from 'prop-types';
 
+// Componentes y Utilidades de Material-UI
 import {
-  AppBar, Toolbar, Typography, Button, Box, IconButton, Drawer, List, ListItem,
-  ListItemText, CssBaseline, CircularProgress, Snackbar, Alert,
-  Menu, MenuItem, Divider, ListItemIcon, Collapse
+  AppBar, Toolbar, IconButton, Typography, Box, Drawer, List, ListItem,
+  ListItemIcon, ListItemText, CssBaseline, Snackbar, Alert, Menu, MenuItem,
+  CircularProgress, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Collapse // Importar Collapse para el menú desplegable
 } from '@mui/material';
+
+// Iconos de Material-UI
 import MenuIcon from '@mui/icons-material/Menu';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import LockIcon from '@mui/icons-material/Lock';
-import WorkIcon from '@mui/icons-material/Work';
 import AccountCircle from '@mui/icons-material/AccountCircle';
-import LogoutIcon from '@mui/icons-material/Logout';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
 import HomeIcon from '@mui/icons-material/Home';
-import AgricultureIcon from '@mui/icons-material/Agriculture';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import BusinessIcon from '@mui/icons-material/Business';
+import PeopleIcon from '@mui/icons-material/People';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import ExpandLess from '@mui/icons-material/ExpandLess'; // Icono para expandir
+import ExpandMore from '@mui/icons-material/ExpandMore'; // Icono para contraer
+import LockIcon from '@mui/icons-material/Lock'; // Para el menú de Administración
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // Para Calendario
+import LocalFloristIcon from '@mui/icons-material/LocalFlorist'; // Para Cultivo (o un ícono de tractor si lo tienes)
 
-// Importaciones de componentes especificados por el usuario
-import LoginComponent from "./components/LoginComponent";
-import EmpresasCrud from "./components/EmpresasCrud";
-import CalendarioModuleWrapper from './components/CalendarioModuleWrapper';
-import CultivationPage from './components/CultivationPage';
+
+// Componentes de tu aplicación
+import EmpresasCrud from './components/EmpresasCrud';
 import UsuariosCrudInternal from './components/UsuariosCrudInternal';
+import CalendarioModuleWrapper from './components/CalendarioModuleWrapper'; // <-- ¡IMPORTADO!
+import CultivationPage from './components/CultivationPage'; // <-- ¡IMPORTADO!
 
-// Configuración de Axios (instancia global para la API)
+
+// Configuración de Axios
 export const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api', // Asegúrate de que esta URL sea correcta para tu backend Laravel
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+  withCredentials: true, // <-- ¡MUY IMPORTANTE PARA SANCTUM!
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-});
+}); 
 
-// Componente principal de la aplicación
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken'); // O de donde sea que guardes tu token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Asegúrate de que X-Tenant-ID se envíe si está disponible
+    const currentTenantId = localStorage.getItem('currentTenantId'); // O de donde sea que guardes el tenant ID
+    if (currentTenantId) {
+      config.headers['X-Tenant-ID'] = currentTenantId;
+    } else {
+      // Si no hay tenantId, asegúrate de que el header no se envíe o sea null,
+      // dependiendo de cómo tu backend maneje los Super Admins.
+      // Para Super Admins, a menudo no se necesita X-Tenant-ID para rutas globales como /tenants.
+      // Puedes decidir eliminarlo si el usuario es Super Admin y la ruta es global.
+      // Por ahora, lo dejamos para ver si es la causa del 401.
+      config.headers['X-Tenant-ID'] = null; // O elimina la línea: delete config.headers['X-Tenant-ID'];
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+const drawerWidth = 240;
+
 const App = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Estados de autenticación y carga
   const [loggedIn, setLoggedIn] = useState(false);
-  const [authUser, setAuthUser] = useState(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [appReady, setAppReady] = useState(false); // Para indicar que la app está lista después de cargar datos iniciales
-  const [loginError, setLoginError] = useState(null);
-  const [tenantId, setTenantId] = useState(null);
-  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
-  const [userPermissions, setUserPermissions] = useState([]); // Permisos del usuario logeado
-  const [facilities, setFacilities] = useState([]); // Lista de instalaciones para el selector de usuario/permisos
-
-  // Estados para Snackbar (mensajes de alerta/éxito)
-  const [snackOpen, setSnackOpen] = useState(false);
-  const [snackMessage, setSnackMessage] = useState("");
-  const [snackSeverity, setSnackSeverity] = useState("info");
-
-  // Estado para el menú de usuario en la AppBar
-  const [anchorEl, setAnchorEl] = useState(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
+  const [anchorEl, setAnchorEl] = useState(null); // Para el menú de usuario
   const openUserMenu = Boolean(anchorEl);
+  const userMenuAnchorRef = React.useRef(null); // Ref para el anclaje del menú de usuario
 
-  // Estado para el drawer (menú lateral)
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [facilities, setFacilities] = useState([]);
 
-  // Estados para submenús del drawer
-  const [openCultivationMenu, setOpenCultivationMenu] = useState(false);
+  // Estado para el diálogo de login
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
+  // Estado para los permisos del usuario
+  const [userPermissions, setUserPermissions] = useState(new Set()); // Usamos un Set para búsqueda rápida
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
+  const [tenantId, setTenantId] = useState(null);
+  const [isAppReady, setIsAppReady] = useState(false); // Nuevo estado para indicar que la app está lista
+
+  // Estado para el menú de Administración colapsable
   const [openAdminMenu, setOpenAdminMenu] = useState(false);
 
-  // Función para mostrar snackbar
-  const showGlobalSnack = useCallback((message, severity = "info") => {
-    setSnackMessage(message);
-    setSnackSeverity(severity);
-    setSnackOpen(true);
+  // --- Función para mostrar SnackBar ---
+  const showSnack = useCallback((message, severity = 'success') => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
   }, []);
 
-  // Función para cerrar snackbar
-  const handleSnackClose = (event, reason) => {
-    if (reason === 'clickaway') {
-      return;
-    }
-    setSnackOpen(false);
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === 'clickaway') return;
+    setSnackbarOpen(false);
   };
 
-  // Función para verificar permisos del usuario logeado
+  // --- Función para verificar permisos ---
   const hasPermission = useCallback((permissionName) => {
-    return isGlobalAdmin || (Array.isArray(userPermissions) && userPermissions.includes(permissionName));
+    // Si es global admin, SIEMPRE tiene todos los permisos
+    if (isGlobalAdmin) {
+      console.log(`hasPermission: Global Admin. Permiso "${permissionName}" concedido.`);
+      return true;
+    }
+    // Para usuarios de tenant, verifica si el permiso está en el Set
+    const has = userPermissions.has(permissionName);
+    console.log(`hasPermission: Tenant User. Permiso "${permissionName}" ${has ? 'concedido' : 'denegado'}.`);
+    return has;
   }, [isGlobalAdmin, userPermissions]);
 
-  // Manejo del menú de usuario
+
+  // --- Lógica de Autenticación y Carga de Usuario ---
+  const fetchUserData = useCallback(async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setLoggedIn(false);
+      setUser(null);
+      setUserPermissions(new Set());
+      setIsGlobalAdmin(false);
+      setTenantId(null);
+      setLoading(false);
+      setIsAppReady(true);
+      console.log("fetchUserData: No auth token found. Not logged in.");
+      return;
+    }
+
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    const storedTenantId = localStorage.getItem('tenantId');
+    if (storedTenantId) {
+      api.defaults.headers.common['X-Tenant-ID'] = storedTenantId;
+      console.log("fetchUserData: Setting X-Tenant-ID from localStorage:", storedTenantId);
+    } else {
+      delete api.defaults.headers.common['X-Tenant-ID'];
+      console.log("fetchUserData: No X-Tenant-ID in localStorage. Removing header.");
+    }
+
+    try {
+      console.log("fetchUserData: Attempting to fetch user data...");
+      const response = await api.get('/user');
+      const userData = response.data;
+      setUser(userData);
+      setLoggedIn(true);
+      setIsGlobalAdmin(userData.is_global_admin);
+      setTenantId(userData.tenant_id);
+
+      const permissionsSet = new Set();
+      if (userData.roles && Array.isArray(userData.roles)) {
+        userData.roles.forEach(role => {
+          if (role.permissions && Array.isArray(role.permissions)) {
+            role.permissions.forEach(permission => {
+              permissionsSet.add(permission.name);
+            });
+          }
+        });
+      }
+      if (userData.permissions && Array.isArray(userData.permissions)) {
+        userData.permissions.forEach(p => permissionsSet.add(p.name || p));
+      }
+      setUserPermissions(permissionsSet);
+      console.log("fetchUserData: User data fetched. Permissions loaded:", Array.from(permissionsSet));
+
+      showSnack('Usuario re-autenticado desde token almacenado.', 'info');
+    } catch (error) {
+      console.error("fetchUserData: Failed to fetch user data:", error);
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('tenantId');
+      delete api.defaults.headers.common['Authorization'];
+      delete api.defaults.headers.common['X-Tenant-ID'];
+      setLoggedIn(false);
+      setUser(null);
+      setUserPermissions(new Set());
+      setIsGlobalAdmin(false);
+      setTenantId(null);
+      showSnack('Sesión expirada o inválida. Por favor, inicie sesión de nuevo.', 'error');
+      navigate('/login');
+    } finally {
+      setLoading(false);
+      setIsAppReady(true);
+    }
+  }, [navigate, showSnack]);
+
+
+  // --- Efecto para cargar usuario al inicio de la aplicación ---
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+
+  // --- Nuevo useEffect para depurar userPermissions ---
+  useEffect(() => {
+    console.log("DEBUG: userPermissions updated:", Array.from(userPermissions));
+    console.log("DEBUG: isGlobalAdmin:", isGlobalAdmin);
+    console.log("DEBUG: Does userPermissions have 'view-users'?", userPermissions.has('view-users'));
+    console.log("DEBUG: Does userPermissions have 'view-companies'?", userPermissions.has('view-companies'));
+    console.log("DEBUG: Does userPermissions have 'view-cultivation-areas'?", userPermissions.has('view-cultivation-areas'));
+    console.log("DEBUG: Does userPermissions have 'view-calendar-events'?", userPermissions.has('view-calendar-events'));
+  }, [userPermissions, isGlobalAdmin]);
+
+
+  // --- Lógica de Login ---
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      console.log("handleLogin: Attempting login...");
+      const response = await api.post('/login', {
+        email: loginEmail,
+        password: loginPassword,
+      });
+      const { token, user: userData } = response.data;
+      localStorage.setItem('authToken', token);
+      localStorage.setItem('tenantId', userData.tenant_id);
+      console.log("handleLogin: Logged in with Tenant ID:", userData.tenant_id);
+      await fetchUserData();
+      setLoginDialogOpen(false);
+      navigate('/');
+      showSnack('Inicio de sesión exitoso.', 'success');
+    } catch (error) {
+      console.error("handleLogin: Login failed:", error);
+      const errorMessage = error.response?.data?.message || 'Error desconocido al iniciar sesión.';
+      setLoginError(errorMessage);
+      showSnack(`Error al iniciar sesión: ${errorMessage}`, 'error');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // --- Lógica de Logout ---
+  const handleLogout = async () => {
+    try {
+      await api.post('/logout');
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('tenantId');
+      delete api.defaults.headers.common['Authorization'];
+      delete api.defaults.headers.common['X-Tenant-ID'];
+      setLoggedIn(false);
+      setUser(null);
+      setUserPermissions(new Set());
+      setIsGlobalAdmin(false);
+      setTenantId(null);
+      showSnack('Sesión cerrada exitosamente.', 'info');
+      navigate('/login');
+    } catch (error) {
+      console.error("Logout failed:", error);
+      showSnack('Error al cerrar sesión.', 'error');
+    }
+  };
+
+  // --- Manejo del menú de usuario ---
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -98,254 +273,38 @@ const App = () => {
     setAnchorEl(null);
   };
 
-  // Función de login
-  const handleLogin = async (email, password) => {
-    setLoading(true);
-    setLoginError(null);
-    console.log("handleLogin: Attempting login...");
-    try {
-      const response = await api.post('/login', { email, password });
-      console.log("handleLogin: Login response received:", response.data);
-
-      const { token, user } = response.data;
-      const tenant_id = user?.tenant_id;
-      const is_global_admin = user?.is_global_admin;
-
-      if (!token || (tenant_id === undefined && is_global_admin === undefined)) {
-        console.error("handleLogin: Login failed: Login response missing token or tenant ID/is_global_admin.");
-        setLoginError("Login failed: Invalid response from server.");
-        showGlobalSnack("Fallo en el login: Respuesta inválida del servidor.", "error");
-        setLoading(false);
-        return;
-      }
-
-      localStorage.setItem('access_token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-      if (is_global_admin) {
-        setTenantId(null);
-        setIsGlobalAdmin(true);
-        delete api.defaults.headers.common['X-Tenant-ID'];
-        localStorage.removeItem('tenantId');
-        localStorage.setItem('isGlobalAdmin', 'true');
-        console.log("handleLogin: Logged in as Global Admin. X-Tenant-ID header removed.");
-      } else if (tenant_id) {
-        setTenantId(tenant_id);
-        setIsGlobalAdmin(false);
-        api.defaults.headers.common['X-Tenant-ID'] = tenant_id;
-        localStorage.setItem('tenantId', tenant_id);
-        localStorage.removeItem('isGlobalAdmin');
-        console.log("handleLogin: Logged in with Tenant ID:", tenant_id);
-      } else {
-        console.error("handleLogin: Login failed: User is neither global admin nor has a tenant ID.");
-        setLoginError("Credenciales inválidas: Tu cuenta no está asociada a una empresa.");
-        showGlobalSnack("Credenciales inválidas: Tu cuenta no está asociada a una empresa.", "error");
-        setLoading(false);
-        return;
-      }
-
-      setAuthUser(user);
-      setUserPermissions(user.permissions && Array.isArray(user.permissions) ? user.permissions : []);
-      setLoggedIn(true);
-      setAppReady(true);
-
-      showGlobalSnack("Inicio de sesión exitoso.", "success");
-      navigate('/');
-
-    } catch (error) {
-      console.error("handleLogin: Login failed:", error);
-      setAuthUser(null);
-      setUserPermissions([]);
-      setLoggedIn(false);
-      localStorage.clear();
-      api.defaults.headers.common['Authorization'] = '';
-      delete api.defaults.headers.common['X-Tenant-ID'];
-
-      if (error.response && error.response.data && error.response.data.errors) {
-        const errorMessages = Object.values(error.response.data.errors).flat().join(' ');
-        setLoginError(errorMessages || "Credenciales inválidas.");
-        showGlobalSnack("Fallo en el login: " + (errorMessages || "Credenciales inválidas."), "error");
-      } else if (error.response && error.response.data && error.response.data.message) {
-        setLoginError(error.response.data.message);
-        showGlobalSnack("Fallo en el login: " + error.response.data.message, "error");
-      } else {
-        setLoginError("Ocurrió un error inesperado durante el login.");
-        showGlobalSnack("Fallo en el login: Ocurrió un error inesperado.", "error");
-      }
-    } finally {
-      setLoading(false);
-    }
+  // --- Manejo del menú de Administración (colapsable) ---
+  const handleClickAdminMenu = () => {
+    setOpenAdminMenu(!openAdminMenu);
   };
 
-  // Función para cargar los detalles del usuario autenticado (al recargar la página)
-  const fetchAuthUser = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('access_token');
-      const storedUser = localStorage.getItem('user');
-      const storedTenantId = localStorage.getItem('tenantId');
-      const storedIsGlobalAdmin = localStorage.getItem('isGlobalAdmin');
 
-      if (token) {
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-        let userFromStorage = null;
-        if (storedUser) {
-          try {
-            userFromStorage = JSON.parse(storedUser);
-          } catch (e) {
-            console.error("Error parsing user from localStorage:", e);
-            localStorage.removeItem('user');
-          }
-        }
-
-        if (storedIsGlobalAdmin === 'true') {
-          setIsGlobalAdmin(true);
-          setTenantId(null);
-          delete api.defaults.headers.common['X-Tenant-ID'];
-        } else if (storedTenantId) {
-          setTenantId(storedTenantId);
-          setIsGlobalAdmin(false);
-          api.defaults.headers.common['X-Tenant-ID'] = storedTenantId;
-        } else {
-          console.warn("App: Authenticated token found but no tenantId or isGlobalAdmin in localStorage. Forcing logout.");
-          handleLogout();
-          setLoading(false);
-          return;
-        }
-
-        const response = await api.get('/user');
-        const user = response.data;
-
-        setAuthUser(user);
-        setUserPermissions(user.permissions && Array.isArray(user.permissions) ? user.permissions : []);
-        setLoggedIn(true);
-        setAppReady(true);
-        console.log("App: User re-authenticated from stored token.", { user_id: user.id, tenant_id: user.tenant_id, is_global_admin: user.is_global_admin });
-
-        if (location.pathname === '/login') {
-          navigate('/');
-        }
-      } else {
-        setLoggedIn(false);
-        setAuthUser(null);
-        setUserPermissions([]);
-        setAppReady(true);
-        console.log("App: No access token found. Not logged in.");
-        if (location.pathname !== '/login') {
-          navigate('/login');
-        }
-      }
-    } catch (error) {
-      console.error("App: Error fetching authenticated user:", error);
-      handleLogout();
-      setLoginError("Tu sesión ha expirado. Por favor, inicia sesión de nuevo.");
-      showGlobalSnack("Tu sesión ha expirado. Por favor, inicia sesión de nuevo.", "error");
-      setAppReady(true);
-      if (location.pathname !== '/login') {
-        navigate('/login');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [navigate, location.pathname, showGlobalSnack]);
-
-  // Función de logout
-  const handleLogout = useCallback(async () => {
-    setLoading(true);
-    try {
-      await api.post('/logout');
-      showGlobalSnack("Sesión cerrada exitosamente.", "info");
-    } catch (error) {
-      console.error("Logout failed:", error);
-      showGlobalSnack("Error al cerrar sesión.", "error");
-    } finally {
-      localStorage.clear();
-      api.defaults.headers.common['Authorization'] = '';
-      delete api.defaults.headers.common['X-Tenant-ID'];
-      setAuthUser(null);
-      setUserPermissions([]);
-      setLoggedIn(false);
-      setTenantId(null);
-      setIsGlobalAdmin(false);
-      setLoading(false);
-      navigate('/login');
-    }
-  }, [navigate, showGlobalSnack]);
-
-  // Fetch de instalaciones (necesario para el CRUD de usuarios/permisos y CultivationPage)
-  const fetchFacilities = useCallback(async () => {
-    if (!tenantId && !isGlobalAdmin) {
-      setFacilities([]);
-      return;
-    }
-    try {
-      const res = await api.get('/facilities');
-      // Asegurarse de que setFacilities siempre reciba un array
-      setFacilities(Array.isArray(res.data) ? res.data : (Array.isArray(res.data.data) ? res.data.data : []));
-    } catch (error) {
-      console.error("Error fetching facilities:", error);
-      showGlobalSnack("No se pudieron cargar las instalaciones.", "error");
-      setFacilities([]); // En caso de error, establecer como array vacío
-    }
-  }, [tenantId, isGlobalAdmin, showGlobalSnack]);
-
-  // Efecto para cargar el usuario autenticado y las instalaciones al inicio de la aplicación
-  useEffect(() => {
-    fetchAuthUser();
-  }, [fetchAuthUser]);
-
-  // Efecto para cargar instalaciones cuando el tenantId o isGlobalAdmin cambian (después del login inicial)
-  useEffect(() => {
-    if (appReady && loggedIn) {
-      fetchFacilities();
-    }
-  }, [appReady, loggedIn, fetchFacilities]);
-
-
-  // Renderizado condicional
-  if (loading && !appReady) {
+  if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#1a202c', color: '#fff' }}>
-        <CircularProgress color="inherit" />
-        <Typography sx={{ ml: 2 }}>Cargando aplicación...</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#1a202c' }}>
+        <CircularProgress color="primary" />
       </Box>
     );
   }
 
-  // Si no está logeado y la app está lista, mostrar componente de login
-  if (!loggedIn && appReady) {
-    return (
-      <LoginComponent
-        onLogin={handleLogin}
-        loading={loading}
-        error={loginError}
-        setParentSnack={showGlobalSnack}
-      />
-    );
-  }
-
-  // Si está logeado y la app está lista, mostrar la interfaz principal
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#1a202c' }}>
+    <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#283e51' }}>
         <Toolbar>
           <IconButton
             color="inherit"
             aria-label="open drawer"
-            onClick={() => setDrawerOpen(!drawerOpen)}
             edge="start"
-            sx={{ mr: 2 }}
+            onClick={() => { /* Lógica para abrir/cerrar drawer si lo implementas */ }}
+            sx={{ mr: 2, display: { sm: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Cannabis ERP
           </Typography>
-          {loggedIn && (
+          {loggedIn ? (
             <Box>
               <IconButton
                 size="large"
@@ -355,6 +314,7 @@ const App = () => {
                 aria-haspopup="true"
                 onClick={handleMenu}
                 color="inherit"
+                ref={userMenuAnchorRef}
               >
                 <AccountCircle />
               </IconButton>
@@ -376,169 +336,306 @@ const App = () => {
                   sx: { bgcolor: '#283e51', color: '#fff' }
                 }}
               >
-                <MenuItem onClick={handleCloseUserMenu} sx={{ '&:hover': { bgcolor: '#3a506b' } }}>
-                  <ListItemIcon><AccountCircle sx={{ color: '#fff' }} /></ListItemIcon>
-                  <ListItemText primary={authUser?.name || 'Usuario'} secondary={authUser?.email} secondaryTypographyProps={{ color: 'rgba(255,255,255,0.7)' }} />
+                <MenuItem onClick={handleCloseUserMenu} sx={{ color: '#fff' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                    {user?.name || 'Usuario'}
+                  </Typography>
                 </MenuItem>
-                <Divider sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
-                <MenuItem onClick={handleLogout} sx={{ '&:hover': { bgcolor: '#3a506b' } }}>
-                  <ListItemIcon><LogoutIcon sx={{ color: '#fff' }} /></ListItemIcon>
-                  <ListItemText primary="Cerrar Sesión" />
+                <MenuItem onClick={handleCloseUserMenu} sx={{ color: '#fff' }}>
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem', color: '#a0aec0' }}>
+                    {user?.email}
+                  </Typography>
+                </MenuItem>
+                <MenuItem onClick={handleCloseUserMenu} sx={{ color: '#fff' }}>
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem', color: '#a0aec0' }}>
+                    {user?.is_global_admin ? 'Super Admin' : `Tenant ID: ${user?.tenant_id}`}
+                  </Typography>
+                </MenuItem>
+                <MenuItem onClick={handleLogout} sx={{ color: '#fff' }}>
+                  <ListItemIcon sx={{ color: '#fff' }}><ExitToAppIcon /></ListItemIcon>
+                  <Typography>Cerrar Sesión</Typography>
                 </MenuItem>
               </Menu>
             </Box>
+          ) : (
+            <Button color="inherit" onClick={() => setLoginDialogOpen(true)}>Iniciar Sesión</Button>
           )}
         </Toolbar>
       </AppBar>
       <Drawer
-        variant="temporary"
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        ModalProps={{ keepMounted: true }} // Better open performance on mobile.
+        variant="permanent"
         sx={{
-          width: 240,
+          width: drawerWidth,
           flexShrink: 0,
-          [`& .MuiDrawer-paper`]: { width: 240, boxSizing: 'border-box', bgcolor: '#18191b', color: '#fff' },
+          [`& .MuiDrawer-paper`]: {
+            width: drawerWidth,
+            boxSizing: 'border-box',
+            bgcolor: '#1a202c',
+            color: '#fff',
+            pt: '64px',
+          },
         }}
       >
-        <Toolbar /> {/* Para compensar la AppBar */}
-        <Box sx={{ overflow: 'auto' }}>
-          <List>
-            {/* Dashboard / Home (ruta raíz) */}
-            <ListItem button onClick={() => { navigate('/'); setDrawerOpen(false); }} sx={{ '&:hover': { bgcolor: '#283e51' } }}>
-              <ListItemIcon><HomeIcon sx={{ color: '#fff' }} /></ListItemIcon>
-              <ListItemText primary="Inicio" />
+        <List>
+          {/* Inicio */}
+          <ListItem
+            button
+            onClick={() => navigate('/')}
+            selected={location.pathname === '/'}
+            sx={{
+              '&.Mui-selected': {
+                bgcolor: '#4CAF50',
+                '&:hover': { bgcolor: '#43A047' },
+              },
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+              borderRadius: 2,
+              mx: 1,
+              my: 0.5,
+            }}
+          >
+            <ListItemIcon sx={{ color: 'inherit' }}>
+              <HomeIcon />
+            </ListItemIcon>
+            <ListItemText primary="Inicio" />
+          </ListItem>
+
+          {/* Cultivo */}
+          {loggedIn && (isGlobalAdmin || hasPermission('view-cultivation-areas')) && ( // Asume un permiso para Cultivo
+            <ListItem
+              button
+              onClick={() => navigate('/cultivo')}
+              selected={location.pathname === '/cultivo'}
+              sx={{
+                '&.Mui-selected': { bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } },
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                borderRadius: 2, mx: 1, my: 0.5,
+              }}
+            >
+              <ListItemIcon sx={{ color: 'inherit' }}>
+                <LocalFloristIcon />
+              </ListItemIcon>
+              <ListItemText primary="Cultivo" />
             </ListItem>
+          )}
 
-            {/* Cultivo (CultivationPage) */}
-            {hasPermission('view-cultivation-areas') && (
-              <ListItem button onClick={() => { navigate('/cultivation'); setDrawerOpen(false); }} sx={{ '&:hover': { bgcolor: '#283e51' } }}>
-                <ListItemIcon><AgricultureIcon sx={{ color: '#fff' }} /></ListItemIcon>
-                <ListItemText primary="Cultivo" />
+          {/* Calendario */}
+          {loggedIn && (isGlobalAdmin || hasPermission('view-calendar-events')) && ( // Asume un permiso para Calendario
+            <ListItem
+              button
+              onClick={() => navigate('/calendar')}
+              selected={location.pathname === '/calendar'}
+              sx={{
+                '&.Mui-selected': { bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } },
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                borderRadius: 2, mx: 1, my: 0.5,
+              }}
+            >
+              <ListItemIcon sx={{ color: 'inherit' }}>
+                <CalendarTodayIcon />
+              </ListItemIcon>
+              <ListItemText primary="Calendario" />
+            </ListItem>
+          )}
+
+          {/* Administración (Menú Colapsable) */}
+          {(loggedIn && isGlobalAdmin) || (loggedIn && (hasPermission('view-companies') || hasPermission('view-users'))) ? (
+            <>
+              <ListItem
+                button
+                onClick={handleClickAdminMenu}
+                sx={{
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                  borderRadius: 2, mx: 1, my: 0.5,
+                }}
+              >
+                <ListItemIcon sx={{ color: 'inherit' }}>
+                  <LockIcon />
+                </ListItemIcon>
+                <ListItemText primary="Administración" />
+                {openAdminMenu ? <ExpandLess /> : <ExpandMore />}
               </ListItem>
-            )}
+              <Collapse in={openAdminMenu} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  {/* Empresas (Submenú) */}
+                  {loggedIn && (isGlobalAdmin || hasPermission('view-companies')) && (
+                    <ListItem
+                      button
+                      onClick={() => navigate('/tenants')}
+                      selected={location.pathname === '/tenants'}
+                      sx={{
+                        pl: 4, // Indentación para submenú
+                        '&.Mui-selected': { bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } },
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                        borderRadius: 2, mx: 1, my: 0.5,
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'inherit' }}>
+                        <BusinessIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Empresas" />
+                    </ListItem>
+                  )}
 
-            {/* Calendario (CalendarioModuleWrapper) */}
-            {hasPermission('view-calendar-events') && (
-              <ListItem button onClick={() => { navigate('/calendar'); setDrawerOpen(false); }} sx={{ '&:hover': { bgcolor: '#283e51' } }}>
-                <ListItemIcon><CalendarMonthIcon sx={{ color: '#fff' }} /></ListItemIcon>
-                <ListItemText primary="Calendario" />
-              </ListItem>
-            )}
-
-            {/* Menú de Administración */}
-            {(isGlobalAdmin || hasPermission('view-users') || hasPermission('view-roles') || hasPermission('view-permissions') || hasPermission('view-companies')) && (
-              <>
-                <ListItem button onClick={() => setOpenAdminMenu(!openAdminMenu)} sx={{ '&:hover': { bgcolor: '#283e51' } }}>
-                  <ListItemIcon><LockIcon sx={{ color: '#fff' }} /></ListItemIcon>
-                  <ListItemText primary="Administración" />
-                  {openAdminMenu ? <ExpandLess sx={{ color: '#fff' }} /> : <ExpandMore sx={{ color: '#fff' }} />}
-                </ListItem>
-                <Collapse in={openAdminMenu} timeout="auto" unmountOnExit>
-                  <List component="div" disablePadding>
-                    {isGlobalAdmin && (
-                      <ListItem button sx={{ pl: 4, '&:hover': { bgcolor: '#283e51' } }} onClick={() => { navigate('/companies'); setDrawerOpen(false); }}>
-                        <ListItemText primary="Empresas" />
-                      </ListItem>
-                    )}
-                    {(hasPermission('view-users') || hasPermission('view-roles') || hasPermission('view-permissions')) && (
-                      <ListItem button sx={{ pl: 4, '&:hover': { bgcolor: '#283e51' } }} onClick={() => { navigate('/users'); setDrawerOpen(false); }}>
-                        <ListItemText primary="Usuarios y Roles" />
-                      </ListItem>
-                    )}
-                  </List>
-                </Collapse>
-              </>
-            )}
-          </List>
-        </Box>
+                  {/* Usuarios y Roles (Submenú) */}
+                  {loggedIn && (isGlobalAdmin || hasPermission('view-users')) && (
+                    <ListItem
+                      button
+                      onClick={() => navigate('/users')}
+                      selected={location.pathname === '/users'}
+                      sx={{
+                        pl: 4, // Indentación para submenú
+                        '&.Mui-selected': { bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } },
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                        borderRadius: 2, mx: 1, my: 0.5,
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: 'inherit' }}>
+                        <PeopleIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Usuarios y Roles" />
+                    </ListItem>
+                  )}
+                </List>
+              </Collapse>
+            </>
+          ) : null}
+        </List>
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 8, bgcolor: '#1a202c', color: '#fff' }}>
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, p: 3, mt: '64px', width: `calc(100% - ${drawerWidth}px)` }}
+      >
         <Routes>
-          {/* Ruta raíz para el dashboard o página de inicio */}
-          <Route path="/" element={<HomeComponent authUser={authUser} tenantId={tenantId} isGlobalAdmin={isGlobalAdmin} hasPermission={hasPermission} setParentSnack={showGlobalSnack} />} />
-          
-          {/* Rutas protegidas por permisos */}
-          {hasPermission('view-users') && (
-            <Route path="/users" element={
-              <UsuariosCrudInternal
+          <Route path="/" element={
+            <Box sx={{ p: 3, bgcolor: '#18191b', borderRadius: 2, boxShadow: '0 1px 0 rgba(9,30,66,.25)', minHeight: 'calc(100vh - 128px)', color: '#fff' }}>
+              <Typography variant="h4" gutterBottom sx={{ color: '#fff' }}>Bienvenido, {user?.name || 'Invitado'}!</Typography>
+              <Typography variant="body1" sx={{ color: '#a0aec0' }}>
+                Esta es la página de inicio de tu Cannabis ERP.
+              </Typography>
+              {!loggedIn && (
+                <Typography variant="body1" sx={{ mt: 2, color: '#a0aec0' }}>
+                  Por favor, <Button onClick={() => setLoginDialogOpen(true)} sx={{ color: '#4CAF50' }}>inicia sesión</Button> para acceder a todas las funcionalidades.
+                </Typography>
+              )}
+            </Box>
+          } />
+          {loggedIn && isGlobalAdmin && (
+            <Route path="/tenants" element={
+              <EmpresasCrud
                 tenantId={tenantId}
-                isAppReady={appReady}
-                facilities={facilities || []} // Asegurarse de pasar un array, incluso si facilities es null/undefined
-                setParentSnack={showGlobalSnack}
-                isGlobalAdmin={isGlobalAdmin} // Pasar isGlobalAdmin
+                isAppReady={isAppReady}
+                setParentSnack={showSnack}
+                isGlobalAdmin={isGlobalAdmin}
               />
             } />
           )}
-          {isGlobalAdmin && (
-            <Route path="/companies" element={<EmpresasCrud tenantId={tenantId} isAppReady={appReady} isGlobalAdmin={isGlobalAdmin} setParentSnack={showGlobalSnack} />} />
+          {loggedIn && hasPermission('view-users') && (
+            <Route path="/users" element={
+              <UsuariosCrudInternal
+                tenantId={tenantId}
+                isAppReady={isAppReady}
+                facilities={facilities}
+                setParentSnack={showSnack}
+                isGlobalAdmin={isGlobalAdmin}
+              />
+            } />
           )}
-          {hasPermission('view-cultivation-areas') && (
-            <Route path="/cultivation" element={<CultivationPage tenantId={tenantId} isAppReady={appReady} facilities={facilities} setParentSnack={showGlobalSnack} />} />
+          {/* Rutas para Cultivo y Calendario */}
+          {loggedIn && (isGlobalAdmin || hasPermission('view-cultivation-areas')) && (
+            <Route path="/cultivo" element={
+              <CultivationPage // <-- ¡USANDO EL COMPONENTE!
+                tenantId={tenantId}
+                isAppReady={isAppReady}
+                setParentSnack={showSnack}
+                isGlobalAdmin={isGlobalAdmin}
+              />
+            } />
           )}
-          {hasPermission('view-calendar-events') && (
-            <Route path="/calendar" element={<CalendarioModuleWrapper tenantId={tenantId} isAppReady={appReady} setParentSnack={showGlobalSnack} />} />
+          {loggedIn && (isGlobalAdmin || hasPermission('view-calendar-events')) && (
+            <Route path="/calendar" element={
+              <CalendarioModuleWrapper // <-- ¡USANDO EL COMPONENTE!
+                tenantId={tenantId}
+                isAppReady={isAppReady}
+                setParentSnack={showSnack}
+                isGlobalAdmin={isGlobalAdmin}
+              />
+            } />
           )}
-
-          {/* Ruta de fallback si no hay ruta o no está logeado (redirige al login si no logeado) */}
-          <Route path="*" element={loggedIn ? <HomeComponent authUser={authUser} tenantId={tenantId} isGlobalAdmin={isGlobalAdmin} hasPermission={hasPermission} setParentSnack={showGlobalSnack} /> : <LoginComponent onLogin={handleLogin} loading={loading} error={loginError} setParentSnack={showGlobalSnack} />} />
         </Routes>
       </Box>
 
+      {/* Login Dialog */}
+      <Dialog open={loginDialogOpen || (!loggedIn && !loading && location.pathname !== '/login')} onClose={() => setLoginDialogOpen(false)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>Iniciar Sesión</DialogTitle>
+        <form onSubmit={handleLogin}>
+          <DialogContent sx={{ pt: '20px !important' }}>
+            <TextField
+              label="Email"
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              fullWidth
+              required
+              sx={{ mt: 1, mb: 2,
+                '& .MuiInputBase-input': { color: '#fff' },
+                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+              }}
+              disabled={loginLoading}
+            />
+            <TextField
+              label="Contraseña"
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2,
+                '& .MuiInputBase-input': { color: '#fff' },
+                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+              }}
+              disabled={loginLoading}
+            />
+            {loginError && (
+              <Alert severity="error" sx={{ mb: 2 }}>{loginError}</Alert>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ bgcolor: '#3a506b' }}>
+            <Button onClick={() => setLoginDialogOpen(false)} disabled={loginLoading} sx={{ color: '#a0aec0' }}>Cancelar</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loginLoading}
+              sx={{
+                bgcolor: '#4CAF50',
+                '&:hover': { bgcolor: '#43A047' }
+              }}
+            >
+              {loginLoading ? <CircularProgress size={24} /> : "Iniciar Sesión"}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
       <Snackbar
-        open={snackOpen}
+        open={snackbarOpen}
         autoHideDuration={6000}
-        onClose={handleSnackClose}
+        onClose={handleSnackbarClose}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={handleSnackClose} severity={snackSeverity} sx={{ width: '100%' }}>
-          {snackMessage}
+        <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
+          {snackbarMessage}
         </Alert>
       </Snackbar>
     </Box>
   );
 };
 
-// Componente simple para la página de inicio/dashboard si no tienes un DashboardComponent específico
-const HomeComponent = ({ authUser, tenantId, isGlobalAdmin, hasPermission, setParentSnack }) => {
-  return (
-    <Box sx={{ p: 3, bgcolor: '#18191b', borderRadius: 2, boxShadow: '0 1px 0 rgba(9,30,66,.25)', color: '#fff' }}>
-      <Typography variant="h4" gutterBottom sx={{ color: '#fff' }}>
-        Bienvenido, {authUser?.name || 'Usuario'}!
-      </Typography>
-      <Typography variant="body1" sx={{ mb: 2, color: '#aaa' }}>
-        Esta es tu página de inicio.
-      </Typography>
-      {isGlobalAdmin && (
-        <Typography variant="body2" sx={{ color: '#4CAF50' }}>
-          Eres un Administrador Global.
-        </Typography>
-      )}
-      {tenantId && (
-        <Typography variant="body2" sx={{ color: '#4CAF50' }}>
-          ID de Tenant: {tenantId}
-        </Typography>
-      )}
-      <Typography variant="body2" sx={{ mt: 2, color: '#aaa' }}>
-        Navega usando el menú lateral.
-      </Typography>
-    </Box>
-  );
-};
-
-HomeComponent.propTypes = {
-  authUser: PropTypes.object,
-  tenantId: PropTypes.string,
-  isGlobalAdmin: PropTypes.bool,
-  hasPermission: PropTypes.func.isRequired,
-  setParentSnack: PropTypes.func.isRequired,
-};
-
-// Componente Wrapper para Router
-const AppWrapper = () => {
-  return (
-    <App />
-  );
-};
-
-export default AppWrapper;
+export default App;

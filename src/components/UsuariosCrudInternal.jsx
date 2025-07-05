@@ -404,11 +404,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setConfirmDialogOpen(true);
   };
 
-  const toggleRolePermission = (permissionId) => { // <-- Aquí está el cambio
+  const toggleRolePermission = (permissionId) => {
     setRoleSelectedPermissionIds(prevSelected =>
       prevSelected.includes(permissionId)
-        ? prevSelected.filter(id => id !== permissionId) // <-- Usar permissionId
-        : [...prevSelected, permissionId] // <-- Usar permissionId
+        ? prevSelected.filter(id => id !== permissionId)
+        : [...prevSelected, permissionId]
     );
   };
 
@@ -1147,7 +1147,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 UsuariosCrudInternal.propTypes = {
   tenantId: PropTypes.string,
   isAppReady: PropTypes.bool.isRequired,
-  facilities: PropTypes.array,
+  facilities: PropTypes.array, // PropTypes actualizado para permitir array vacío o null/undefined
   setParentSnack: PropTypes.func.isRequired,
   isGlobalAdmin: PropTypes.bool.isRequired,
 };
