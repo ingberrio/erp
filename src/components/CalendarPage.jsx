@@ -15,6 +15,11 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import GroupIcon from '@mui/icons-material/Group';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import LabelIcon from '@mui/icons-material/Label'; // Icono para Etiquetas
+import ChecklistIcon from '@mui/icons-material/Checklist'; // Icono para Checklist
+import PersonIcon from '@mui/icons-material/Person'; // Icono para Miembros
+import CommentIcon from '@mui/icons-material/Comment'; // Icono para Comentarios
+
 
 // --- Importaciones para MUI X Date Pickers ---
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -330,6 +335,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
   };
 
 
+  // --- Renderizado Condicional de la Vista del Tablero Específico ---
   if (viewingBoardId && selectedBoard) {
     return (
       <Box sx={{ p: { xs: 2, sm: 3 }, bgcolor: '#1a202c', minHeight: 'calc(100vh - 64px)', color: '#fff' }}> {/* Fondo oscuro */}
@@ -370,116 +376,11 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
           setParentConfirmDialog={setConfirmDialogData}
           setParentConfirmDialogOpen={setConfirmDialogOpen}
         />
-
-        <Snackbar
-            open={snack.open}
-            autoHideDuration={4000}
-            onClose={() => setSnack({ ...snack, open: false })}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-            <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })}>
-                {snack.message}
-            </Alert>
-        </Snackbar>
-
-        <Dialog open={openBoardDialog} onClose={handleCloseBoardDialog} maxWidth="sm" fullWidth
-          PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }} // Estilo oscuro
-        >
-            <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingBoard ? "Editar Tablero" : "Crear Nuevo Tablero"}</DialogTitle> {/* Estilo oscuro */}
-            <form onSubmit={handleSaveBoard}>
-                <DialogContent sx={{ pt: '20px !important' }}>
-                    <TextField
-                        label="Nombre del Tablero"
-                        value={boardName}
-                        onChange={e => setBoardName(e.target.value)}
-                        fullWidth
-                        required
-                        sx={{ mt: 1, mb: 2,
-                          '& .MuiInputBase-input': { color: '#fff' },
-                          '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-                        }}
-                        disabled={loading}
-                        helperText={!boardName.trim() && openBoardDialog ? "El nombre del tablero es obligatorio." : ""}
-                        error={!boardName.trim() && openBoardDialog}
-                    />
-                    <TextField
-                        label="Descripción del Tablero"
-                        value={boardDescription}
-                        onChange={e => setBoardDescription(e.target.value)}
-                        fullWidth
-                        multiline
-                        rows={3}
-                        sx={{ mb: 2,
-                          '& .MuiInputBase-input': { color: '#fff' },
-                          '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-                        }}
-                        disabled={loading}
-                    />
-                    {isGlobalAdmin && ( // Mostrar selector de tenant solo si es Super Admin
-                      <FormControl fullWidth sx={{ mb: 2 }}>
-                        <InputLabel id="tenant-select-label" sx={{ color: '#fff' }}>Asignar a Inquilino</InputLabel>
-                        <Select
-                          labelId="tenant-select-label"
-                          value={selectedTenantForBoard}
-                          label="Asignar a Inquilino"
-                          onChange={(e) => setSelectedTenantForBoard(e.target.value)}
-                          required
-                          disabled={loading || tenants.length === 0}
-                          sx={{
-                            color: '#fff',
-                            '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-                            '.MuiSvgIcon-root': { color: '#fff' },
-                          }}
-                          MenuProps={{
-                            PaperProps: {
-                              sx: { bgcolor: '#004060', color: '#fff' },
-                            },
-                          }}
-                        >
-                          {tenants.length === 0 ? (
-                            <MenuItem value="" sx={{ color: '#aaa' }}>
-                              <em>No hay inquilinos disponibles</em>
-                            </MenuItem>
-                          ) : (
-                            tenants.map((tenant) => (
-                              <MenuItem key={tenant.id} value={tenant.id}>
-                                {tenant.name}
-                              </MenuItem>
-                            ))
-                          )}
-                        </Select>
-                      </FormControl>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ bgcolor: '#3a506b' }}> {/* Estilo oscuro */}
-                    <Button onClick={handleCloseBoardDialog} disabled={loading} sx={{ color: '#a0aec0' }}>Cancelar</Button>
-                    <Button type="submit" variant="contained" disabled={loading || !boardName.trim() || (isGlobalAdmin && !selectedTenantForBoard)}
-                      sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
-                    >
-                        {loading ? <CircularProgress size={24} /> : (editingBoard ? "Guardar Cambios" : "Crear Tablero")}
-                    </Button>
-                </DialogActions>
-            </form>
-        </Dialog>
-        <ConfirmationDialog
-            open={confirmDialogOpen}
-            title={confirmDialogData.title}
-            message={confirmDialogData.message}
-            onConfirm={confirmDialogData.onConfirm}
-            onCancel={() => setConfirmDialogOpen(false)}
-        />
       </Box>
     );
   }
 
+  // --- Renderizado de la Vista de Selección de Tableros (Default) ---
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, bgcolor: '#1a202c', minHeight: 'calc(100vh - 64px)', color: '#fff' }}> {/* Fondo oscuro general */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}> {/* Añadir flexWrap y gap para responsive */}
@@ -563,6 +464,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
         </Grid>
       )}
 
+      {/* Snackbar y Diálogos Globales (renderizados una sola vez, controlados por 'open' prop) */}
       <Snackbar
         open={snack.open}
         autoHideDuration={4000}
@@ -947,8 +849,8 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
     if (isSameList) {
       // Movimiento dentro de la misma lista
       const oldIndex = sourceCardIndex;
-      const newIndex = destinationList.cards.findIndex(card => card.id === over.id);
-
+      const newIndex = destinationList.cards.findIndex(card => card.id === targetCardId); // Corregido: usar targetCardId para el índice
+      
       if (oldIndex !== newIndex) {
         const updatedCards = arrayMove(sourceList.cards, oldIndex, newIndex);
         sourceList.cards = updatedCards.map((card, idx) => ({ ...card, order: idx }));
@@ -1300,74 +1202,171 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
         Añadir una tarjeta
       </Button>
 
-      <Dialog open={openAddCardDialog} onClose={handleCloseCardDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }} // Estilo oscuro
+      {/* --- Diálogo de Añadir/Editar Tarjeta (Rediseñado) --- */}
+      <Dialog open={openAddCardDialog} onClose={handleCloseCardDialog} maxWidth="md" fullWidth
+        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2, minHeight: '80vh' } }} // Aumentar tamaño y altura mínima
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingCard ? "Editar Tarjeta" : "Crear Nueva Tarjeta"}</DialogTitle> {/* Estilo oscuro */}
+        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {editingCard ? "Editar Tarjeta" : "Crear Nueva Tarjeta"}
+          <IconButton onClick={handleCloseCardDialog} sx={{ color: '#e2e8f0' }}>
+            <DeleteIcon /> {/* Usamos DeleteIcon como icono de cerrar por ahora, puedes cambiarlo a CloseIcon si lo prefieres */}
+          </IconButton>
+        </DialogTitle>
         <form onSubmit={handleSaveCard}>
           <DialogContent
-            sx={{ overflow: 'visible', pt: '20px !important' }}
+            sx={{
+              overflowY: 'auto', // Permitir scroll si el contenido es muy largo
+              pt: '20px !important',
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' }, // Columnas en móvil, fila en desktop
+              gap: { xs: 3, md: 4 }, // Espacio entre secciones
+            }}
           >
-            <TextField
-              label="Título de la Tarjeta"
-              value={cardTitle}
-              onChange={e => setCardTitle(e.target.value)}
-              fullWidth
-              required
-              sx={{ mt: 1, mb: 2,
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              }}
-              disabled={false}
-            />
-            <TextField
-              label="Descripción"
-              value={cardDescription}
-              onChange={e => setCardDescription(e.target.value)}
-              fullWidth
-              multiline
-              rows={3}
-              sx={{ mb: 2,
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              }}
-              disabled={false}
-            />
-            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
-              <DatePicker
-                label="Fecha de Vencimiento"
-                value={cardDueDate}
-                onChange={(newValue) => {
-                  setCardDueDate(newValue);
-                }}
-                slotProps={{
-                    textField: {
-                        fullWidth: true,
-                        sx: { mb: 2,
-                          '& .MuiInputBase-input': { color: '#fff' },
-                          '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+            {/* Sección Principal de Contenido (Izquierda) */}
+            <Box sx={{ flexGrow: 1 }}>
+              {/* Título de la Tarjeta */}
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <CheckCircleOutlineIcon sx={{ mr: 1, color: '#a0aec0' }} /> {/* Icono de círculo */}
+                <TextField
+                  label="Título de la Tarjeta"
+                  value={cardTitle}
+                  onChange={e => setCardTitle(e.target.value)}
+                  fullWidth
+                  required
+                  variant="standard" // Estilo más sutil para el título
+                  InputProps={{
+                    disableUnderline: true, // Quitar la línea inferior
+                    sx: {
+                      fontSize: '1.5rem', // Tamaño de fuente más grande
+                      fontWeight: 700,
+                      color: '#e2e8f0',
+                    },
+                  }}
+                  InputLabelProps={{
+                    sx: {
+                      fontSize: '1.5rem',
+                      fontWeight: 700,
+                      color: 'rgba(255,255,255,0.7)',
+                    },
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': { color: '#e2e8f0' },
+                    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                  }}
+                />
+              </Box>
+
+              {/* Sección de "Añadir" */}
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 1 }}>
+                Añadir a la tarjeta
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+                <Button variant="contained" startIcon={<LabelIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1 }}>
+                  Etiquetas
+                </Button>
+                <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
+                  <DatePicker
+                    label="Fechas"
+                    value={cardDueDate}
+                    onChange={(newValue) => setCardDueDate(newValue)}
+                    slotProps={{
+                      textField: {
+                        variant: "outlined", // CAMBIO CLAVE: Cambiado de "contained" a "outlined"
+                        sx: {
+                          bgcolor: '#4a5568', // Fondo oscuro
+                          color: '#e2e8f0', // Texto claro
+                          '& .MuiInputBase-input': { color: '#e2e8f0' },
+                          '& .MuiInputLabel-root': { color: '#e2e8f0' },
+                          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' }, // Sin borde
+                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                          '& .MuiSvgIcon-root': { color: '#e2e8f0' }, // Icono del calendario
+                          borderRadius: 1,
+                          textTransform: 'none', // Para que el texto no sea todo mayúsculas
+                          minWidth: '120px', // Ancho mínimo para el botón
+                          py: '8px', // Ajustar padding vertical
+                          px: '12px', // Ajustar padding horizontal
                         },
-                        disabled: false,
-                    }
-                }}
-              />
-            </LocalizationProvider>
+                        placeholder: "Fechas", // Para que no muestre la fecha si está vacío
+                        InputProps: {
+                          startAdornment: <DateRangeIcon sx={{ mr: 1, color: '#e2e8f0' }} />, // Icono al inicio
+                        },
+                      },
+                    }}
+                  />
+                </LocalizationProvider>
+                <Button variant="contained" startIcon={<ChecklistIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1 }}>
+                  Checklist
+                </Button>
+                <Button variant="contained" startIcon={<PersonIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1 }}>
+                  Miembros
+                </Button>
+              </Box>
+
+              {/* Sección de Descripción */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 1 }}>
+                  <DescriptionIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#a0aec0' }} />
+                  Descripción
+                </Typography>
+                <TextField
+                  placeholder="Añadir una descripción más detallada..."
+                  value={cardDescription}
+                  onChange={e => setCardDescription(e.target.value)}
+                  fullWidth
+                  multiline
+                  rows={4}
+                  sx={{
+                    bgcolor: '#3a506b', // Fondo más oscuro para el campo de descripción
+                    borderRadius: 1,
+                    '& .MuiInputBase-input': { color: '#e2e8f0', py: 1.5, px: 2 },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' }, // Sin borde
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                  }}
+                />
+              </Box>
+
+              {/* Sección de Comentarios y Actividad */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 1 }}>
+                  <CommentIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#a0aec0' }} />
+                  Comentarios y Actividad
+                  <Button size="small" sx={{ ml: 2, color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
+                    Mostrar detalles
+                  </Button>
+                </Typography>
+                <TextField
+                  placeholder="Escribe un comentario..."
+                  fullWidth
+                  multiline
+                  rows={2}
+                  sx={{
+                    bgcolor: '#3a506b', // Fondo más oscuro para el campo de comentario
+                    borderRadius: 1,
+                    mb: 2,
+                    '& .MuiInputBase-input': { color: '#e2e8f0', py: 1.5, px: 2 },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' }, // Sin borde
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                  }}
+                />
+                {/* Placeholder para actividad */}
+                <Box sx={{ bgcolor: '#3a506b', p: 2, borderRadius: 1 }}>
+                  <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+                    <Box component="span" sx={{ fontWeight: 600, color: '#e2e8f0' }}>Eduard Berrio</Box> ha añadido esta tarjeta a Pendmndiente <br />
+                    <Typography variant="caption" sx={{ color: '#a0aec0' }}>17 de dic de 2024, 12:37</Typography>
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}> {/* Estilo oscuro */}
-            <Button onClick={handleCloseCardDialog} disabled={false} sx={{ color: '#a0aec0' }}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={false || !cardTitle.trim()}
+          <DialogActions sx={{ bgcolor: '#3a506b', p: 2, justifyContent: 'flex-end' }}> {/* Estilo oscuro y justificado a la derecha */}
+            <Button onClick={handleCloseCardDialog} sx={{ color: '#a0aec0' }}>Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={!cardTitle.trim()}
               sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
             >
-              {false ? <CircularProgress size={24} /> : (editingCard ? "Guardar Cambios" : "Crear Tarjeta")}
+              {editingCard ? "Guardar Cambios" : "Crear Tarjeta"}
             </Button>
           </DialogActions>
         </form>

@@ -292,9 +292,23 @@ function App() {
     );
   }
 
+  // Determinar el color de fondo de la AppBar y el color del texto
+  const appBarBgColor = user ? '#2d3748' : '#2d3748'; // Mismo color para logueado y no logueado
+  const appBarTextColor = user ? '#e2e8f0' : '#e2e8f0'; // Texto blanco para contraste
+
   if (!user) {
     return (
       <>
+        <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: appBarBgColor }}>
+          <Toolbar>
+            <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 600, color: appBarTextColor }}>
+              Cannaprime ERP
+            </Typography>
+            <Button color="inherit" onClick={() => setLoginDialogOpen(true)} sx={{ color: appBarTextColor }}>
+              Login
+            </Button>
+          </Toolbar>
+        </AppBar>
         <LandingPage setLoginDialogOpen={setLoginDialogOpen} />
 
         <Dialog open={loginDialogOpen} onClose={() => setLoginDialogOpen(false)} maxWidth="xs" fullWidth disableEscapeKeyDown PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}>
@@ -376,18 +390,18 @@ function App() {
   return (
     <Box sx={{ display: 'flex', bgcolor: '#1a202c', minHeight: '100vh' }}>
       <CssBaseline />
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#2d3748' }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: appBarBgColor }}>
         <Toolbar>
           <IconButton
             color="inherit"
             aria-label="open drawer"
             onClick={() => setDrawerOpen(!drawerOpen)}
             edge="start"
-            sx={{ mr: 2 }}
+            sx={{ mr: 2, color: appBarTextColor }} // Asegurar el color del icono
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 600, color: appBarTextColor }}>
             Cannabis ERP
           </Typography>
           {user && (
@@ -396,7 +410,7 @@ function App() {
                 onClick={handleMenu}
                 color="inherit"
                 startIcon={<AccountCircle />}
-                sx={{ textTransform: 'none', fontSize: '1rem' }}
+                sx={{ textTransform: 'none', fontSize: '1rem', color: appBarTextColor }} // Asegurar el color del botón
               >
                 {user.name}
               </Button>
