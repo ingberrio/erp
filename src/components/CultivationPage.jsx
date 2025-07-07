@@ -129,13 +129,13 @@ ConfirmationDialog.propTypes = {
 };
 
 // --- Componente principal del Módulo de Cultivo ---
-const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }) => {
+const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, setParentSnack }) => {
   const [facilities, setFacilities] = useState([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
   const [stages, setStages] = useState([]);
   const [rawAreas, setRawAreas] = useState([]);
   const [cultivationAreas, setCultivationAreas] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Estado de carga principal
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
   const [openStageDialog, setOpenStageDialog] = useState(false);
   const [stageName, setStageName] = useState('');
@@ -153,12 +153,13 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
 
   const isFacilityOperator = !!userFacilityId;
 
+  // Utilidad para mostrar notificaciones
   const showSnack = useCallback((message, severity = 'success') => {
     setSnack({ open: true, message, severity });
   }, []);
 
+  // Memoización para organizar las áreas por etapa
   const organizedAreas = useMemo(() => {
-    // console.log("CultivationPage: Recalculando organizedAreas. Stages count:", stages.length, "Raw Areas count:", rawAreas.length);
     return stages.length > 0
       ? stages.map(stage => ({
           ...stage,
@@ -169,13 +170,13 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
       : [];
   }, [stages, rawAreas]);
 
+  // Actualiza el estado de las áreas de cultivo organizadas
   useEffect(() => {
-    // console.log("CultivationPage: organizedAreas changed. Updating cultivationAreas state.");
     setCultivationAreas(organizedAreas);
   }, [organizedAreas]);
 
+  // Función para obtener instalaciones
   const fetchFacilities = useCallback(async () => {
-    // console.log('CultivationPage: fetchFacilities iniciado.');
     try {
       const response = await api.get('/facilities');
       let fetchedFacilities = Array.isArray(response.data)
@@ -186,31 +187,29 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
 
       if (isFacilityOperator && userFacilityId) {
         fetchedFacilities = fetchedFacilities.filter(f => f.id === userFacilityId);
-        // console.log("CultivationPage: Operador de instalación detectado. Filtrando instalaciones a:", fetchedFacilities);
       }
 
       setFacilities(fetchedFacilities);
 
+      // Si hay instalaciones y no hay una seleccionada o la seleccionada ya no existe, selecciona la primera
       if (fetchedFacilities.length > 0) {
         const currentFacilityExists = fetchedFacilities.some(f => f.id === selectedFacilityId);
         if (!selectedFacilityId || !currentFacilityExists) {
           setSelectedFacilityId(fetchedFacilities[0].id);
-          // console.log("CultivationPage: Defaulting selected facility to:", fetchedFacilities[0].id);
-        } else {
-          // console.log("CultivationPage: Selected facility remains:", selectedFacilityId);
         }
       } else {
-        setSelectedFacilityId('');
-        // console.log("CultivationPage: No facilities available. Clearing selectedFacilityId.");
+        setSelectedFacilityId(''); // Si no hay instalaciones, limpia la selección
       }
+      return fetchedFacilities; // Devuelve las instalaciones para Promise.all
     } catch (error) {
       console.error('CultivationPage: Error fetching facilities:', error);
       showSnack(SNACK_MESSAGES.FACILITIES_ERROR, 'error');
+      return [];
     }
   }, [showSnack, isFacilityOperator, userFacilityId, selectedFacilityId]);
 
+  // Función para obtener etapas
   const fetchStages = useCallback(async () => {
-    // console.log('CultivationPage: fetchStages iniciado.');
     try {
       const response = await api.get('/stages');
       const fetchedStages = Array.isArray(response.data)
@@ -219,21 +218,19 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
         ? response.data.data
         : [];
       setStages(fetchedStages.sort((a, b) => a.order - b.order));
-      // console.log('CultivationPage: Etapas cargadas:', fetchedStages.length);
+      return fetchedStages; // Devuelve las etapas para Promise.all
     } catch (error) {
       console.error('CultivationPage: Error fetching stages:', error);
       showSnack(SNACK_MESSAGES.STAGES_ERROR, 'error');
+      return [];
     }
   }, [showSnack]);
 
+  // Función para obtener inquilinos (solo para administradores globales)
   const fetchTenants = useCallback(async () => {
-    // console.log('CultivationPage: fetchTenants - isGlobalAdmin:', isGlobalAdmin);
     if (!isGlobalAdmin) {
-      // console.log('CultivationPage: Skipping fetchTenants as not Super Admin.');
-      return;
+      return [];
     }
-    // console.log('CultivationPage: fetchTenants iniciado para Super Admin.');
-
     try {
       const response = await api.get('/tenants');
       const fetchedTenants = Array.isArray(response.data)
@@ -242,35 +239,34 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
         ? response.data.data
         : [];
       setTenants(fetchedTenants);
-      // console.log('CultivationPage: Tenants cargados:', fetchedTenants.length);
       if (fetchedTenants.length > 0 && !selectedTenantForNewFacility) {
         setSelectedTenantForNewFacility(fetchedTenants[0].id);
       }
+      return fetchedTenants; // Devuelve los inquilinos para Promise.all
     } catch (error) {
       console.error('CultivationPage: Error fetching tenants:', error);
       showSnack(SNACK_MESSAGES.TENANTS_ERROR, 'error');
+      return [];
     }
   }, [isGlobalAdmin, showSnack, selectedTenantForNewFacility]);
 
-  const fetchCultivationAreas = useCallback(async () => {
+  // Función para obtener áreas de cultivo
+  const fetchCultivationAreas = useCallback(async (currentSelectedFacilityId) => {
+    // No establecer loading a true/false aquí para evitar parpadeo si ya está en carga principal
+    // console.log("fetchCultivationAreas: currentSelectedFacilityId:", currentSelectedFacilityId);
     if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
-      // console.log("CultivationPage: Skipping fetchCultivationAreas due to app not ready or invalid tenant context. Tenant ID:", tenantId, "App Ready:", isAppReady, "Global Admin:", isGlobalAdmin);
-      setLoading(false);
+      return;
+    }
+    // Solo si hay una instalación seleccionada (o si no hay ninguna y no es operador de instalación)
+    if (!currentSelectedFacilityId && !isFacilityOperator) {
+      // console.log("fetchCultivationAreas: No facility selected and not operator, skipping.");
       return;
     }
 
-    if (facilities.length > 0 && !selectedFacilityId) {
-      // console.log("CultivationPage: Waiting for facility selection to fetch areas.");
-      setLoading(false);
-      return;
-    }
-    
-    // console.log("CultivationPage: fetchCultivationAreas initiated for facility:", selectedFacilityId || "All");
-    setLoading(true);
     try {
       let url = '/cultivation-areas';
-      if (selectedFacilityId) {
-        url = `/facilities/${selectedFacilityId}/cultivation-areas`;
+      if (currentSelectedFacilityId) {
+        url = `/facilities/${currentSelectedFacilityId}/cultivation-areas`;
       }
       const response = await api.get(url);
       const fetchedAreas = Array.isArray(response.data)
@@ -279,69 +275,66 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
         ? response.data.data
         : [];
       setRawAreas(fetchedAreas);
-      // console.log("CultivationPage: Cultivation areas loaded for facility:", selectedFacilityId || "All", "Count:", fetchedAreas.length);
     } catch (error) {
       console.error('CultivationPage: Error fetching cultivation areas:', error);
       showSnack(SNACK_MESSAGES.CULTIVATION_AREAS_ERROR, 'error');
-    } finally {
-      setLoading(false);
-      // console.log('CultivationPage: setLoading(false) called in fetchCultivationAreas.');
     }
-  }, [tenantId, isAppReady, selectedFacilityId, facilities.length, showSnack, isGlobalAdmin]);
+  }, [tenantId, isAppReady, showSnack, isGlobalAdmin, isFacilityOperator]);
 
-  // Effect for initial data load (facilities, stages, and tenants if global admin)
+
+  // Effect para la carga inicial de datos (facilities, stages, y tenants si es admin global)
   useEffect(() => {
     const loadInitialData = async () => {
-      // console.log('CultivationPage: loadInitialData - tenantId:', tenantId, 'isAppReady:', isAppReady, 'isGlobalAdmin:', isGlobalAdmin);
       if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
-        setLoading(false);
-        // console.log('CultivationPage: Skipping initial data load due to app not ready or invalid tenant context.');
+        setLoading(false); // Asegura que el estado de carga se desactive si no hay contexto válido
         return;
       }
 
-      // console.log('CultivationPage: Initiating initial data load (facilities, stages, and tenants if global admin).');
-      setLoading(true);
+      setLoading(true); // Activa el estado de carga al inicio de la carga inicial
       try {
-        await Promise.all([
+        const [fetchedFacs] = await Promise.all([
           fetchFacilities(),
           fetchStages(),
-          isGlobalAdmin ? fetchTenants() : Promise.resolve() // Fetch tenants only if global admin
+          isGlobalAdmin ? fetchTenants() : Promise.resolve([])
         ]);
+
+        // Después de cargar las instalaciones, si hay una seleccionada por defecto,
+        // o si el usuario es operador de instalación, cargamos las áreas de cultivo.
+        const facilityToFetchAreas = selectedFacilityId || (fetchedFacs.length > 0 ? fetchedFacs[0].id : null);
+        if (facilityToFetchAreas || isFacilityOperator) {
+          await fetchCultivationAreas(facilityToFetchAreas);
+        }
+
       } catch (error) {
         console.error('CultivationPage: Error in initial data load:', error);
         showSnack('Error loading initial data.', 'error');
       } finally {
-        setLoading(false); // Set loading to false after all initial fetches complete
+        setLoading(false); // Desactiva el estado de carga una vez que todas las promesas se resuelven
       }
     };
 
     loadInitialData();
-  }, [tenantId, isAppReady, fetchFacilities, fetchStages, fetchTenants, isGlobalAdmin, showSnack]);
+  }, [tenantId, isAppReady, isGlobalAdmin]); // Dependencias para la carga inicial
 
-  // Effect to re-trigger fetchTenants if isGlobalAdmin/isAppReady change after initial mount
+  // Effect para cargar áreas de cultivo cuando la instalación seleccionada cambia
   useEffect(() => {
-    // console.log('CultivationPage: isGlobalAdmin/isAppReady changed. isGlobalAdmin:', isGlobalAdmin, 'isAppReady:', isAppReady, 'tenants.length:', tenants.length);
-    if (isGlobalAdmin && isAppReady && tenants.length === 0) {
-      // console.log('CultivationPage: Re-disparando fetchTenants debido a cambio de isGlobalAdmin/isAppReady.');
-      fetchTenants();
+    if (isAppReady && (tenantId || isGlobalAdmin) && selectedFacilityId !== '') {
+      fetchCultivationAreas(selectedFacilityId);
+    } else if (isAppReady && (tenantId || isGlobalAdmin) && isFacilityOperator && selectedFacilityId === '') {
+      // Si es operador de instalación y no hay facility seleccionada (porque solo hay una),
+      // intenta cargar las áreas para la única facility disponible.
+      if (facilities.length > 0) {
+        fetchCultivationAreas(facilities[0].id);
+      }
     }
-  }, [isGlobalAdmin, isAppReady, fetchTenants, tenants.length]);
+  }, [selectedFacilityId, isAppReady, tenantId, isGlobalAdmin, isFacilityOperator, facilities.length]); // Dependencias para áreas de cultivo
 
-  // Effect to load cultivation areas when selectedFacilityId or stages change
-  useEffect(() => {
-    if (isAppReady && (tenantId || isGlobalAdmin)) {
-        // console.log("CultivationPage: Triggering fetchCultivationAreas due to change in selectedFacilityId or stages.");
-        fetchCultivationAreas();
-    }
-  }, [selectedFacilityId, stages, tenantId, isAppReady, fetchCultivationAreas, isGlobalAdmin]);
-
-  // Handlers for Stage UI and Dialogs
+  // Handlers para la UI de Etapas y Diálogos
   const handleOpenStageDialog = (stage = null) => {
     setEditingStage(stage);
     setStageName(stage ? stage.name : '');
     setOpenStageDialog(true);
     setStageDialogLoading(false);
-    // console.log('CultivationPage: Stage dialog opened. Editing:', !!stage);
   };
 
   const handleCloseStageDialog = () => {
@@ -349,7 +342,6 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
     setEditingStage(null);
     setStageName('');
     setStageDialogLoading(false);
-    // console.log('CultivationPage: Stage dialog closed.');
   };
 
   const handleSaveStage = async (e) => {
@@ -379,11 +371,9 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
         return;
       }
       stageData.tenant_id = parseInt(selectedFacility.tenant_id, 10);
-      // console.log(`CultivationPage: Super Admin creando etapa con tenant_id: ${stageData.tenant_id} (tipo: ${typeof stageData.tenant_id})`);
     }
 
     setStageDialogLoading(true);
-    // console.log('CultivationPage: Attempting to save stage:', stageName);
     try {
       if (editingStage) {
         await api.put(`/stages/${editingStage.id}`, stageData);
@@ -392,7 +382,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
         await api.post('/stages', stageData);
         showSnack(SNACK_MESSAGES.STAGE_CREATED, 'success');
       }
-      await fetchStages();
+      await fetchStages(); // Vuelve a cargar las etapas para actualizar la UI
       handleCloseStageDialog();
     } catch (err) {
       console.error('CultivationPage: Error saving stage:', err);
@@ -410,17 +400,15 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
       }
     } finally {
       setStageDialogLoading(false);
-      // console.log('CultivationPage: setLoading(false) called in handleSaveStage.');
     }
   };
 
   const handleDeleteStageConfirm = useCallback(async (stageToDelete) => {
-    setLoading(true);
-    // console.log('CultivationPage: Confirming stage deletion:', stageToDelete.name);
+    setLoading(true); // Activa el loading mientras se borra
     try {
       await api.delete(`/stages/${stageToDelete.id}`);
       showSnack(SNACK_MESSAGES.STAGE_DELETED, 'info');
-      await fetchStages();
+      await fetchStages(); // Vuelve a cargar las etapas para actualizar la UI
     } catch (err) {
       console.error('CultivationPage: Error deleting stage:', err);
       const errorMessage = err.response?.data?.message || err.message;
@@ -432,9 +420,8 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
         showSnack(`Error deleting stage: ${errorMessage}`, 'error');
       }
     } finally {
-      setLoading(false);
+      setLoading(false); // Desactiva el loading
       setConfirmDialogOpen(false);
-      // console.log('CultivationPage: setLoading(false) called in handleDeleteStageConfirm.');
     }
   }, [fetchStages, showSnack]);
 
@@ -445,10 +432,9 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
       onConfirm: () => handleDeleteStageConfirm(stageToDelete),
     });
     setConfirmDialogOpen(true);
-    // console.log('CultivationPage: Stage deletion confirmation dialog opened.');
   }, [handleDeleteStageConfirm]);
 
-  // Handlers for Facility Dialog
+  // Handlers para el Diálogo de Instalación
   const handleOpenFacilityDialog = () => {
     setNewFacilityName('');
     if (tenants.length > 0) {
@@ -458,7 +444,6 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
     }
     setOpenFacilityDialog(true);
     setFacilityDialogLoading(false);
-    // console.log('CultivationPage: Facility dialog opened. Tenants count for default selection:', tenants.length);
   };
 
   const handleCloseFacilityDialog = () => {
@@ -496,7 +481,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
 
       await api.post('/facilities', facilityData);
       showSnack(SNACK_MESSAGES.FACILITY_CREATED, 'success');
-      await fetchFacilities();
+      await fetchFacilities(); // Vuelve a cargar las instalaciones para actualizar la UI
       handleCloseFacilityDialog();
     } catch (err) {
       console.error('Error creating facility:', err);
@@ -595,7 +580,6 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
     const { active, over } = event;
     setActiveDraggableId(null);
     if (!over || active.id === over.id) {
-      // console.log('CultivationPage: Drag ended over no droppable area or same item.');
       return;
     }
 
@@ -618,7 +602,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
       return;
     }
 
-    setLoading(true);
+    setLoading(true); // Activa el loading durante la operación de arrastre
     try {
       if (sourceStage.id === destinationStage.id) {
         await handleSameStageDrag(sourceStage, destinationStage, sourceAreaIndex, targetAreaId);
@@ -631,10 +615,10 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
       console.error('CultivationPage: Error in drag operation:', error);
       showSnack(SNACK_MESSAGES.ERROR_DRAGGING, 'error');
     } finally {
-      await fetchCultivationAreas();
-      // console.log('CultivationPage: setLoading(false) called in handleDragEnd.');
+      await fetchCultivationAreas(selectedFacilityId); // Vuelve a cargar las áreas para asegurar la consistencia
+      setLoading(false); // Desactiva el loading
     }
-  }, [cultivationAreas, isFacilityOperator, showSnack, findDraggedArea, parseDragDestination, handleSameStageDrag, handleCrossStageDrag, fetchCultivationAreas]);
+  }, [cultivationAreas, isFacilityOperator, showSnack, findDraggedArea, parseDragDestination, handleSameStageDrag, handleCrossStageDrag, fetchCultivationAreas, selectedFacilityId]);
 
   const getActiveCultivationArea = useCallback(() => {
     if (!activeDraggableId) return null;
@@ -665,7 +649,6 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
             value={selectedFacilityId}
             label="Instalación"
             onChange={(e) => {
-                // console.log("CultivationPage: Cambio de instalación detectado:", e.target.value);
                 setSelectedFacilityId(e.target.value);
             }}
             disabled={loading || facilities.length === 0 || isFacilityOperator}
@@ -760,7 +743,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin }
                   stage={stage}
                   cultivationAreas={cultivationAreas.find(s => s.id === stage.id)?.cultivationAreas || []}
                   tenantId={tenantId}
-                  refreshCultivationAreas={fetchCultivationAreas}
+                  refreshCultivationAreas={() => fetchCultivationAreas(selectedFacilityId)} // Pasa la función con el ID actual
                   handleDeleteStage={handleDeleteStageClick}
                   setParentSnack={showSnack}
                   setParentConfirmDialog={setConfirmDialogData}
@@ -941,13 +924,15 @@ CultivationPage.propTypes = {
   isAppReady: PropTypes.bool.isRequired,
   userFacilityId: PropTypes.number, // Asumiendo que facilityId es numérico
   isGlobalAdmin: PropTypes.bool.isRequired,
+  setParentSnack: PropTypes.func.isRequired, // Añadido propType para setParentSnack
 };
 
 // --- Componente: StageView ---
 const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultivationAreas, handleDeleteStage, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, selectedFacilityId, facilities, isFacilityOperator, isGlobalAdmin }) => {
   const [openAddAreaDialog, setOpenAddAreaDialog] = useState(false);
   const [areaName, setAreaName] = useState('');
-  const [areaDescription, setAreaDescription] = useState('');
+  // --- CORRECCIÓN CLAVE AQUÍ: Usar useState() para areaDescription ---
+  const [areaDescription, setAreaDescription] = useState(''); 
   const [areaCapacityUnits, setAreaCapacityUnits] = useState('');
   const [areaCapacityUnitType, setAreaCapacityUnitType] = useState('');
   const [areaFacilityId, setAreaFacilityId] = useState(selectedFacilityId);
@@ -1035,7 +1020,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         await api.post('/cultivation-areas', areaData);
         setParentSnack(SNACK_MESSAGES.CULTIVATION_AREA_CREATED, 'success');
       }
-      await refreshCultivationAreas();
+      await refreshCultivationAreas(); // Llama a la función de refresco del padre
       handleCloseAddAreaDialog();
     } catch (err) {
       console.error('Error al guardar área de cultivo:', err);
@@ -1057,11 +1042,11 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
   };
 
   const handleDeleteAreaConfirm = useCallback(async (areaToDelete) => {
-    setAreaDialogLoading(true);
+    setAreaDialogLoading(true); // Activa el loading para el diálogo de área
     try {
       await api.delete(`/cultivation-areas/${areaToDelete.id}`);
       setParentSnack(SNACK_MESSAGES.CULTIVATION_AREA_DELETED, 'info');
-      await refreshCultivationAreas();
+      await refreshCultivationAreas(); // Llama a la función de refresco del padre
     } catch (err) {
       console.error('Error al eliminar área de cultivo:', err);
       const errorMessage = err.response?.data?.message || err.message;
@@ -1076,7 +1061,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       }
     } finally {
       setParentConfirmDialogOpen(false);
-      setAreaDialogLoading(false);
+      setAreaDialogLoading(false); // Desactiva el loading para el diálogo de área
     }
   }, [refreshCultivationAreas, setParentSnack, setParentConfirmDialogOpen]);
 

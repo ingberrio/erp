@@ -33,17 +33,15 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
       aria-describedby="alert-dialog-description"
       PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
     >
-      <DialogTitle id="alert-dialog-title" sx={{ color: '#e2e8f0' }}>{title}</DialogTitle>
-      <DialogContent>
-        <Typography id="alert-dialog-description" sx={{ color: '#a0aec0' }}>
+      <DialogTitle id="alert-dialog-title" sx={{ bgcolor: '#3a506b', color: '#fff' }}>{title}</DialogTitle>
+      <DialogContent sx={{ pt: '20px !important' }}>
+        <Typography id="alert-dialog-description" sx={{ color: '#e2e8f0' }}>
           {message}
         </Typography>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel} sx={{ color: '#a0aec0' }}>
-          Cancelar
-        </Button>
-        <Button onClick={onConfirm} color="error" autoFocus sx={{ color: '#fc8181' }}>
+      <DialogActions sx={{ bgcolor: '#3a506b' }}>
+        <Button onClick={onCancel} sx={{ color: '#a0aec0' }}>Cancelar</Button>
+        <Button onClick={onConfirm} autoFocus variant="contained" sx={{ bgcolor: '#d32f2f', '&:hover': { bgcolor: '#c62828' } }}>
           Confirmar
         </Button>
       </DialogActions>
@@ -88,7 +86,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
   const [roleName, setRoleName] = useState("");
   const [roleDescription, setRoleDescription] = useState("");
   const [roleSelectedPermissionIds, setRoleSelectedPermissionIds] = useState([]);
-  const [roleDialogLoading, setRoleDialogLoading] = useState(false);
+  const [roleDialogLoading, setLoadingRoleDialog] = useState(false);
 
   // --- Estados para Permisos ---
   const [permissions, setPermissions] = useState([]);
@@ -175,8 +173,9 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 
   // --- Fetchers de datos ---
   const fetchUsers = useCallback(async () => {
+    console.log('fetchUsers: Iniciando. tenantId:', tenantId, 'isGlobalAdmin:', isGlobalAdmin, 'isAppReady:', isAppReady);
     if (!isAppReady || (!isGlobalAdmin && !tenantId)) {
-      console.log('UsuariosCrudInternal: Saltando fetchUsers. Tenant ID:', tenantId, 'Is Global Admin:', isGlobalAdmin, 'App Ready:', isAppReady);
+      console.log('fetchUsers: Saltando fetchUsers debido a la condición. Tenant ID:', tenantId, 'Is Global Admin:', isGlobalAdmin, 'App Ready:', isAppReady);
       setLoadingUsers(false);
       return;
     }
@@ -193,7 +192,9 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
   }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
   const fetchRoles = useCallback(async () => {
+    console.log('fetchRoles: Iniciando. tenantId:', tenantId, 'isGlobalAdmin:', isGlobalAdmin, 'isAppReady:', isAppReady);
     if (!isAppReady || (!isGlobalAdmin && !tenantId)) {
+      console.log('fetchRoles: Saltando fetchRoles debido a la condición. Tenant ID:', tenantId, 'Is Global Admin:', isGlobalAdmin, 'App Ready:', isAppReady);
       setLoadingRoles(false);
       return;
     }
@@ -210,7 +211,9 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
   }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
   const fetchPermissions = useCallback(async () => {
+    console.log('fetchPermissions: Iniciando. tenantId:', tenantId, 'isGlobalAdmin:', isGlobalAdmin, 'isAppReady:', isAppReady);
     if (!isAppReady || (!isGlobalAdmin && !tenantId)) {
+      console.log('fetchPermissions: Saltando fetchPermissions debido a la condición. Tenant ID:', tenantId, 'Is Global Admin:', isGlobalAdmin, 'App Ready:', isAppReady);
       setLoadingPermissions(false);
       return;
     }
@@ -228,13 +231,14 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 
   // --- useEffects para cargar datos al montar y al cambiar la pestaña ---
   useEffect(() => {
+    console.log("UsuariosCrudInternal: useEffect principal activado. isAppReady:", isAppReady, "isGlobalAdmin:", isGlobalAdmin, "tenantId:", tenantId);
     if (isAppReady && (isGlobalAdmin || tenantId)) {
-      console.log("UsuariosCrudInternal: isAppReady y (isGlobalAdmin o tenantId) son true. Cargando datos para la pestaña:", activeTab);
+      console.log("UsuariosCrudInternal: useEffect: isAppReady y (isGlobalAdmin o tenantId) son true. Cargando datos para la pestaña:", activeTab);
       if (activeTab === 0) fetchUsers();
       if (activeTab === 1) fetchRoles();
       if (activeTab === 2) fetchPermissions();
     } else {
-      console.log("UsuariosCrudInternal: Esperando isAppReady o (isGlobalAdmin o tenantId). tenantId:", tenantId, "isAppReady:", isAppReady, "isGlobalAdmin:", isGlobalAdmin);
+      console.log("UsuariosCrudInternal: useEffect: Esperando isAppReady o (isGlobalAdmin o tenantId). tenantId:", tenantId, "isAppReady:", isAppReady, "isGlobalAdmin:", isGlobalAdmin);
       setLoadingUsers(false);
       setLoadingRoles(false);
       setLoadingPermissions(false);
@@ -290,7 +294,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
         email: userEmail,
         ...(!editingUser || userPassword.trim() !== "" ? { password: userPassword } : {}),
         roles: userSelectedRoleIds,
-        tenant_id: isGlobalAdmin ? null : tenantId,
+        tenant_id: isGlobalAdmin ? null : tenantId, // Asegura que el tenant_id se envía correctamente
       };
       if (editingUser) {
         await api.put(`/users/${editingUser.id}`, userData);
@@ -358,13 +362,13 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
   // --- CRUD Operations (Roles) ---
   const handleSaveRole = async (e) => {
     e.preventDefault();
-    setRoleDialogLoading(true);
+    setLoadingRoleDialog(true);
     try {
       const roleData = {
         name: roleName,
         description: roleDescription,
         permissions: roleSelectedPermissionIds,
-        tenant_id: isGlobalAdmin ? null : tenantId,
+        tenant_id: isGlobalAdmin ? null : tenantId, // Asegura que el tenant_id se envía correctamente
       };
       if (editingRole) {
         await api.put(`/roles/${editingRole.id}`, roleData);
@@ -378,7 +382,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     } catch (err) {
       console.error("Error al guardar rol:", err.response?.data || err.message);
       showSnack("Error al guardar rol: " + (err.response?.data?.message || err.message), "error");
-    } finally { setRoleDialogLoading(false); }
+    } finally { setLoadingRoleDialog(false); }
   };
 
   const handleDeleteRole = async (roleToDelete) => {
@@ -452,7 +456,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       const permissionData = {
         name: permissionName,
         description: permissionDescription,
-        tenant_id: isGlobalAdmin ? null : tenantId,
+        tenant_id: isGlobalAdmin ? null : tenantId, // Asegura que el tenant_id se envía correctamente
       };
 
       if (!editingPermission && permissionTemplate.includes('{id}') && !selectedFacilityForPermission) {
