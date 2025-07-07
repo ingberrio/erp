@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
-use Illuminate\Support\Facades\Config; // <-- ¡Añadir esta importación!
+use Illuminate\Support\Facades\Config;
 
 class AuthController extends Controller
 {
@@ -75,11 +75,24 @@ class AuthController extends Controller
             Log::info('Login: Restored original Spatie teams configuration.');
             // --- FIN DE CAMBIOS CLAVE ---
 
+            // Obtener los nombres de los permisos
+            $permissions = $user->getAllPermissions()->pluck('name')->toArray();
+            Log::info('Login: User permissions collected.', ['permissions' => $permissions]);
+
             Log::info('Login: Returning successful response.', ['user_id' => $user->id, 'tenant_id' => $user->tenant_id, 'is_global_admin' => $user->is_global_admin]);
 
             return response()->json([
                 'token' => $token,
-                'user' => $user,
+                'user' => [ // Construir el objeto user explícitamente
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'tenant_id' => $user->tenant_id,
+                    'is_global_admin' => (bool) $user->is_global_admin,
+                    'facility_id' => $user->facility_id, // Asegúrate de incluirlo si existe
+                    'permissions' => $permissions, // ¡Aquí se añade el array de permisos!
+                    // Puedes añadir otras propiedades del usuario que necesites en el frontend
+                ],
             ]);
 
         } catch (ValidationException $e) {
@@ -132,7 +145,21 @@ class AuthController extends Controller
         Log::info('User method: Restored original Spatie teams configuration.');
         // --- FIN DE CAMBIOS CLAVE ---
 
-        return response()->json($user);
+        // Obtener los nombres de los permisos
+        $permissions = $user->getAllPermissions()->pluck('name')->toArray();
+        Log::info('User method: User permissions collected.', ['permissions' => $permissions]); // Nuevo log
+
+        // Devolver el usuario y sus permisos de forma explícita
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'tenant_id' => $user->tenant_id,
+            'is_global_admin' => (bool) $user->is_global_admin, // Asegúrate de que sea booleano
+            'facility_id' => $user->facility_id, // Asegúrate de incluirlo si existe
+            'permissions' => $permissions, // ¡Aquí se añade el array de permisos!
+            // Puedes añadir otras propiedades del usuario que necesites
+        ]);
     }
 
     /**

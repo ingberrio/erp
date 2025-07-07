@@ -23,17 +23,17 @@ class UserController extends Controller
         Log::info('UserController@index: Request received.', [
             'user_id' => $user->id ?? 'guest',
             'is_global_admin' => $user->is_global_admin ?? false,
-            'tenant_id_from_user' => $user->tenant_id ?? 'N/A'
+            'tenant_id_from_user' => $user->tenant_id ?? 'N/A',
+            'X-Tenant-ID-Header' => $request->header('X-Tenant-ID') ?? 'N/A' // Log del header
         ]);
 
         try {
             // Si el usuario es un administrador global, devolver TODOS los usuarios.
-            // El TenantScope en el modelo User debería manejar el bypass para is_global_admin
-            // si TenantContext::getTenantId() devuelve null para global admins.
+            // Es CRUCIAL usar withoutGlobalScopes() aquí si tienes un TenantScope global
+            // aplicado al modelo User, para que el admin global vea todos los usuarios.
             if ($user && $user->is_global_admin) {
-                Log::info('UserController@index: Global Admin detected. Fetching all users.');
-                // Cargar usuarios con sus roles para el frontend
-                $users = User::with('roles')->get();
+                Log::info('UserController@index: Global Admin detected. Fetching all users using withoutGlobalScopes().');
+                $users = User::withoutGlobalScopes()->with('roles')->get(); // <-- CAMBIO CLAVE AQUÍ
                 return response()->json($users);
             }
 
