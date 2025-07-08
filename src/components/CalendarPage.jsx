@@ -5,7 +5,8 @@ import {
   Box, Typography, Button, CircularProgress, Snackbar, Alert,
   TextField, Paper, Divider, IconButton, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  FormControl, InputLabel, Select, MenuItem
+  FormControl, InputLabel, Select, MenuItem,
+  LinearProgress, Checkbox, Avatar, AvatarGroup // Importar Avatar y AvatarGroup
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -13,12 +14,15 @@ import EditIcon from '@mui/icons-material/Edit';
 import DateRangeIcon from "@mui/icons-material/DateRange";
 import DescriptionIcon from "@mui/icons-material/Description";
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import GroupIcon from '@mui/icons-material/Group';
+import GroupIcon from "@mui/icons-material/Group";
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import LabelIcon from '@mui/icons-material/Label'; // Icono para Etiquetas
-import ChecklistIcon from '@mui/icons-material/Checklist'; // Icono para Checklist
-import PersonIcon from '@mui/icons-material/Person'; // Icono para Miembros
-import CommentIcon from '@mui/icons-material/Comment'; // Icono para Comentarios
+import LabelIcon from "@mui/icons-material/Label"; // Icono para Etiquetas
+import ChecklistIcon from "@mui/icons-material/Checklist"; // Icono para Checklist
+import PersonIcon from "@mui/icons-material/Person"; // Icono para Miembros
+import CommentIcon from "@mui/icons-material/Comment"; // Icono para Comentarios
+import CloseIcon from "@mui/icons-material/Close"; // Icono de cerrar para el diálogo de tarjeta
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'; // Icono para checklist no completado
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Icono para checklist completado
 
 
 // --- Importaciones para MUI X Date Pickers ---
@@ -77,7 +81,7 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
 
 
 // --- Componente principal del Módulo de Calendario ---
-const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) => {
+const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, user, hasPermission }) => { // Añadir user y hasPermission
   const [boards, setBoards] = useState([]);
   const [loading, setLoading] = useState(false);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
@@ -106,26 +110,35 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
 
   // --- Sincronizar selectedTenantForViewing con localStorage ---
   useEffect(() => {
+    console.log(`CalendarPage: useEffect para sync localStorage - isGlobalAdmin: ${isGlobalAdmin}, tenantId: ${tenantId}, selectedTenantForViewing: ${selectedTenantForViewing}`);
     if (isGlobalAdmin) {
       if (selectedTenantForViewing) {
         localStorage.setItem('currentTenantId', String(selectedTenantForViewing));
         console.log(`CalendarPage: Super Admin, currentTenantId en localStorage actualizado a: ${selectedTenantForViewing}`);
       } else {
+        // Si es Super Admin y no hay selectedTenantForViewing, limpiar para evitar enviar un tenantId incorrecto
         localStorage.removeItem('currentTenantId');
-        console.log("CalendarPage: Super Admin, selectedTenantForViewing es nulo, removiendo currentTenantId de localStorage.");
+        console.log("CalendarPage: Super Admin, no selectedTenantForViewing. Removing currentTenantId from localStorage.");
       }
     } else if (tenantId) {
       // Para usuarios de tenant, siempre se usa su propio tenantId
       localStorage.setItem('currentTenantId', String(tenantId));
-      console.log(`CalendarPage: Tenant user, currentTenantId en localStorage actualizado a: ${tenantId}`);
+      setSelectedTenantForViewing(tenantId); // Asegurarse de que el estado local también refleje el tenantId del usuario
+      console.log(`CalendarPage: Tenant user, currentTenantId en localStorage actualizado a: ${tenantId}. selectedTenantForViewing set to user's tenantId.`);
     } else {
+      // Este caso es para cuando no hay contexto de inquilino (ni global admin, ni tenantId).
       localStorage.removeItem('currentTenantId');
-      console.log("CalendarPage: Ni Super Admin ni Tenant ID válido, removiendo currentTenantId de localStorage.");
+      console.log("CalendarPage: No valid tenant context, removing currentTenantId from localStorage.");
     }
   }, [isGlobalAdmin, selectedTenantForViewing, tenantId]);
 
 
   const fetchBoards = useCallback(async () => {
+    console.log(`CalendarPage: fetchBoards START. isGlobalAdmin: ${isGlobalAdmin}, selectedTenantForViewing: ${selectedTenantForViewing}, tenantId: ${tenantId}, isAppReady: ${isAppReady}`);
+
+    // Determinar el ID de inquilino efectivo para la llamada a la API
+    const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+
     // Si es Super Admin y no ha seleccionado un tenant para ver, no cargar nada
     if (isGlobalAdmin && !selectedTenantForViewing) {
       setBoards([]); // Limpiar tableros si no hay tenant seleccionado para ver
@@ -142,10 +155,11 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
       return;
     }
 
+    // Si llegamos aquí, tenemos un effectiveTenantId válido para la llamada
+    console.log(`CalendarPage: Attempting to fetch boards from API with effectiveTenantId: ${effectiveTenantId}`);
     setLoading(true);
     try {
       // La URL base es siempre /boards, el interceptor de Axios añade el X-Tenant-ID
-      console.log("CalendarPage: Attempting to fetch boards from API.");
       const response = await api.get("/boards");
       const fetchedBoards = Array.isArray(response.data) ? response.data : response.data.data || [];
       setBoards(fetchedBoards);
@@ -157,10 +171,11 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
       }
 
     } catch (error) {
-      console.error("CalendarPage: Error fetching boards:", error);
+      console.error("CalendarPage: Error fetching boards:", error.response?.data || error.message);
       showSnack("Error al cargar los tableros. Asegúrate de que el inquilino seleccionado tenga tableros o permisos.", "error"); // Mensaje más descriptivo
     } finally {
       setLoading(false);
+      console.log("CalendarPage: fetchBoards END.");
     }
   }, [tenantId, isAppReady, viewingBoardId, showSnack, isGlobalAdmin, selectedTenantForViewing]);
 
@@ -186,7 +201,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
         console.log("CalendarPage: Initializing selectedTenantForViewing with first tenant:", fetchedTenants[0].id);
       }
     } catch (error) {
-      console.error('CalendarPage: Error fetching tenants:', error);
+      console.error('CalendarPage: Error fetching tenants:', error.response?.data || error.message);
       showSnack('Error al cargar inquilinos para la asignación de tableros.', 'error');
     }
   }, [isGlobalAdmin, showSnack, selectedTenantForViewing]);
@@ -199,7 +214,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
         fetchTenants(); // Cargar tenants si es global admin
       } else if (tenantId) {
         // Si no es global admin y tiene tenantId, inicializar selectedTenantForViewing con su propio tenantId
-        setSelectedTenantForViewing(tenantId);
+        setSelectedTenantForViewing(tenantId); // Esto ya se hace en el useEffect de sync, pero lo reforzamos aquí.
         console.log("CalendarPage: Initializing selectedTenantForViewing with user's tenantId:", tenantId);
       }
     }
@@ -209,9 +224,13 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
   // Se ejecutará cuando selectedTenantForViewing cambie para Super Admin
   // o cuando tenantId esté disponible para usuarios de tenant
   useEffect(() => {
+    // Solo llamar a fetchBoards si la aplicación está lista Y
+    // (es un usuario de inquilino con tenantId O es un Super Admin con un tenant seleccionado)
     if (isAppReady && (tenantId || (isGlobalAdmin && selectedTenantForViewing))) {
-        console.log("CalendarPage: Triggering fetchBoards due to dependency change.");
+        console.log("CalendarPage: Triggering fetchBoards due to dependency change (isAppReady, tenantId/selectedTenantForViewing).");
         fetchBoards();
+    } else {
+        console.log("CalendarPage: Skipping fetchBoards due to unmet conditions (isAppReady, tenantId/selectedTenantForViewing).");
     }
   }, [isAppReady, tenantId, isGlobalAdmin, selectedTenantForViewing, fetchBoards]);
 
@@ -371,10 +390,14 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
         <BoardView
           board={selectedBoard}
           // Pasar el tenantId correcto a BoardView
-          tenantId={isGlobalAdmin ? selectedTenantForViewing : tenantId}
+          tenantId={tenantId} // Usar el tenantId original del prop
+          isGlobalAdmin={isGlobalAdmin} // Pasar isGlobalAdmin
+          selectedTenantForViewing={selectedTenantForViewing} // Pasar selectedTenantForViewing
           setParentSnack={showSnack} // Pasar showSnack
           setParentConfirmDialog={setConfirmDialogData}
-          setParentConfirmDialogOpen={setConfirmDialogOpen}
+          setParentConfirmDialogOpen={setConfirmDialogOpen} // Pasa la función setConfirmDialogOpen directamente
+          user={user} // Pasar el objeto de usuario
+          hasPermission={hasPermission} // Pasar la función de permisos
         />
       </Box>
     );
@@ -418,14 +441,14 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
               ) : (
                 tenants.map((tenant) => (
                   <MenuItem key={tenant.id} value={tenant.id}>
-                    {tenant.name}
-                  </MenuItem>
-                ))
-              )}
-            </Select>
-          </FormControl>
-        )}
-      </Box>
+                        {tenant.name}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+            )}
+          </Box>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#fff' }}> {/* Color blanco para el spinner */}
@@ -590,7 +613,7 @@ const BoardCard = ({ board, onClick }) => {
     return color;
   };
 
-  const randomColor = getColor(board.id);
+  const randomColor = getColor(String(board.id)); // Convertir a string para consistencia
 
   return (
     <Paper
@@ -658,7 +681,7 @@ const CreateBoardCard = ({ onClick }) => {
 
 
 // --- Componente: BoardView (Representa un tablero de Trello) ---
-const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen }) => {
+const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, user, hasPermission }) => { // Añadir user y hasPermission
   const [lists, setLists] = useState([]);
   const [loadingLists, setLoadingLists] = useState(false);
   const [activeDraggableId, setActiveDraggableId] = useState(null); // Estado para la tarjeta que se está arrastrando
@@ -674,31 +697,74 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
 
   // Función para cargar listas Y sus tarjetas anidadas
   const fetchListsWithCards = useCallback(async () => {
-    // La condición ahora solo verifica board?.id, ya que tenantId se garantiza que es el correcto
-    // gracias al cambio en CalendarPage y el interceptor de Axios.
-    // Asegurarse de que tenantId no sea null o undefined antes de continuar
-    if (!board?.id || tenantId === null || tenantId === undefined) {
-      console.log("BoardView: Skipping fetchListsWithCards. Board ID:", board?.id, "Tenant ID:", tenantId);
-      setLists([]); // Asegurar que las listas se limpien si no hay datos válidos
+    console.log("BoardView: fetchListsWithCards START"); // NUEVO LOG
+    // Asegurarse de que el ID del tablero sea válido
+    if (!board?.id) {
+      console.log("BoardView: Saltando fetchListsWithCards. No hay ID de tablero.");
+      setLists([]);
+      setLoadingLists(false);
       return;
     }
 
+    // Determinar el ID de inquilino efectivo para la llamada a la API
+    const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+    console.log(`BoardView: fetchListsWithCards - effectiveTenantId: ${effectiveTenantId}`); // NUEVO LOG
+
+    if (!effectiveTenantId) {
+      console.log("BoardView: Saltando fetchListsWithCards. No hay ID de inquilino efectivo establecido para la llamada a la API.");
+      setLists([]);
+      setLoadingLists(false);
+      return;
+    }
+
+    // Asegurarse de que localStorage.currentTenantId esté correctamente configurado para esta búsqueda específica
+    localStorage.setItem('currentTenantId', String(effectiveTenantId));
+    console.log(`BoardView: Estableciendo localStorage.currentTenantId en ${effectiveTenantId} antes de buscar listas.`);
+
+
     setLoadingLists(true);
-    console.log(`BoardView: Fetching lists with cards for board ID: ${board.id}, Tenant ID: ${tenantId}`);
+    console.log(`BoardView: Buscando listas con tarjetas para el ID de tablero: ${board.id}, ID de inquilino efectivo: ${effectiveTenantId}`);
     try {
       const listsResponse = await api.get(`/boards/${board.id}/lists`);
-      // CORRECCIÓN: Usar listsResponse.data en lugar de response.data
-      let fetchedLists = Array.isArray(listsResponse.data) ? listsResponse.data : listsResponse.data.data || [];
-      console.log("BoardView: Raw lists response:", fetchedLists);
+      // CORRECCIÓN: Asegurarse de que listsResponse.data es un objeto antes de acceder a .data
+      let fetchedLists = [];
+      if (listsResponse.data) { // Verificar si data existe
+        fetchedLists = Array.isArray(listsResponse.data) ? listsResponse.data : listsResponse.data.data || [];
+      } else {
+        console.warn("BoardView: listsResponse.data is null or undefined. Setting fetchedLists to empty array.");
+      }
+      
+      console.log("BoardView: Raw API response for lists:", listsResponse.data); // Mover este log para ver la data cruda
+      console.log("BoardView: Processed fetchedLists (before mapping for cards):", fetchedLists); // NUEVO LOG
+
 
       const listsWithCardsPromises = fetchedLists.map(async (list) => {
         try {
-          const cardsResponse = await api.get(`/lists/${list.id}/cards`);
-          const fetchedCards = Array.isArray(cardsResponse.data) ? cardsResponse.data : cardsResponse.data.data || [];
-          console.log(`BoardView: Cards for list ${list.id}:`, fetchedCards);
+          console.log(`BoardView: Fetching cards for list ID: ${list.id} (name: ${list.name}) with effectiveTenantId: ${effectiveTenantId}`); // NUEVO LOG
+          // Incluir la relación 'members' al obtener las tarjetas
+          const cardsResponse = await api.get(`/lists/${list.id}/cards?include=members`);
+          console.log(`BoardView: Raw API response for cards of list ${list.id} (name: ${list.name}):`, cardsResponse.data); // NUEVO LOG
+          
+          // CORRECCIÓN: Usar cardsResponse.data directamente o cardsResponse.data.data si es un objeto envolvente
+          let fetchedCards = [];
+          if (cardsResponse.data) { // Verificar si data existe
+            if (Array.isArray(cardsResponse.data)) {
+              fetchedCards = cardsResponse.data;
+              console.log(`BoardView: cardsResponse.data is an array for list ${list.id} (name: ${list.name}).`);
+            } else if (cardsResponse.data && Array.isArray(cardsResponse.data.data)) {
+              fetchedCards = cardsResponse.data.data;
+              console.log(`BoardView: cardsResponse.data.data is an array for list ${list.id} (name: ${list.name}).`);
+            } else {
+              console.warn(`BoardView: Unexpected cards data format for list ${list.id} (name: ${list.name}):`, cardsResponse.data);
+            }
+          } else {
+            console.warn(`BoardView: cardsResponse.data is null or undefined for list ${list.id} (name: ${list.name}). Setting fetchedCards to empty array.`);
+          }
+          
+          console.log(`BoardView: Processed cards for list ${list.id} (name: ${list.name}):`, fetchedCards); // NUEVO LOG
           return { ...list, cards: fetchedCards.sort((a, b) => a.order - b.order) };
         } catch (cardError) {
-          console.error(`Error fetching cards for list ${list.id}:`, cardError);
+          console.error(`Error al buscar tarjetas para la lista ${list.id} (name: ${list.name}):`, cardError.response?.data || cardError.message); // NUEVO LOG
           setParentSnack("Error al cargar tarjetas de la lista \"" + list.name + "\".", "error"); // Usar setParentSnack
           return { ...list, cards: [] };
         }
@@ -709,15 +775,16 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
       setLists(listsWithCards.sort((a, b) => a.order - b.order));
       console.log("BoardView: Lists with cards fetched successfully and state updated.");
     } catch (error) {
-      console.error(`BoardView: Error fetching lists for board ID: ${board.id}`, error);
+      console.error(`BoardView: Error al buscar listas para el ID de tablero: ${board.id}`, error.response?.data || error.message); // NUEVO LOG
       setParentSnack("Error al cargar las listas del tablero.", "error"); // Usar setParentSnack
     } finally {
       setLoadingLists(false);
+      console.log("BoardView: fetchListsWithCards END"); // NUEVO LOG
     }
-  }, [board?.id, tenantId, setParentSnack]);
+  }, [board?.id, tenantId, isGlobalAdmin, selectedTenantForViewing, setParentSnack]);
 
   useEffect(() => {
-    console.log("BoardView: useEffect triggered. Board ID:", board?.id, "Tenant ID:", tenantId);
+    console.log("BoardView: useEffect activado. ID de tablero:", board?.id, "ID de inquilino:", tenantId, "isGlobalAdmin:", isGlobalAdmin, "selectedTenantForViewing:", selectedTenantForViewing);
     fetchListsWithCards();
   }, [fetchListsWithCards]);
 
@@ -740,13 +807,13 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
 
     setLoadingLists(true);
     try {
-      console.log(`BoardView: Attempting to create list '${listName}' for board ID: ${board.id}`);
+      console.log(`BoardView: Intentando crear la lista '${listName}' para el ID de tablero: ${board.id}`);
       const response = await api.post(`/boards/${board.id}/lists`, { name: listName });
-      console.log("BoardView: List creation API response:", response.data);
+      console.log("BoardView: Respuesta de la API de creación de lista:", response.data);
       setParentSnack("Lista creada.", "success");
       handleCloseAddListDialog();
-      await fetchListsWithCards(); // Re-fetch lists after successful creation
-      console.log("BoardView: Lists re-fetched after creation.");
+      await fetchListsWithCards(); // Volver a buscar listas después de la creación exitosa
+      console.log("BoardView: Listas buscadas de nuevo después de la creación.");
     } catch (err) {
       console.error("BoardView: Error al crear lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
@@ -759,20 +826,19 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
   const handleDeleteListConfirm = useCallback(async (listToDelete) => {
     setLoadingLists(true);
     try {
-      console.log(`BoardView: Attempting to delete list '${listToDelete.name}' (ID: ${listToDelete.id})`);
+      console.log(`BoardView: Intentando eliminar la lista '${listToDelete.name}' (ID: ${listToDelete.id})`);
       await api.delete(`/lists/${listToDelete.id}`);
       setParentSnack("Lista eliminada.", "info");
       await fetchListsWithCards();
-      console.log("BoardView: Lists re-fetched after deletion.");
     } catch (err) {
       console.error("BoardView: Error al eliminar lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       setParentSnack("Error al eliminar lista: " + errorMessage, "error");
     } finally {
       setLoadingLists(false);
-      setParentConfirmDialogOpen(false);
+      setParentConfirmDialogOpen(false); // Corregido: usar setParentConfirmDialogOpen
     }
-  }, [fetchListsWithCards, setParentSnack, setParentConfirmDialogOpen]);
+  }, [fetchListsWithCards, setParentSnack, setParentConfirmDialogOpen]); // Añadido setParentConfirmDialogOpen a las dependencias
 
   const handleDeleteListClick = (listToDelete) => {
     setParentConfirmDialog({
@@ -965,23 +1031,26 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
                 key={list.id}
                 list={list}
                 tenantId={tenantId}
+                isGlobalAdmin={isGlobalAdmin} // Pasar isGlobalAdmin
+                selectedTenantForViewing={selectedTenantForViewing} // Pasar selectedTenantForViewing
                 refreshLists={fetchListsWithCards}
                 handleDeleteList={handleDeleteListClick}
                 setParentSnack={setParentSnack}
                 setParentConfirmDialog={setParentConfirmDialog}
-                setParentConfirmDialogOpen={setParentConfirmDialogOpen}
+                setParentConfirmDialogOpen={setParentConfirmDialogOpen} // CORRECCIÓN: Pasar el prop que se recibió
+                user={user} // Pasar el objeto de usuario
+                hasPermission={hasPermission} // Pasar la función de permisos
               />
             ))}
           </Box>
         )}
         <Button
-          variant="contained"
+          variant="contained" // Cambiado a contained para un look más sólido
           startIcon={<AddIcon />}
-          onClick={handleOpenAddListDialog}
+          onClick={() => handleOpenAddListDialog(null)}
+          fullWidth
           sx={{
-            minWidth: 280,
-            height: 50,
-            flexShrink: 0,
+            mt: 1,
             bgcolor: '#4CAF50', // Botón de añadir lista en verde, como "Añadir Etapa" en Cultivo
             color: '#fff', // Texto blanco
             '&:hover': { bgcolor: '#43A047' },
@@ -1049,12 +1118,27 @@ const BoardView = ({ board, tenantId, setParentSnack, setParentConfirmDialog, se
 
 
 // --- Componente: ListView (Representa una lista de Trello) ---
-const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen }) => {
+const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, refreshLists, handleDeleteList, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, user, hasPermission }) => {
   const [openAddCardDialog, setOpenAddCardDialog] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
   const [cardDescription, setCardDescription] = useState("");
   const [cardDueDate, setCardDueDate] = useState(null);
-  const [editingCard, setEditingCard] = useState(null);
+  const [editingCard, setEditingCard] = useState(null); // La tarjeta que se está editando (objeto completo)
+
+  // Nuevo estado para el checklist
+  const [cardChecklist, setCardChecklist] = useState(null); // { id: 'uuid', title: 'Mi Checklist', items: [{ id: 'uuid', text: 'Tarea 1', completed: false }] }
+  const [newChecklistItemText, setNewChecklistItemText] = useState('');
+  const [isSaving, setIsSaving] = useState(false); // Estado para indicar si se está guardando automáticamente
+
+  // Nuevos estados para Miembros
+  const [openMembersDialog, setOpenMembersDialog] = useState(false);
+  const [availableMembers, setAvailableMembers] = useState([]); // Todos los miembros del tenant
+  const [selectedMembers, setSelectedMembers] = useState([]); // Miembros asignados a la tarjeta actual
+
+  console.log("ListView Render: list prop received:", list); // NUEVO LOG
+  console.log("ListView Render: list.cards prop received:", list.cards); // NUEVO LOG
+  console.log("ListView Render: editingCard is", editingCard); // LOG DE DEPURACIÓN
+  console.log("ListView: Props - tenantId:", tenantId, "isGlobalAdmin:", isGlobalAdmin, "selectedTenantForViewing:", selectedTenantForViewing); // NUEVO LOG
 
   const { setNodeRef, isOver } = useDroppable({
     id: list.id,
@@ -1065,29 +1149,90 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
   });
 
 
-  const handleOpenCardDialog = (card = null) => {
-    setEditingCard(card);
-    setCardTitle(card ? card.title : "");
-    setCardDescription(card ? (card.description || "") : "");
-    setCardDueDate(card && card.due_date ? dayjs(card.due_date) : null);
+  const handleOpenCardDialog = async (card = null) => {
+    console.log("handleOpenCardDialog: Card parameter received:", card); // LOG DE DEPURACIÓN
     setOpenAddCardDialog(true);
+
+    let cardToEdit = card;
+    if (card && card.id) {
+      try {
+        const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+        if (effectiveTenantId) {
+          localStorage.setItem('currentTenantId', String(effectiveTenantId));
+          console.log(`ListView: Setting localStorage.currentTenantId to ${effectiveTenantId} before fetching single card.`);
+        }
+        // Incluir la relación 'members' al obtener la tarjeta individual
+        const response = await api.get(`/cards/${card.id}?include=members`);
+        cardToEdit = response.data;
+        console.log("ListView: Fetched latest card data for dialog:", cardToEdit); // LOG DE DEPURACIÓN
+      } catch (error) {
+        console.error("ListView: Error al cargar los detalles de la tarjeta para el diálogo:", error.response?.data || error.message);
+        setParentSnack("Error al cargar los detalles de la tarjeta.", "error");
+      }
+    }
+
+    setEditingCard(cardToEdit);
+    console.log("handleOpenCardDialog: After setEditingCard, current editingCard state:", cardToEdit); // LOG DE DEPURACIÓN
+    setCardTitle(cardToEdit ? cardToEdit.title : "");
+    setCardDescription(cardToEdit ? (cardToEdit.description || "") : "");
+    setCardDueDate(cardToEdit && cardToEdit.due_date ? dayjs(cardToEdit.due_date) : null);
+
+    let initialChecklist = null;
+    if (cardToEdit && cardToEdit.checklist) {
+      try {
+        if (typeof cardToEdit.checklist === 'string') {
+          initialChecklist = JSON.parse(cardToEdit.checklist);
+          if (!initialChecklist.items) {
+            initialChecklist.items = [];
+          }
+        } else if (typeof cardToEdit.checklist === 'object' && cardToEdit.checklist !== null) {
+          initialChecklist = { ...cardToEdit.checklist, items: cardToEdit.checklist.items || [] };
+        }
+      } catch (e) {
+        console.error("Error al analizar el checklist de la tarjeta (en apertura):", e);
+        initialChecklist = null;
+      }
+    }
+    setCardChecklist(initialChecklist);
+    setNewChecklistItemText('');
+    setIsSaving(false);
+
+    // Inicializar selectedMembers con los miembros de la tarjeta
+    setSelectedMembers(cardToEdit && cardToEdit.members ? cardToEdit.members : []);
   };
 
   const handleCloseCardDialog = () => {
+    console.log("handleCloseCardDialog: Closing dialog."); // LOG DE DEPURACIÓN
     setOpenAddCardDialog(false);
     setEditingCard(null);
     setCardTitle("");
     setCardDescription("");
     setCardDueDate(null);
+    setCardChecklist(null); // Limpiar checklist al cerrar
+    setNewChecklistItemText('');
+    setIsSaving(false);
+    setSelectedMembers([]); // Limpiar miembros seleccionados al cerrar
+    refreshLists();
   };
 
-  const handleSaveCard = async (e) => {
-    e.preventDefault();
-    if (!cardTitle.trim()) {
-      setParentSnack("El título de la tarjeta es obligatorio.", "warning"); // Usar setParentSnack
+  // Función para guardar los cambios de la tarjeta (usada para autosave)
+  const saveCardChanges = useCallback(async () => {
+    if (!editingCard || !editingCard.id) {
+      console.log("saveCardChanges: No editingCard or ID. Skipping autosave."); // LOG DE DEPURACIÓN
       return;
     }
 
+    const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+    if (!effectiveTenantId) {
+      console.error("ListView: No se pueden guardar los cambios de la tarjeta. No hay ID de inquilino efectivo establecido para la llamada a la API.");
+      setParentSnack("Error: No se pudo determinar el inquilino para guardar.", "error");
+      setIsSaving(false);
+      return;
+    }
+    localStorage.setItem('currentTenantId', String(effectiveTenantId));
+    console.log(`ListView: Estableciendo localStorage.currentTenantId en ${effectiveTenantId} antes de guardar la tarjeta.`);
+
+    setIsSaving(true);
     try {
       const cardData = {
         title: cardTitle,
@@ -1097,41 +1242,190 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
         status: 'todo',
       };
 
-      console.log("ListView: Saving card with data:", cardData);
-      let res;
-      if (editingCard) {
-        res = await api.put(`/cards/${editingCard.id}`, cardData);
-        setParentSnack("Tarjeta actualizada.", "success"); // Usar setParentSnack
-      } else {
-        res = await api.post(`/lists/${list.id}/cards`, cardData);
-        setParentSnack("Tarjeta creada.", "success"); // Usar setParentSnack
-      }
-      console.log("ListView: Card saved. Response:", res.data);
-      await refreshLists();
-      handleCloseCardDialog();
-      console.log("ListView: Lists refreshed after card save.");
+      console.log("ListView: Autoguardando tarjeta (campos de texto) con datos:", cardData); // LOG DE DEPURACIÓN
+      const response = await api.put(`/cards/${editingCard.id}`, cardData);
+      setParentSnack("Cambios guardados automáticamente.", "success");
+      setEditingCard(response.data);
+      console.log("ListView: Autosave successful. Updated editingCard to:", response.data); // LOG DE DEPURACIÓN
     } catch (err) {
-      console.error("ListView: Error al guardar tarjeta:", err.response?.data || err.message);
+      console.error("ListView: Error al guardar automáticamente la tarjeta:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setParentSnack("Error al guardar tarjeta: " + errorMessage, "error"); // Usar setParentSnack
+      setParentSnack("Error al guardar automáticamente: " + errorMessage, "error");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingCard, cardTitle, cardDescription, cardDueDate, list.id, setParentSnack, isGlobalAdmin, selectedTenantForViewing, tenantId]);
+
+
+  // Función para guardar cambios del checklist inmediatamente
+  const saveChecklistChangesImmediately = useCallback(async (currentCardId, currentChecklistData) => {
+    if (!currentCardId) return;
+
+    setIsSaving(true);
+    try {
+      const cardData = {
+        checklist: currentChecklistData ? JSON.stringify(currentChecklistData) : null,
+      };
+      const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+      if (!effectiveTenantId) {
+        console.error("ListView: No se pueden guardar los cambios del checklist. No hay ID de inquilino efectivo establecido.");
+        setParentSnack("Error: No se pudo determinar el inquilino para guardar el checklist.", "error");
+        setIsSaving(false);
+        return;
+      }
+      localStorage.setItem('currentTenantId', String(effectiveTenantId));
+
+      console.log("ListView: Guardando inmediatamente el checklist para la tarjeta:", currentCardId, "datos:", cardData);
+      await api.put(`/cards/${currentCardId}`, cardData);
+      setParentSnack("Checklist guardado.", "success");
+      setEditingCard(prev => prev ? { ...prev, checklist: currentChecklistData ? JSON.stringify(currentChecklistData) : null } : null);
+    } catch (err) {
+      console.error("ListView: Error al guardar el checklist:", err.response?.data || err.message);
+      const errorMessage = err.response?.data?.message || err.message;
+      setParentSnack("Error al guardar checklist: " + errorMessage, "error");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [isGlobalAdmin, selectedTenantForViewing, tenantId, setParentSnack, setEditingCard]);
+
+
+  // Función para sincronizar miembros de la tarjeta
+  const syncCardMembers = useCallback(async (cardId, memberIds) => {
+    if (!cardId) return;
+
+    setIsSaving(true); // Usar el mismo indicador de guardado
+    try {
+      const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+      if (!effectiveTenantId) {
+        console.error("ListView: No se pueden sincronizar miembros. No hay ID de inquilino efectivo establecido.");
+        setParentSnack("Error: No se pudo determinar el inquilino para sincronizar miembros.", "error");
+        setIsSaving(false);
+        return;
+      }
+      localStorage.setItem('currentTenantId', String(effectiveTenantId));
+
+      console.log(`ListView: Sincronizando miembros para la tarjeta ${cardId} con IDs:`, memberIds);
+      const response = await api.post(`/cards/${cardId}/members`, { member_ids: memberIds });
+      setParentSnack("Miembros actualizados.", "success");
+      setEditingCard(response.data); // Actualizar la tarjeta editada con los nuevos miembros
+      setSelectedMembers(response.data.members); // Actualizar el estado de miembros seleccionados
+    } catch (err) {
+      console.error("ListView: Error al sincronizar miembros:", err.response?.data || err.message);
+      const errorMessage = err.response?.data?.message || err.message;
+      setParentSnack("Error al sincronizar miembros: " + errorMessage, "error");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [isGlobalAdmin, selectedTenantForViewing, tenantId, setParentSnack, setEditingCard, setSelectedMembers]);
+
+
+  // Efecto para debounce el guardado automático (solo para campos de texto y fecha)
+  useEffect(() => {
+    if (!editingCard) {
+      console.log("useEffect for autosave: No editingCard. Skipping."); // LOG DE DEPURACIÓN
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      console.log("useEffect for autosave: Triggering saveCardChanges."); // LOG DE DEPURACIÓN
+      saveCardChanges();
+    }, 700);
+
+    return () => {
+      console.log("useEffect for autosave: Clearing timeout."); // LOG DE DEPURACIÓN
+      clearTimeout(handler);
+    };
+  }, [cardTitle, cardDescription, cardDueDate, editingCard, saveCardChanges]);
+
+
+  // Función para guardar una tarjeta (solo se usa para CREAR una nueva tarjeta)
+  const handleSaveCard = async (e) => {
+    e.preventDefault();
+    // Si ya estamos editando una tarjeta, solo cerramos el diálogo, los cambios se autoguardan
+    if (editingCard) {
+      console.log("handleSaveCard: Editing existing card. Calling handleCloseCardDialog."); // LOG DE DEPURACIÓN
+      handleCloseCardDialog();
+      return;
+    }
+
+    // This block is only for CREATING a NEW card
+    if (!cardTitle.trim()) {
+      setParentSnack("El título de la tarjeta es obligatorio.", "warning");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const cardData = {
+        title: cardTitle,
+        description: cardDescription,
+        due_date: cardDueDate ? dayjs(cardDueDate).format('YYYY-MM-DD') : null,
+        list_id: list.id,
+        status: 'todo',
+        checklist: cardChecklist ? JSON.stringify(cardChecklist) : null,
+        member_ids: selectedMembers.map(m => m.id), // <-- Siempre enviar un array de IDs, incluso si está vacío
+      };
+
+      const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+      if (!effectiveTenantId) {
+        console.error("ListView: No se puede crear una nueva tarjeta. No hay ID de inquilino efectivo establecido para la llamada a la API.");
+        setParentSnack("Error: No se pudo determinar el inquilino para crear la tarjeta.", "error");
+        setIsSaving(false);
+        return;
+      }
+      localStorage.setItem('currentTenantId', String(effectiveTenantId));
+      console.log(`ListView: Estableciendo localStorage.currentTenantId en ${effectiveTenantId} antes de crear una nueva tarjeta.`);
+
+
+      console.log("ListView: Calling API to create new card with data:", cardData); // LOG DE DEPURACIÓN
+      const res = await api.post(`/lists/${list.id}/cards`, cardData);
+      setParentSnack("Tarjeta creada.", "success");
+      
+      // CRITICAL: Update editingCard state with the newly created card's data
+      // This will trigger a re-render and change the dialog's state to "editing"
+      setEditingCard(res.data); 
+      console.log("ListView: New card created successfully. Setting editingCard to:", res.data); // LOG DE DEPURACIÓN
+
+      refreshLists(); // Refrescar las listas para mostrar la nueva tarjeta en la UI principal
+      
+      // Do NOT close the dialog here. Keep it open to allow immediate further editing/member assignment.
+      // The button text will change to "Cerrar" due to editingCard being set.
+      // handleCloseCardDialog(); // Removed this line
+    } catch (err) {
+      console.error("ListView: Error al crear tarjeta:", err.response?.data || err.message);
+      const errorMessage = err.response?.data?.message || err.message;
+      setParentSnack("Error al crear tarjeta: " + errorMessage, "error");
+    } finally {
+      setIsSaving(false);
     }
   };
 
+
   const handleDeleteCardConfirm = useCallback(async (cardToDelete) => {
     try {
-      console.log(`ListView: Attempting to delete card '${cardToDelete.title}' (ID: ${cardToDelete.id})`);
+      console.log(`ListView: Intentando eliminar la tarjeta '${cardToDelete.title}' (ID: ${cardToDelete.id})`);
+      const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+      if (!effectiveTenantId) {
+        console.error("ListView: No se puede eliminar la tarjeta. No hay ID de inquilino efectivo establecido para la llamada a la API.");
+        setParentSnack("Error: No se pudo determinar el inquilino para eliminar la tarjeta.", "error");
+        setParentConfirmDialogOpen(false);
+        return;
+      }
+      localStorage.setItem('currentTenantId', String(effectiveTenantId));
+      console.log(`ListView: Estableciendo localStorage.currentTenantId en ${effectiveTenantId} antes de eliminar la tarjeta.`);
+
       await api.delete(`/cards/${cardToDelete.id}`);
-      setParentSnack("Tarjeta eliminada.", "info"); // Usar setParentSnack
+      setParentSnack("Tarjeta eliminada.", "info");
       await refreshLists();
-      console.log("ListView: Lists refreshed after card deletion.");
+      console.log("ListView: Listas actualizadas después de la eliminación de la tarjeta.");
     } catch (err) {
       console.error("ListView: Error al eliminar tarjeta:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setParentSnack("Error al eliminar tarjeta: " + errorMessage, "error"); // Usar setParentSnack
+      setParentSnack("Error al eliminar tarjeta: " + errorMessage, "error");
     } finally {
       setParentConfirmDialogOpen(false);
     }
-  }, [refreshLists, setParentSnack, setParentConfirmDialogOpen]);
+  }, [refreshLists, setParentSnack, setParentConfirmDialogOpen, isGlobalAdmin, selectedTenantForViewing, tenantId]);
 
   const handleDeleteCardClick = (cardToDelete) => {
     setParentConfirmDialog({
@@ -1140,6 +1434,179 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
       onConfirm: () => handleDeleteCardConfirm(cardToDelete),
     });
     setParentConfirmDialogOpen(true);
+  };
+
+  // --- Funciones para el Checklist ---
+  const handleAddChecklist = () => {
+    if (!editingCard) {
+      setParentSnack("Por favor, crea o selecciona una tarjeta para añadir un checklist.", "warning");
+      return;
+    }
+    if (!cardChecklist) {
+      const newChecklist = {
+        id: crypto.randomUUID(),
+        title: 'Checklist',
+        items: []
+      };
+      setCardChecklist(newChecklist);
+      console.log("handleAddChecklist: New checklist created. Saving immediately."); // LOG DE DEPURACIÓN
+      saveChecklistChangesImmediately(editingCard.id, newChecklist);
+    }
+  };
+
+  const handleDeleteChecklist = () => {
+    if (!editingCard) return; // No hacer nada si no hay tarjeta
+    setParentConfirmDialog({
+      title: "Eliminar Checklist",
+      message: "¿Estás seguro de que quieres eliminar este checklist?",
+      onConfirm: () => {
+        setCardChecklist(null);
+        setParentSnack("Checklist eliminado.", "info");
+        setParentConfirmDialogOpen(false);
+        console.log("handleDeleteChecklist: Checklist deleted. Saving immediately."); // LOG DE DEPURACIÓN
+        saveChecklistChangesImmediately(editingCard.id, null);
+      },
+    });
+    setParentConfirmDialogOpen(true);
+  };
+
+  const handleAddChecklistItem = () => {
+    if (!editingCard || !newChecklistItemText.trim() || !cardChecklist) return;
+
+    const newItem = {
+      id: crypto.randomUUID(),
+      text: newChecklistItemText.trim(),
+      completed: false,
+    };
+    const updatedChecklist = {
+      ...cardChecklist,
+      items: [...(cardChecklist.items || []), newItem]
+    };
+    setCardChecklist(updatedChecklist);
+    console.log("handleAddChecklistItem: New item added to checklist. Saving immediately."); // LOG DE DEPURACIÓN
+    saveChecklistChangesImmediately(editingCard.id, updatedChecklist);
+    setNewChecklistItemText('');
+  };
+
+  const handleToggleChecklistItem = (itemId) => {
+    if (!editingCard || !cardChecklist) return;
+
+    const updatedChecklist = {
+      ...cardChecklist,
+      items: cardChecklist.items.map(item =>
+        item.id === itemId ? { ...item, completed: !item.completed } : item
+      )
+    };
+    setCardChecklist(updatedChecklist);
+    console.log("handleToggleChecklistItem: Checklist item toggled. Saving immediately."); // LOG DE DEPURACIÓN
+    saveChecklistChangesImmediately(editingCard.id, updatedChecklist);
+  };
+
+  const handleDeleteChecklistItem = (itemId) => {
+    if (!editingCard || !cardChecklist) return;
+
+    const updatedChecklist = {
+      ...cardChecklist,
+      items: cardChecklist.items.filter(item => item.id !== itemId)
+    };
+    setCardChecklist(updatedChecklist);
+    setParentSnack("Elemento del checklist eliminado.", "info");
+    console.log("handleDeleteChecklistItem: Checklist item deleted. Saving immediately."); // LOG DE DEPURACIÓN
+    saveChecklistChangesImmediately(editingCard.id, updatedChecklist);
+  };
+
+  const calculateChecklistProgress = useMemo(() => {
+    // CORREGIDO: Usar cardChecklist en lugar de checklist
+    if (!cardChecklist || !cardChecklist.items || cardChecklist.items.length === 0) {
+      return 0;
+    }
+    const completedItems = cardChecklist.items.filter(item => item.completed).length;
+    return (completedItems / cardChecklist.items.length) * 100;
+  }, [cardChecklist]); // Dependencia correcta
+
+  // --- Funciones para Miembros ---
+  const fetchAvailableMembers = useCallback(async () => {
+    const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
+    console.log(`fetchAvailableMembers: START - effectiveTenantId: ${effectiveTenantId}`); // LOG DE INICIO
+    if (!effectiveTenantId) {
+      console.error("fetchAvailableMembers: No se puede obtener la lista de miembros. No hay ID de inquilino efectivo.");
+      setParentSnack("Error: No se pudo determinar el inquilino para cargar miembros.", "error");
+      setAvailableMembers([]); // Asegurarse de que la lista esté vacía si no hay tenantId
+      console.log("fetchAvailableMembers: END - Skipping API call due to missing effectiveTenantId."); // LOG DE FIN
+      return;
+    }
+    localStorage.setItem('currentTenantId', String(effectiveTenantId)); // Asegurar que el tenantId esté en localStorage
+    console.log(`fetchAvailableMembers: localStorage.currentTenantId set to: ${localStorage.getItem('currentTenantId')}`); // LOG
+
+    try {
+      console.log(`fetchAvailableMembers: Making API call to /tenant-members for tenant: ${effectiveTenantId}`); // NUEVO LOG
+      const response = await api.get('/tenant-members'); // La nueva ruta de la API
+      console.log("fetchAvailableMembers: Raw API response from /tenant-members:", response.data); // LOG
+      const fetchedMembers = Array.isArray(response.data) ? response.data : response.data.data || [];
+      setAvailableMembers(fetchedMembers); // Asegurar que siempre es un array
+      console.log("fetchAvailableMembers: Processed available members and updated state:", fetchedMembers); // LOG
+    } catch (error) {
+      console.error("fetchAvailableMembers: Error fetching available members:", error.response?.data || error.message); // LOG
+      setParentSnack("Error al cargar la lista de miembros.", "error");
+      setAvailableMembers([]); // Limpiar la lista en caso de error
+    } finally {
+      console.log("fetchAvailableMembers: END - API call finished."); // LOG DE FIN
+    }
+  }, [tenantId, isGlobalAdmin, selectedTenantForViewing, setParentSnack]);
+
+
+  const handleOpenMembersDialog = () => {
+    console.log("handleOpenMembersDialog: Called. Current editingCard:", editingCard); // LOG DE DEPURACIÓN
+    console.log(`handleOpenMembersDialog: User has 'assign-card-members' permission: ${hasPermission('assign-card-members')}`); // LOG DE PERMISO
+
+    if (!editingCard) {
+      setParentSnack("Por favor, crea o selecciona una tarjeta para asignar miembros.", "warning");
+      console.log("handleOpenMembersDialog: Skipping member fetch because editingCard is null."); // NUEVO LOG
+      setOpenMembersDialog(true); // Abrir el diálogo para que el usuario vea el mensaje, pero sin miembros
+      return;
+    }
+    
+    if (!hasPermission('assign-card-members')) {
+        setParentSnack("No tienes permiso para asignar miembros.", "error");
+        console.log("handleOpenMembersDialog: Skipping member fetch due to insufficient permissions."); // NUEVO LOG
+        setOpenMembersDialog(true); // Abrir el diálogo para que el usuario vea el mensaje, pero sin miembros
+        return;
+    }
+    console.log("handleOpenMembersDialog: Calling fetchAvailableMembers."); // NUEVO LOG
+    fetchAvailableMembers(); // Cargar miembros cada vez que se abre el diálogo
+    setOpenMembersDialog(true);
+  };
+
+  const handleCloseMembersDialog = () => {
+    setOpenMembersDialog(false);
+  };
+
+  const handleMemberToggle = (memberId) => {
+    if (!editingCard) return; // Asegurarse de que hay una tarjeta para editar
+
+    const isCurrentlySelected = selectedMembers.some(member => member.id === memberId);
+    let updatedMemberIds;
+
+    if (isCurrentlySelected) {
+      // Deseleccionar
+      updatedMemberIds = selectedMembers.filter(member => member.id !== memberId).map(m => m.id);
+    } else {
+      // Seleccionar
+      const memberToAdd = availableMembers.find(member => member.id === memberId);
+      if (memberToAdd) {
+        updatedMemberIds = [...selectedMembers.map(m => m.id), memberToAdd.id];
+      } else {
+        updatedMemberIds = selectedMembers.map(m => m.id); // No hay cambios si no se encuentra
+      }
+    }
+    
+    // Actualizar el estado local inmediatamente para feedback visual
+    const newSelectedMembersObjects = availableMembers.filter(member => updatedMemberIds.includes(member.id));
+    setSelectedMembers(newSelectedMembersObjects);
+    console.log("handleMemberToggle: New selected members (local state):", newSelectedMembersObjects); // LOG DE DEPURACIÓN
+
+    // Sincronizar con el backend
+    syncCardMembers(editingCard.id, updatedMemberIds);
   };
 
 
@@ -1177,10 +1644,17 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
           pb: 1,
         }}
       >
-        {list.cards.map((card) => (
-          <CardItem key={card.id} card={card} handleEdit={handleOpenCardDialog} handleDelete={handleDeleteCardClick} />
-        ))}
-        {list.cards.length === 0 && !isOver && (
+        {/* Aquí es donde se renderizan las tarjetas */}
+        {list.cards && list.cards.length > 0 ? ( // Verificar que list.cards existe y no está vacío
+          list.cards.map((card) => (
+            <CardItem key={card.id} card={card} handleEdit={handleOpenCardDialog} handleDelete={handleDeleteCardClick} />
+          ))
+        ) : (
+          <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: '#a0aec0' }}> {/* Texto claro */}
+            No hay tarjetas en esta lista.
+          </Typography>
+        )}
+        {list.cards.length === 0 && !isOver && ( // Mensaje adicional si no hay tarjetas y no se está arrastrando nada
           <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: '#a0aec0' }}> {/* Texto claro */}
             Arrastra tarjetas aquí o añade una nueva.
           </Typography>
@@ -1203,13 +1677,13 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
       </Button>
 
       {/* --- Diálogo de Añadir/Editar Tarjeta (Rediseñado) --- */}
-      <Dialog open={openAddCardDialog} onClose={handleCloseCardDialog} maxWidth="md" fullWidth
+      <Dialog open={openAddCardDialog} onClose={handleCloseCardDialog} maxWidth="lg" fullWidth // Cambiado a maxWidth="lg"
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2, minHeight: '80vh' } }} // Aumentar tamaño y altura mínima
       >
         <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {editingCard ? "Editar Tarjeta" : "Crear Nueva Tarjeta"}
           <IconButton onClick={handleCloseCardDialog} sx={{ color: '#e2e8f0' }}>
-            <DeleteIcon /> {/* Usamos DeleteIcon como icono de cerrar por ahora, puedes cambiarlo a CloseIcon si lo prefieres */}
+            <CloseIcon /> {/* Usamos CloseIcon para cerrar */}
           </IconButton>
         </DialogTitle>
         <form onSubmit={handleSaveCard}>
@@ -1223,7 +1697,7 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
             }}
           >
             {/* Sección Principal de Contenido (Izquierda) */}
-            <Box sx={{ flexGrow: 1 }}>
+            <Box sx={{ flexGrow: 1, minWidth: { md: '60%' } }}> {/* Ajustar minWidth para que la columna izquierda tenga espacio */}
               {/* Título de la Tarjeta */}
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <CheckCircleOutlineIcon sx={{ mr: 1, color: '#a0aec0' }} /> {/* Icono de círculo */}
@@ -1256,12 +1730,12 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
                 />
               </Box>
 
-              {/* Sección de "Añadir" */}
+              {/* Sección de "Añadir" (ahora en la columna principal izquierda) */}
               <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 1 }}>
                 Añadir a la tarjeta
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
-                <Button variant="contained" startIcon={<LabelIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1 }}>
+                <Button variant="contained" startIcon={<LabelIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '8px', px: '12px' }}>
                   Etiquetas
                 </Button>
                 <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
@@ -1271,7 +1745,7 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
                     onChange={(newValue) => setCardDueDate(newValue)}
                     slotProps={{
                       textField: {
-                        variant: "outlined", // CAMBIO CLAVE: Cambiado de "contained" a "outlined"
+                        variant: "outlined",
                         sx: {
                           bgcolor: '#4a5568', // Fondo oscuro
                           color: '#e2e8f0', // Texto claro
@@ -1295,10 +1769,16 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
                     }}
                   />
                 </LocalizationProvider>
-                <Button variant="contained" startIcon={<ChecklistIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1 }}>
+                <Button variant="contained" startIcon={<ChecklistIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '8px', px: '12px' }}
+                  onClick={hasPermission('manage-card-checklist') ? handleAddChecklist : () => setParentSnack("No tienes permiso para añadir un checklist.", "error")} // Control de permiso
+                  disabled={!editingCard || !hasPermission('manage-card-checklist')} // Deshabilitar si no hay tarjeta o no tiene permiso
+                >
                   Checklist
                 </Button>
-                <Button variant="contained" startIcon={<PersonIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1 }}>
+                <Button variant="contained" startIcon={<PersonIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '8px', px: '12px' }}
+                  onClick={hasPermission('assign-card-members') ? handleOpenMembersDialog : () => setParentSnack("No tienes permiso para asignar miembros.", "error")} // Control de permiso
+                  disabled={!editingCard || !hasPermission('assign-card-members')} // Deshabilitar si no hay tarjeta o no tiene permiso
+                >
                   Miembros
                 </Button>
               </Box>
@@ -1327,15 +1807,140 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
                 />
               </Box>
 
-              {/* Sección de Comentarios y Actividad */}
+              {/* Sección de Checklist (NUEVA) */}
+              {cardChecklist && (
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0' }}>
+                      <ChecklistIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#a0aec0' }} />
+                      {cardChecklist.title}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}> {/* Contenedor para botones del checklist */}
+                      {/* Botón Ocultar/Mostrar elementos marcados (funcionalidad pendiente) */}
+                      <Button
+                        size="small"
+                        sx={{ borderRadius: 1, color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }, textTransform: 'none' }}
+                        onClick={() => setParentSnack("Funcionalidad 'Ocultar/Mostrar elementos marcados' pendiente.", "info")}
+                      >
+                        Ocultar elementos marcados
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={hasPermission('manage-card-checklist') ? handleDeleteChecklist : () => setParentSnack("No tienes permiso para eliminar el checklist.", "error")} // Control de permiso
+                        sx={{ borderRadius: 1, color: '#fc8181', '&:hover': { bgcolor: 'rgba(252,129,129,0.1)' }, textTransform: 'none' }}
+                      >
+                        Eliminar
+                      </Button>
+                    </Box>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={calculateChecklistProgress}
+                    sx={{
+                      height: 8,
+                      borderRadius: 5,
+                      bgcolor: '#4a5568', // Fondo de la barra
+                      '& .MuiLinearProgress-bar': {
+                        bgcolor: '#4CAF50', // Color de progreso (verde)
+                      },
+                      mb: 2,
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ color: '#a0aec0', mb: 1 }}>
+                    {Math.round(calculateChecklistProgress)}% completado
+                  </Typography>
+
+                  {/* Lista de elementos del checklist */}
+                  <Box sx={{ mb: 2 }}>
+                    {cardChecklist.items.map((item) => (
+                      <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', mb: 1, bgcolor: '#3a506b', p: 1, borderRadius: 1 }}>
+                        <Checkbox
+                          checked={item.completed}
+                          onChange={hasPermission('manage-card-checklist') ? () => handleToggleChecklistItem(item.id) : undefined} // Control de permiso
+                          icon={<RadioButtonUncheckedIcon sx={{ color: '#a0aec0' }} />}
+                          checkedIcon={<CheckCircleIcon sx={{ color: '#4CAF50' }} />}
+                          sx={{ p: 0.5 }}
+                          disabled={!hasPermission('manage-card-checklist')} // Deshabilitar si no tiene permiso
+                        />
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            flexGrow: 1,
+                            color: item.completed ? '#a0aec0' : '#e2e8f0',
+                            textDecoration: item.completed ? 'line-through' : 'none',
+                          }}
+                        >
+                          {item.text}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={hasPermission('manage-card-checklist') ? () => handleDeleteChecklistItem(item.id) : undefined} // Control de permiso
+                          sx={{ color: '#aaa' }}
+                          disabled={!hasPermission('manage-card-checklist')} // Deshabilitar si no tiene permiso
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  {/* Campo para añadir nuevo elemento */}
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TextField
+                      placeholder="Añade un elemento"
+                      value={newChecklistItemText}
+                      onChange={(e) => setNewChecklistItemText(e.target.value)}
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      sx={{
+                        bgcolor: '#3a506b',
+                        borderRadius: 1,
+                        '& .MuiInputBase-input': { color: '#e2e8f0', py: 1 },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault(); // Evitar que el formulario se envíe
+                          if (hasPermission('manage-card-checklist')) { // Control de permiso
+                            handleAddChecklistItem();
+                          } else {
+                            setParentSnack("No tienes permiso para añadir elementos al checklist.", "error");
+                          }
+                        }
+                      }}
+                      disabled={!hasPermission('manage-card-checklist')} // Deshabilitar si no tiene permiso
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={hasPermission('manage-card-checklist') ? handleAddChecklistItem : () => setParentSnack("No tienes permiso para añadir elementos al checklist.", "error")} // Control de permiso
+                      disabled={!newChecklistItemText.trim() || !hasPermission('manage-card-checklist')} // Deshabilitar si no tiene permiso
+                      sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' }, borderRadius: 1, textTransform: 'none' }}
+                    >
+                      Añadir
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+
+            {/* Sección de Acciones y Actividad (Derecha - Sidebar) */}
+            <Box sx={{ width: { md: '300px' }, flexShrink: 0, ml: { md: 4 } }}> {/* Ancho fijo para la barra lateral en escritorio y margen izquierdo */}
+              {/* Sección de Comentarios y Actividad (permanece en la barra lateral) */}
               <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 1 }}>
-                  <CommentIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#a0aec0' }} />
-                  Comentarios y Actividad
-                  <Button size="small" sx={{ ml: 2, color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
+                {/* Contenedor flex para alinear el título y el botón */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0' }}>
+                    <CommentIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#a0aec0' }} />
+                    Comentarios y Actividad
+                  </Typography>
+                  <Button size="small" sx={{ color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
                     Mostrar detalles
                   </Button>
-                </Typography>
+                </Box>
                 <TextField
                   placeholder="Escribe un comentario..."
                   fullWidth
@@ -1355,21 +1960,99 @@ const ListView = ({ list, tenantId, refreshLists, handleDeleteList, setParentSna
                 <Box sx={{ bgcolor: '#3a506b', p: 2, borderRadius: 1 }}>
                   <Typography variant="body2" sx={{ color: '#a0aec0' }}>
                     <Box component="span" sx={{ fontWeight: 600, color: '#e2e8f0' }}>Eduard Berrio</Box> ha añadido esta tarjeta a Pendmndiente <br />
-                    <Typography variant="caption" sx={{ color: '#a0aec0' }}>17 de dic de 2024, 12:37</Typography>
+                    <Typography variant="caption" component="span" sx={{ color: '#a0aec0' }}>17 de dic de 2024, 12:37</Typography>
                   </Typography>
                 </Box>
               </Box>
             </Box>
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b', p: 2, justifyContent: 'flex-end' }}> {/* Estilo oscuro y justificado a la derecha */}
-            <Button onClick={handleCloseCardDialog} sx={{ color: '#a0aec0' }}>Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={!cardTitle.trim()}
-              sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
-            >
-              {editingCard ? "Guardar Cambios" : "Crear Tarjeta"}
+            {isSaving && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+                <CircularProgress size={20} sx={{ color: '#a0aec0' }} />
+                <Typography variant="body2" sx={{ ml: 1, color: '#a0aec0' }}>Guardando...</Typography>
+              </Box>
+            )}
+            <Button onClick={handleCloseCardDialog} sx={{ color: '#a0aec0' }}>
+              {editingCard ? "Cerrar" : "Cancelar"} {/* Cambiar texto del botón si es edición */}
             </Button>
+            {!editingCard && ( // Mostrar botón "Crear Tarjeta" solo para nuevas tarjetas
+              <Button type="submit" variant="contained" disabled={isSaving || !cardTitle.trim()}
+                sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
+              >
+                {isSaving ? <CircularProgress size={24} /> : "Crear Tarjeta"}
+              </Button>
+            )}
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* --- Diálogo de Miembros --- */}
+      <Dialog open={openMembersDialog} onClose={handleCloseMembersDialog} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Miembros
+          <IconButton onClick={handleCloseMembersDialog} sx={{ color: '#e2e8f0' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: '20px !important' }}>
+          <TextField
+            placeholder="Buscar miembros"
+            fullWidth
+            variant="outlined"
+            size="small"
+            sx={{
+              mb: 2,
+              bgcolor: '#3a506b',
+              borderRadius: 1,
+              '& .MuiInputBase-input': { color: '#e2e8f0', py: 1 },
+              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+            }}
+          />
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#a0aec0', mb: 1 }}>
+            Miembros del tablero
+          </Typography>
+          <Box>
+            {availableMembers.length === 0 ? (
+              <Typography variant="body2" sx={{ color: '#a0aec0' }}>No hay miembros disponibles.</Typography>
+            ) : (
+              availableMembers.map((member) => (
+                <Box
+                  key={member.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    p: 1,
+                    mb: 0.5,
+                    borderRadius: 1,
+                    '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => hasPermission('assign-card-members') ? handleMemberToggle(member.id) : setParentSnack("No tienes permiso para asignar miembros.", "error")} // Control de permiso
+                >
+                  <Avatar sx={{ bgcolor: '#4CAF50', width: 32, height: 32, fontSize: 14, mr: 1 }}>
+                    {member.name ? member.name.charAt(0).toUpperCase() : ''}
+                  </Avatar>
+                  <Typography variant="body1" sx={{ flexGrow: 1, color: '#e2e8f0' }}>
+                    {member.name}
+                  </Typography>
+                  <Checkbox
+                    checked={selectedMembers.some(sm => sm.id === member.id)}
+                    sx={{ color: '#a0aec0', '&.Mui-checked': { color: '#4CAF50' } }}
+                    disabled={!hasPermission('assign-card-members')} // Deshabilitar si no tiene permiso
+                  />
+                </Box>
+              ))
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#3a506b' }}>
+          <Button onClick={handleCloseMembersDialog} sx={{ color: '#a0aec0' }}>Cerrar</Button>
+        </DialogActions>
       </Dialog>
     </Paper>
   );
@@ -1407,6 +2090,9 @@ const CardItem = ({ card, handleEdit, handleDelete }) => {
     color: '#fff', // Texto claro por defecto
   };
 
+  console.log("CardItem: Rendering card:", card.title, "ID:", card.id); // NUEVO LOG
+  console.log("CardItem: Card data:", card); // NUEVO LOG
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <CardContent card={card} handleEdit={handleEdit} handleDelete={handleDelete} />
@@ -1417,6 +2103,28 @@ const CardItem = ({ card, handleEdit, handleDelete }) => {
 
 // --- Componente: CardContent (Solo el contenido visual de la tarjeta) ---
 const CardContent = ({ card, handleEdit, handleDelete }) => {
+  console.log("CardContent: Rendering card. Title:", card?.title, "Full card object:", card); // NUEVO LOG CRÍTICO
+
+  // Parsear el checklist si existe
+  const checklist = useMemo(() => {
+    try {
+      // Asegurarse de que card.checklist es un string antes de intentar parsear
+      return card.checklist && typeof card.checklist === 'string' ? JSON.parse(card.checklist) : null;
+    } catch (e) {
+      console.error("Error al analizar el checklist:", e);
+      return null;
+    }
+  }, [card.checklist]);
+
+  const checklistProgress = useMemo(() => {
+    if (!checklist || !checklist.items || checklist.items.length === 0) {
+      return 0;
+    }
+    const completedItems = checklist.items.filter(item => item.completed).length;
+    return (completedItems / checklist.items.length) * 100;
+  }, [checklist]);
+
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1432,6 +2140,19 @@ const CardContent = ({ card, handleEdit, handleDelete }) => {
             </IconButton>
         </Box>
       </Box>
+
+      {/* Mostrar miembros asignados */}
+      {card.members && card.members.length > 0 && (
+        <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          <AvatarGroup max={4}>
+            {card.members.map(member => (
+              <Avatar key={member.id} sx={{ bgcolor: '#4CAF50', width: 24, height: 24, fontSize: 12 }}>
+                {member.name ? member.name.charAt(0).toUpperCase() : ''}
+              </Avatar>
+            ))}
+          </AvatarGroup>
+        </Box>
+      )}
 
       {card.description && (
         <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, color: '#b0c4de' }}> {/* Color de texto para contraste */}
@@ -1455,6 +2176,29 @@ const CardContent = ({ card, handleEdit, handleDelete }) => {
           <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 500 }}>
             Completada
           </Typography>
+        </Box>
+      )}
+      {/* Mostrar progreso del checklist en la tarjeta si existe */}
+      {checklist && checklist.items && checklist.items.length > 0 && (
+        <Box sx={{ mt: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+            <ChecklistIcon sx={{ fontSize: 16, mr: 0.5, color: '#b0c4de' }} />
+            <Typography variant="body2" sx={{ fontSize: 13, color: '#b0c4de', fontWeight: 500 }}>
+              {Math.round(checklistProgress)}% Checklist
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={checklistProgress}
+            sx={{
+              height: 4,
+              borderRadius: 2,
+              bgcolor: '#4a5568',
+              '& .MuiLinearProgress-bar': {
+                bgcolor: '#4CAF50',
+              },
+            }}
+          />
         </Box>
       )}
     </Box>

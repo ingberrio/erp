@@ -8,7 +8,7 @@ import {
   CircularProgress, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Avatar, Checkbox, Divider, Tabs, Tab, FormControl, InputLabel, Select,
-  MenuItem
+  MenuItem, TablePagination // Asegúrate de que TablePagination esté importado
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -31,15 +31,15 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
       onClose={onCancel}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
-      PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+      PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }} // Estilo oscuro
     >
-      <DialogTitle id="alert-dialog-title" sx={{ bgcolor: '#3a506b', color: '#fff' }}>{title}</DialogTitle>
+      <DialogTitle id="alert-dialog-title" sx={{ bgcolor: '#3a506b', color: '#fff' }}>{title}</DialogTitle> {/* Estilo oscuro */}
       <DialogContent sx={{ pt: '20px !important' }}>
-        <Typography id="alert-dialog-description" sx={{ color: '#e2e8f0' }}>
+        <Typography id="alert-dialog-description" sx={{ color: '#e2e8f0' }}> {/* Color de texto para contraste */}
           {message}
         </Typography>
       </DialogContent>
-      <DialogActions sx={{ bgcolor: '#3a506b' }}>
+      <DialogActions sx={{ bgcolor: '#3a506b' }}> {/* Estilo oscuro */}
         <Button onClick={onCancel} sx={{ color: '#a0aec0' }}>Cancelar</Button>
         <Button onClick={onConfirm} autoFocus variant="contained" sx={{ bgcolor: '#d32f2f', '&:hover': { bgcolor: '#c62828' } }}>
           Confirmar
@@ -77,6 +77,9 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
   const [userSelectedRoleIds, setUserSelectedRoleIds] = useState([]);
   const [userSearch, setUserSearch] = useState("");
   const [userDialogLoading, setUserDialogLoading] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState(''); // Estado para el tenant_id del usuario
+  const [tenants, setTenants] = useState([]); // Estado para la lista de tenants (solo para Global Admin)
+
 
   // --- Estados para Roles ---
   const [roles, setRoles] = useState([]);
@@ -138,6 +141,10 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     { label: 'Actualizar Evento de Calendario', value: 'update-calendar-event' },
     { label: 'Eliminar Evento de Calendario', value: 'delete-calendar-event' },
 
+    // NUEVOS PERMISOS PARA TARJETAS DE CALENDARIO
+    { label: 'Gestionar Checklist de Tarjeta', value: 'manage-card-checklist' },
+    { label: 'Asignar Miembros a Tarjeta', value: 'assign-card-members' },
+
     // Permisos de Usuarios (Gestión del módulo de Usuarios)
     { label: 'Ver Usuarios', value: 'view-users' },
     { label: 'Gestionar Usuarios', value: 'manage-users' },
@@ -165,9 +172,21 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
 
-  // Utilidad para manejar notificaciones (ahora usa setParentSnack)
-  const showSnack = useCallback((message, severity = 'success') => {
-    setParentSnack(message, severity);
+  // Utilidad para manejar notificaciones (ahora muestra detalles de error si existen)
+  const showSnack = useCallback((message, severity = 'success', errorDetails = null) => {
+    let fullMessage = message;
+    if (severity === 'error' && errorDetails) {
+      // Si errorDetails es un objeto con mensajes de validación
+      if (typeof errorDetails === 'object' && !Array.isArray(errorDetails)) {
+        const detailMessages = Object.values(errorDetails).flat();
+        if (detailMessages.length > 0) {
+          fullMessage += ": " + detailMessages.join(', ');
+        }
+      } else if (typeof errorDetails === 'string') {
+        fullMessage += ": " + errorDetails;
+      }
+    }
+    setParentSnack(fullMessage, severity);
   }, [setParentSnack]);
 
 
@@ -201,6 +220,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setLoadingRoles(true);
     try {
       const res = await api.get("/roles?with_permissions=true");
+      console.log("fetchRoles: Datos de roles recibidos:", res.data); // LOG: Ver la respuesta completa
       setRoles(Array.isArray(res.data) ? res.data : res.data.data || []);
       showSnack('Roles cargados exitosamente.', 'success');
     } catch (err) {
@@ -229,21 +249,51 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     } finally { setLoadingPermissions(false); }
   }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
-  // --- useEffects para cargar datos al montar y al cambiar la pestaña ---
+  // NUEVA FUNCIÓN: Fetch de tenants para Super Admin
+  const fetchTenants = useCallback(async () => {
+    if (!isGlobalAdmin) {
+      setTenants([]); // Solo Global Admin puede ver la lista de tenants
+      return;
+    }
+    try {
+      const response = await api.get('/tenants');
+      const fetchedTenants = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
+      setTenants(fetchedTenants);
+      // Si estamos creando un nuevo usuario y somos global admin, preseleccionar el primer tenant
+      if (!editingUser && fetchedTenants.length > 0) {
+        setSelectedTenantId(fetchedTenants[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching tenants:', error);
+      showSnack('Error al cargar inquilinos para la asignación de tableros.', 'error');
+    }
+  }, [isGlobalAdmin, showSnack, editingUser]);
+
+
+  // --- useEffects para Carga Inicial ---
   useEffect(() => {
     console.log("UsuariosCrudInternal: useEffect principal activado. isAppReady:", isAppReady, "isGlobalAdmin:", isGlobalAdmin, "tenantId:", tenantId);
     if (isAppReady && (isGlobalAdmin || tenantId)) {
       console.log("UsuariosCrudInternal: useEffect: isAppReady y (isGlobalAdmin o tenantId) son true. Cargando datos para la pestaña:", activeTab);
-      if (activeTab === 0) fetchUsers();
-      if (activeTab === 1) fetchRoles();
-      if (activeTab === 2) fetchPermissions();
+      // Cargar todos los datos relevantes al inicio, no solo por pestaña
+      fetchUsers();
+      fetchRoles();
+      fetchPermissions();
+      if (isGlobalAdmin) {
+        fetchTenants(); // Cargar tenants si es Global Admin
+      }
     } else {
       console.log("UsuariosCrudInternal: useEffect: Esperando isAppReady o (isGlobalAdmin o tenantId). tenantId:", tenantId, "isAppReady:", isAppReady, "isGlobalAdmin:", isGlobalAdmin);
       setLoadingUsers(false);
       setLoadingRoles(false);
       setLoadingPermissions(false);
     }
-  }, [activeTab, tenantId, isAppReady, isGlobalAdmin, fetchUsers, fetchRoles, fetchPermissions]);
+  }, [isAppReady, isGlobalAdmin, tenantId, fetchUsers, fetchRoles, fetchPermissions, fetchTenants]); // Añadir fetchTenants aquí
+
 
   // --- Lógica de filtrado de usuarios ---
   const filteredUsers = users.filter(user =>
@@ -257,7 +307,19 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setUserName(user ? user.name : "");
     setUserEmail(user ? user.email : "");
     setUserPassword("");
-    if (isAppReady && (isGlobalAdmin || tenantId)) { fetchRolesForAssignment(); }
+    fetchRolesForAssignment(); // Siempre cargar roles para asignación
+
+    // Lógica para el tenant_id en el diálogo de usuario
+    if (user && user.tenant_id) {
+      setSelectedTenantId(user.tenant_id); // Si edita, usar el tenant_id del usuario
+    } else if (isGlobalAdmin && tenants.length > 0) {
+      setSelectedTenantId(tenants[0].id); // Si es Global Admin y crea, seleccionar el primer tenant
+    } else if (tenantId) {
+      setSelectedTenantId(tenantId); // Si es usuario de tenant, usar su propio tenantId
+    } else {
+      setSelectedTenantId(''); // Por defecto vacío
+    }
+
     setUserSelectedRoleIds(user ? (user.roles?.map(role => role.id) || []) : []);
     setOpenUserDialog(true);
   };
@@ -269,6 +331,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     setUserEmail("");
     setUserPassword("");
     setUserSelectedRoleIds([]);
+    setSelectedTenantId(''); // Limpiar al cerrar
   };
 
   // Función específica para cargar roles para el diálogo de asignación de usuarios
@@ -289,13 +352,37 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     e.preventDefault();
     setUserDialogLoading(true);
     try {
+      // Validaciones adicionales para el tenantId
+      if (isGlobalAdmin && !selectedTenantId) {
+        showSnack('Como Super Admin, debes seleccionar un inquilino para el usuario.', 'warning');
+        setUserDialogLoading(false);
+        return;
+      }
+      if (!userName.trim() || !userEmail.trim() || (!editingUser && !userPassword.trim())) {
+        showSnack('Nombre, email y contraseña (para nuevos usuarios) son obligatorios.', 'warning');
+        setUserDialogLoading(false);
+        return;
+      }
+
       const userData = {
         name: userName,
         email: userEmail,
         ...(!editingUser || userPassword.trim() !== "" ? { password: userPassword } : {}),
         roles: userSelectedRoleIds,
-        tenant_id: isGlobalAdmin ? null : tenantId, // Asegura que el tenant_id se envía correctamente
+        // CORRECCIÓN CLAVE: Enviar el tenant_id correcto
+        tenant_id: isGlobalAdmin ? selectedTenantId : tenantId, 
+        facility_id: null, // Tu código no usa facility_id para usuarios, lo dejo como null por si acaso.
       };
+      
+      // Si userEmail es el mismo que el del usuario logueado y se está editando, no permitir cambiar el tenant_id
+      // Esto es una medida de seguridad, pero puede ser ajustada según tu lógica de negocio
+      // if (editingUser && editingUser.email === userEmail && editingUser.tenant_id !== userData.tenant_id) {
+      //   showSnack('No puedes cambiar el inquilino de tu propio usuario.', 'error');
+      //   setUserDialogLoading(false);
+      //   return;
+      // }
+
+      let res;
       if (editingUser) {
         await api.put(`/users/${editingUser.id}`, userData);
         showSnack("Usuario actualizado", "success");
@@ -303,11 +390,12 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
         await api.post("/users", userData);
         showSnack("Usuario creado", "success");
       }
-      await fetchUsers();
       handleCloseUserDialog();
+      await fetchUsers(); // Recargar usuarios
     } catch (err) {
       console.error("Error al guardar usuario:", err.response?.data || err.message);
-      showSnack("Error al guardar usuario: " + (err.response?.data?.message || err.message), "error");
+      // MODIFICACIÓN: Pasar los detalles del error si existen
+      showSnack("Error al guardar usuario: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
     } finally { setUserDialogLoading(false); }
   };
 
@@ -343,11 +431,15 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 
   // --- Handlers de Diálogos (Roles) ---
   const handleOpenRoleDialog = (role = null) => {
+    console.log("handleOpenRoleDialog: Rol recibido para edición:", role); // LOG: Ver el objeto rol completo
     setEditingRole(role);
     setRoleName(role ? role.name : "");
     setRoleDescription(role ? (role.description || "") : "");
     if (isAppReady && (isGlobalAdmin || tenantId)) { fetchPermissions(); }
-    setRoleSelectedPermissionIds(role ? (role.permissions?.map(perm => perm.id) || []) : []);
+    
+    const initialSelectedPermissions = role ? (role.permissions?.map(perm => perm.id) || []) : [];
+    console.log("handleOpenRoleDialog: Permisos iniciales seleccionados (IDs):", initialSelectedPermissions); // LOG: Ver los IDs de permisos
+    setRoleSelectedPermissionIds(initialSelectedPermissions);
     setOpenRoleDialog(true);
   };
 
@@ -367,21 +459,25 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       const roleData = {
         name: roleName,
         description: roleDescription,
-        permissions: roleSelectedPermissionIds,
+        permissions: roleSelectedPermissionIds, // <--- Esto es lo que se envía
         tenant_id: isGlobalAdmin ? null : tenantId, // Asegura que el tenant_id se envía correctamente
       };
+      console.log("handleSaveRole: Datos del rol a enviar:", roleData); // LOG: Ver el payload completo
       if (editingRole) {
-        await api.put(`/roles/${editingRole.id}`, roleData);
+        const res = await api.put(`/roles/${editingRole.id}`, roleData);
+        console.log("handleSaveRole: Respuesta de actualización de rol:", res.data); // LOG: Ver la respuesta del PUT
         showSnack("Rol actualizado", "success");
       } else {
-        await api.post("/roles", roleData);
+        const res = await api.post("/roles", roleData);
+        console.log("handleSaveRole: Respuesta de creación de rol:", res.data); // LOG: Ver la respuesta del POST
         showSnack("Rol creado", "success");
       }
-      await fetchRoles();
+      await fetchRoles(); // Se vuelve a cargar la lista de roles
       handleCloseRoleDialog();
     } catch (err) {
       console.error("Error al guardar rol:", err.response?.data || err.message);
-      showSnack("Error al guardar rol: " + (err.response?.data?.message || err.message), "error");
+      // MODIFICACIÓN: Pasar los detalles del error si existen
+      showSnack("Error al guardar rol: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
     } finally { setLoadingRoleDialog(false); }
   };
 
@@ -481,7 +577,8 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       handleClosePermissionDialog();
     } catch (err) {
       console.error("Error al guardar permiso:", err.response?.data || err.message);
-      showSnack("Error al guardar permiso: " + (err.response?.data?.message || err.message), "error");
+      // MODIFICACIÓN: Pasar los detalles del error si existen
+      showSnack("Error al guardar permiso: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
     } finally { setPermissionDialogLoading(false); }
   };
 
@@ -697,6 +794,46 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     required={!editingUser && userPassword.trim() === ""}
                     disabled={userDialogLoading}
                   />
+
+                  {/* NUEVO: Selector de Inquilino (solo para Global Admin) */}
+                  {isGlobalAdmin && (
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                      <InputLabel id="tenant-select-label" sx={{ color: '#fff' }}>Inquilino</InputLabel>
+                      <Select
+                        labelId="tenant-select-label"
+                        value={selectedTenantId}
+                        label="Inquilino"
+                        onChange={(e) => setSelectedTenantId(e.target.value)}
+                        required
+                        disabled={userDialogLoading || tenants.length === 0}
+                        sx={{
+                          color: '#fff',
+                          '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
+                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+                          '.MuiSvgIcon-root': { color: '#fff' },
+                        }}
+                        MenuProps={{
+                          PaperProps: {
+                            sx: { bgcolor: '#004060', color: '#fff' },
+                          },
+                        }}
+                      >
+                        {tenants.length === 0 ? (
+                          <MenuItem value="" sx={{ color: '#aaa' }}>
+                            <em>No hay inquilinos disponibles</em>
+                          </MenuItem>
+                        ) : (
+                          tenants.map((tenant) => (
+                            <MenuItem key={tenant.id} value={tenant.id}>
+                              {tenant.name}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
+                  )}
+
                   <Divider sx={{ my: 2, bgcolor: 'rgba(255,255,255,0.2)' }} />
                   <Typography variant="subtitle2" sx={{ color: '#fff' }} mb={1}>Roles Asignados</Typography>
                   <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid rgba(255,255,255,0.3)", p: 1, borderRadius: 1 }}>
@@ -725,7 +862,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   <Button
                     type="submit"
                     variant="contained"
-                    disabled={userDialogLoading || !userName || !userEmail || (!editingUser && userPassword.trim() === "")}
+                    disabled={userDialogLoading || !userName || !userEmail || (!editingUser && userPassword.trim() === "") || (isGlobalAdmin && !selectedTenantId)}
                     sx={{
                       bgcolor: '#4CAF50',
                       '&:hover': { bgcolor: '#43A047' }
@@ -1149,7 +1286,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 };
 
 UsuariosCrudInternal.propTypes = {
-  tenantId: PropTypes.string,
+  tenantId: PropTypes.number, // Cambiado a number para IDs de inquilino
   isAppReady: PropTypes.bool.isRequired,
   facilities: PropTypes.array, // PropTypes actualizado para permitir array vacío o null/undefined
   setParentSnack: PropTypes.func.isRequired,

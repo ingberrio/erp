@@ -8,7 +8,7 @@ import {
   AppBar, Toolbar, IconButton, Typography, Box, Drawer, List, ListItem,
   ListItemIcon, ListItemText, CssBaseline, Snackbar, Alert, Menu, MenuItem,
   CircularProgress, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Collapse, Divider
+  TextField, Collapse, Divider, Avatar // Añadido Avatar para el menú de usuario
 } from '@mui/material';
 
 // Iconos de Material-UI
@@ -21,8 +21,8 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // Icono para Calendario
+import LocalFloristIcon from '@mui/icons-material/LocalFlorist'; // Icono para Cultivo
 
 
 // Componentes de tu aplicación
@@ -34,7 +34,7 @@ import LandingPage from './components/LandingPage';
 
 // Configuración de Axios
 export const api = axios.create({
-  baseURL: 'http://localhost:8000/api', // Asegúrate de que esta URL sea correcta para tu backend Laravel
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api', // Usar VITE_API_BASE_URL
   withCredentials: true, // Importante para enviar cookies de sesión (Sanctum)
 });
 
@@ -47,7 +47,6 @@ api.interceptors.request.use(config => {
     delete config.headers.Authorization;
   }
 
-  // MODIFICACIÓN CLAVE AQUÍ: Leer currentTenantId y aplicarlo si existe
   const currentTenantId = localStorage.getItem('currentTenantId');
   if (currentTenantId && currentTenantId !== 'null') {
     config.headers['X-Tenant-ID'] = currentTenantId;
@@ -133,17 +132,13 @@ function App() {
       const userData = response.data;
       setUser(userData);
       setIsGlobalAdmin(userData.is_global_admin);
-      setUserPermissions(userData.permissions || []);
+      setUserPermissions(userData.permissions || []); // Asegúrate de que los permisos se carguen aquí
       setUserFacilityId(userData.facility_id || null);
 
-      // Si no es global admin y tiene tenant_id, lo guarda en localStorage
-      // Si es global admin, o no tiene tenant_id, se asegura de que no haya un currentTenantId en localStorage
       if (!userData.is_global_admin && userData.tenant_id) {
         localStorage.setItem('currentTenantId', String(userData.tenant_id));
         console.log('App.jsx: Usuario de tenant logueado. Tenant ID establecido en localStorage:', userData.tenant_id);
       } else {
-        // Importante: Si es global admin, no queremos que el interceptor envíe un X-Tenant-ID por defecto
-        // hasta que elija uno. Si no tiene tenant_id, tampoco.
         localStorage.removeItem('currentTenantId');
         console.log('App.jsx: Usuario global admin o sin tenant_id. currentTenantId removido de localStorage.');
       }
@@ -156,7 +151,7 @@ function App() {
     } catch (error) {
       console.error('App.jsx: fetchUserData: Error fetching user data:', error);
       localStorage.removeItem('authToken');
-      localStorage.removeItem('currentTenantId'); // Asegurarse de limpiar en caso de error
+      localStorage.removeItem('currentTenantId');
       setUser(null);
       setIsGlobalAdmin(false);
       setUserPermissions([]);
@@ -208,11 +203,10 @@ function App() {
       
       localStorage.setItem('authToken', response.data.token);
       
-      // Lógica para establecer currentTenantId en login
       if (response.data.user && !response.data.user.is_global_admin && response.data.user.tenant_id) {
         localStorage.setItem('currentTenantId', String(response.data.user.tenant_id));
       } else {
-        localStorage.removeItem('currentTenantId'); // Limpiar si es global admin o no tiene tenant_id
+        localStorage.removeItem('currentTenantId');
       }
 
       setLoginDialogOpen(false);
@@ -231,7 +225,7 @@ function App() {
           navigate('/users');
         } else if (userHasPermission('view-companies')) {
           navigate('/empresas');
-        } else if (userHasPermission('view-calendar-events')) {
+        } else if (userHasPermission('manage-calendar-events')) { // CAMBIO: Usar 'manage-calendar-events'
           navigate('/calendario');
         } else {
           navigate('/');
@@ -256,7 +250,7 @@ function App() {
     try {
       await api.post('/logout');
       localStorage.removeItem('authToken');
-      localStorage.removeItem('currentTenantId'); // Asegurarse de limpiar al cerrar sesión
+      localStorage.removeItem('currentTenantId');
       setUser(null);
       setIsGlobalAdmin(false);
       setUserPermissions([]);
@@ -267,7 +261,7 @@ function App() {
       console.error('Logout error:', error);
       showSnack('Error al cerrar sesión.', 'error');
     } finally {
-      handleClose(); // Cerrar el menú después de cerrar sesión
+      handleClose();
     }
   };
 
@@ -276,7 +270,7 @@ function App() {
   };
 
   const handleClose = () => {
-    setAnchorEl(null); // Esto cerrará el menú
+    setAnchorEl(null);
   };
 
   const handleAdminMenuToggle = () => {
@@ -292,9 +286,8 @@ function App() {
     );
   }
 
-  // Determinar el color de fondo de la AppBar y el color del texto
-  const appBarBgColor = user ? '#2d3748' : '#2d3748'; // Mismo color para logueado y no logueado
-  const appBarTextColor = user ? '#e2e8f0' : '#e2e8f0'; // Texto blanco para contraste
+  const appBarBgColor = user ? '#2d3748' : '#2d3748';
+  const appBarTextColor = user ? '#e2e8f0' : '#e2e8f0';
 
   if (!user) {
     return (
@@ -397,7 +390,7 @@ function App() {
             aria-label="open drawer"
             onClick={() => setDrawerOpen(!drawerOpen)}
             edge="start"
-            sx={{ mr: 2, color: appBarTextColor }} // Asegurar el color del icono
+            sx={{ mr: 2, color: appBarTextColor }}
           >
             <MenuIcon />
           </IconButton>
@@ -409,8 +402,10 @@ function App() {
               <Button
                 onClick={handleMenu}
                 color="inherit"
-                startIcon={<AccountCircle />}
-                sx={{ textTransform: 'none', fontSize: '1rem', color: appBarTextColor }} // Asegurar el color del botón
+                startIcon={<Avatar sx={{ bgcolor: '#4CAF50', width: 32, height: 32, fontSize: 14 }}>
+                  {user.name ? user.name.charAt(0).toUpperCase() : ''}
+                </Avatar>}
+                sx={{ textTransform: 'none', fontSize: '1rem', color: appBarTextColor }}
               >
                 {user.name}
               </Button>
@@ -472,19 +467,28 @@ function App() {
         <Toolbar />
         <Box sx={{ overflow: 'auto' }}>
           <List>
+            {/* Dashboard siempre visible */}
+            <ListItem button onClick={() => { navigate('/'); setDrawerOpen(false); }} selected={location.pathname === '/'}>
+              <ListItemIcon sx={{ color: '#e2e8f0' }}><HomeIcon /></ListItemIcon>
+              <ListItemText primary="Dashboard" />
+            </ListItem>
+
+            {/* Módulos principales con control de permisos */}
             {hasPermission('view-cultivation-areas') && (
               <ListItem button onClick={() => { navigate('/cultivo'); setDrawerOpen(false); }} selected={location.pathname === '/cultivo'}>
                 <ListItemIcon sx={{ color: '#e2e8f0' }}><LocalFloristIcon /></ListItemIcon>
                 <ListItemText primary="Cultivo" />
               </ListItem>
             )}
-            {hasPermission('view-calendar-events') && (
+            {/* CAMBIO CLAVE AQUÍ: Usar 'manage-calendar-events' para el menú de Calendario */}
+            {hasPermission('manage-calendar-events') && (
               <ListItem button onClick={() => { navigate('/calendario'); setDrawerOpen(false); }} selected={location.pathname === '/calendario'}>
                 <ListItemIcon sx={{ color: '#e2e8f0' }}><CalendarTodayIcon /></ListItemIcon>
                 <ListItemText primary="Calendario" />
               </ListItem>
             )}
 
+            {/* Sección de Administración */}
             {(hasPermission('view-users') || hasPermission('view-roles') || hasPermission('view-permissions') || hasPermission('view-companies')) && (
               <>
                 <ListItem button onClick={handleAdminMenuToggle}>
@@ -510,6 +514,11 @@ function App() {
                 </Collapse>
               </>
             )}
+            <Divider sx={{ my: 0.5, bgcolor: 'rgba(255,255,255,0.2)' }} />
+            <ListItem button onClick={handleLogout}>
+              <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon /></ListItemIcon>
+              <ListItemText primary="Cerrar Sesión" />
+            </ListItem>
           </List>
         </Box>
       </Drawer>
@@ -519,12 +528,13 @@ function App() {
         sx={{
           flexGrow: 1,
           p: 3,
-          mt: 8,
+          mt: 8, // Ajuste para el AppBar fijo
           width: '100%',
           boxSizing: 'border-box',
         }}
       >
         <Routes>
+          {/* Rutas condicionales basadas en permisos */}
           {hasPermission('view-companies') && (
             <Route path="/empresas" element={<EmpresasCrud setParentSnack={showSnack} isAppReady={appReady} tenantId={user?.tenant_id} isGlobalAdmin={isGlobalAdmin} />} />
           )}
@@ -556,7 +566,8 @@ function App() {
               }
             />
           )}
-          {hasPermission('view-calendar-events') && (
+          {/* CAMBIO CLAVE AQUÍ: Usar 'manage-calendar-events' para la ruta del Calendario */}
+          {hasPermission('manage-calendar-events') && (
             <Route
               path="/calendario"
               element={
@@ -565,10 +576,13 @@ function App() {
                   isAppReady={appReady}
                   tenantId={user?.tenant_id}
                   isGlobalAdmin={isGlobalAdmin}
+                  user={user} // Pasar el objeto de usuario
+                  hasPermission={hasPermission} // Pasar la función de permisos
                 />
               }
             />
           )}
+          {/* Ruta por defecto o de fallback */}
           <Route path="*" element={
             user && hasPermission('view-cultivation-areas') ? (
               <CultivationPage
@@ -586,12 +600,14 @@ function App() {
                 setParentSnack={showSnack}
                 isGlobalAdmin={isGlobalAdmin}
               />
-            ) : user && hasPermission('view-calendar-events') ? (
+            ) : user && hasPermission('manage-calendar-events') ? ( // CAMBIO: Usar 'manage-calendar-events'
               <CalendarPage
                 setParentSnack={showSnack}
                 isAppReady={appReady}
                 tenantId={user?.tenant_id}
                 isGlobalAdmin={isGlobalAdmin}
+                user={user} // Pasar el objeto de usuario
+                hasPermission={hasPermission} // Pasar la función de permisos
               />
             ) : (
               <LandingPage setLoginDialogOpen={setLoginDialogOpen} />
