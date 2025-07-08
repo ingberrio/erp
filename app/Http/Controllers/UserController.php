@@ -294,4 +294,17 @@ class UserController extends Controller
 
         abort(403, 'Unauthorized: You do not have permission to delete this user.');
     }
+
+    public function tenantMembers(Request $request)
+    {
+        // El middleware 'identify.tenant' ya debería haber establecido el tenant_id en la request
+        $tenantId = $request->header('X-Tenant-ID'); // O como lo estés obteniendo en tu middleware
+
+        if (!$tenantId) {
+            return response()->json(['message' => 'Tenant ID not provided or identified.'], 400);
+        }
+
+        $members = User::where('tenant_id', $tenantId)->get(); // Asumiendo que User es tu modelo de usuario
+        return response()->json($members);
+    }
 }

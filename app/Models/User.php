@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Scopes\TenantScope; // <-- ¡MANTENER ESTA IMPORTACIÓN!
+use App\Scopes\TenantScope;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
@@ -32,7 +32,6 @@ class User extends Authenticatable
         'is_global_admin' => 'boolean',
     ];
 
-    // <-- ¡MANTENER ESTE BLOQUE!
     protected static function booted()
     {
         static::addGlobalScope(new TenantScope);
@@ -43,9 +42,18 @@ class User extends Authenticatable
         return $this->belongsTo(Tenant::class);
     }
 
-    // Este método es crucial para que Spatie sepa qué tenant_id usar para los "teams"
     public function getTeamId(): ?int
     {
         return $this->tenant_id;
+    }
+
+    public function cards()
+    {
+        return $this->belongsToMany(Card::class, 'card_members', 'user_id', 'card_id');
+    }
+
+    public function boards()
+    {
+        return $this->belongsToMany(Board::class, 'board_members', 'user_id', 'board_id');
     }
 }

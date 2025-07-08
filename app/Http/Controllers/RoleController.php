@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth; // <-- ¡Añadir esta importación!
+use Illuminate\Support\Facades\Auth;
 
 class RoleController extends Controller
 {
@@ -64,7 +64,10 @@ class RoleController extends Controller
 
             Log::info('RoleController@index: Fetching roles for tenant.', ['tenant_id' => $tenantId]);
             // Cargar roles del tenant con sus permisos y el conteo de usuarios
-            $roles = Role::with('permissions')
+            // Los roles de un tenant solo pueden tener permisos de su propio tenant o permisos globales (tenant_id IS NULL)
+            $roles = Role::with(['permissions' => function($query) use ($tenantId) {
+                    $query->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+                }])
                 ->withCount('users')
                 ->where('tenant_id', $tenantId)
                 ->get();
@@ -102,37 +105,29 @@ class RoleController extends Controller
                     'required',
                     'string',
                     'max:255',
-                    // La regla unique se ajustará dinámicamente
                 ],
                 'description' => 'nullable|string|max:255',
                 'permissions' => 'nullable|array',
-                'permissions.*' => ['integer', Rule::exists('permissions', 'id')], // No filtrar por tenant_id aquí aún
-                'tenant_id' => 'nullable|exists:tenants,id', // Permitir tenant_id si es global admin
+                'permissions.*' => ['integer', Rule::exists('permissions', 'id')],
+                'tenant_id' => 'nullable|exists:tenants,id',
             ]);
 
-            // Determinar el tenant_id para el nuevo rol
             $assignedTenantId = null;
             if ($currentUser->is_global_admin) {
-                // Si es global admin, puede asignar a un tenant específico o dejarlo global (null)
                 $assignedTenantId = $request->input('tenant_id');
             } else {
-                // Si no es global admin, el rol se asigna a su propio tenant
                 $assignedTenantId = $currentUser->tenant_id;
             }
 
-            // Validación adicional para usuarios no-global-admin
             if (!$currentUser->is_global_admin) {
-                // Un no-global admin no puede crear roles globales
                 if ($assignedTenantId === null) {
                     abort(403, 'Unauthorized: Non-global admin cannot create global roles.');
                 }
-                // Un no-global admin no puede crear roles en otros tenants
                 if ($assignedTenantId != $currentUser->tenant_id) {
                     abort(403, 'Unauthorized: Cannot assign role to a different tenant.');
                 }
             }
             
-            // Re-validar la unicidad del nombre del rol con el tenant_id asignado
             $request->validate([
                 'name' => [
                     'required',
@@ -147,17 +142,17 @@ class RoleController extends Controller
             $role = Role::create([
                 'name'        => $validated['name'],
                 'description' => $validated['description'] ?? null,
-                'tenant_id'   => $assignedTenantId, // Usar el tenant_id determinado
+                'tenant_id'   => $assignedTenantId,
                 'guard_name'  => $guard,
             ]);
 
             // Sincronizar permisos si se enviaron
             if (!empty($validated['permissions'])) {
                 $permissions = Permission::whereIn('id', $validated['permissions'])->get();
-                // Filtrar permisos si el usuario actual no es global admin
+                // CORRECCIÓN: Filtrar permisos para usuarios no-global-admin para permitir permisos de su tenant Y globales
                 if (!$currentUser->is_global_admin) {
                     $permissions = $permissions->filter(function($permission) use ($currentUser) {
-                        return $permission->tenant_id == $currentUser->tenant_id;
+                        return $permission->tenant_id == $currentUser->tenant_id || $permission->tenant_id === null;
                     });
                 }
                 $role->syncPermissions($permissions);
@@ -197,11 +192,9 @@ class RoleController extends Controller
         try {
             $query = Role::with('permissions')->withCount('users');
 
-            // Si es global admin, no aplicar filtro de tenant
             if ($currentUser->is_global_admin) {
                 Log::info('RoleController@show: Global Admin detected. Fetching role without tenant filter.');
             } else {
-                // Para usuarios de tenant, filtrar por su propio tenant_id
                 $tenantId = $request->header('X-Tenant-ID');
                 if (!$tenantId || $currentUser->tenant_id != $tenantId) {
                     abort(403, 'Unauthorized: Tenant ID mismatch or missing.');
@@ -212,7 +205,6 @@ class RoleController extends Controller
 
             $role = $query->findOrFail($id);
 
-            // Verificación final de seguridad si no es global admin
             if (!$currentUser->is_global_admin && $role->tenant_id !== $currentUser->tenant_id) {
                 abort(403, 'Unauthorized: You do not have permission to view this role.');
             }
@@ -246,9 +238,8 @@ class RoleController extends Controller
         DB::beginTransaction();
 
         try {
-            $role = Role::findOrFail($id); // Encontrar el rol primero
+            $role = Role::findOrFail($id);
 
-            // Validar que el usuario actual tiene permiso para actualizar este rol
             if (!$currentUser->is_global_admin && $currentUser->tenant_id !== $role->tenant_id) {
                 abort(403, 'Unauthorized: You do not have permission to update this role.');
             }
@@ -264,23 +255,20 @@ class RoleController extends Controller
                 ],
                 'description' => 'nullable|string|max:255',
                 'permissions' => 'nullable|array',
-                'permissions.*' => ['integer', Rule::exists('permissions', 'id')], // No filtrar por tenant_id aquí aún
-                'tenant_id' => 'nullable|exists:tenants,id', // Permitir tenant_id para global admin
+                'permissions.*' => ['integer', Rule::exists('permissions', 'id')],
+                'tenant_id' => 'nullable|exists:tenants,id',
             ];
 
             $validated = $request->validate($rules);
 
-            // Manejo de tenant_id para la actualización
             if (isset($validated['tenant_id'])) {
                 if (!$currentUser->is_global_admin) {
-                    // Un no-global admin no puede cambiar el tenant_id ni asignarse a otro tenant.
                     if ($validated['tenant_id'] !== $role->tenant_id) {
                          abort(403, 'Unauthorized: Cannot change role\'s tenant ID.');
                     }
                 }
                 $role->tenant_id = $validated['tenant_id'];
             }
-
 
             $role->update([
                 'name'        => $validated['name'],
@@ -290,10 +278,10 @@ class RoleController extends Controller
             // Sincronizar permisos si se enviaron en la petición
             if (array_key_exists('permissions', $validated)) {
                 $permissionsToAssign = Permission::whereIn('id', $validated['permissions'])->get();
-                // Filtrar permisos si el usuario actual no es global admin
+                // CORRECCIÓN: Filtrar permisos para usuarios no-global-admin para permitir permisos de su tenant Y globales
                 if (!$currentUser->is_global_admin) {
                     $permissionsToAssign = $permissionsToAssign->filter(function($permission) use ($currentUser) {
-                        return $permission->tenant_id == $currentUser->tenant_id;
+                        return $permission->tenant_id == $currentUser->tenant_id || $permission->tenant_id === null;
                     });
                 }
                 $role->syncPermissions($permissionsToAssign);
@@ -341,9 +329,8 @@ class RoleController extends Controller
         DB::beginTransaction();
 
         try {
-            $role = Role::findOrFail($id); // Encontrar el rol primero
+            $role = Role::findOrFail($id);
 
-            // Validar que el usuario actual tiene permiso para eliminar este rol
             if (!$currentUser->is_global_admin && $currentUser->tenant_id !== $role->tenant_id) {
                 abort(403, 'Unauthorized: You do not have permission to delete this role.');
             }
@@ -383,24 +370,26 @@ class RoleController extends Controller
         $currentUser = Auth::guard('sanctum')->user();
 
         try {
-            $role = Role::findOrFail($id); // Encontrar el rol primero
+            $role = Role::findOrFail($id);
 
-            // Validar que el usuario actual tiene permiso para modificar este rol
             if (!$currentUser->is_global_admin && $currentUser->tenant_id !== $role->tenant_id) {
                 abort(403, 'Unauthorized: You do not have permission to modify this role.');
             }
 
             $request->validate([
                 'permissions' => 'required|array',
-                'permissions.*' => ['integer', Rule::exists('permissions', 'id')], // No filtrar por tenant_id aquí aún
+                'permissions.*' => ['integer', Rule::exists('permissions', 'id')],
             ]);
 
             $permissionIds = Permission::whereIn('id', $request->permissions ?? [])->pluck('id')->toArray();
             
-            // Filtrar permisos si el usuario actual no es global admin
+            // CORRECCIÓN: Filtrar permisos para usuarios no-global-admin para permitir permisos de su tenant Y globales
             if (!$currentUser->is_global_admin) {
                 $permissionIds = Permission::whereIn('id', $permissionIds)
-                    ->where('tenant_id', $currentUser->tenant_id)
+                    ->where(function($query) use ($currentUser) {
+                        $query->where('tenant_id', $currentUser->tenant_id)
+                              ->orWhereNull('tenant_id');
+                    })
                     ->pluck('id')
                     ->toArray();
             }

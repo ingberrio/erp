@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\UserController as AppUserController; // <-- ¡Esta línea es crucial!
+use App\Http\Controllers\UserController as AppUserController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
@@ -40,11 +40,13 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // CRUD de usuarios (filtrados por tenant)
-    Route::apiResource('users', AppUserController::class, ['only' => ['index', 'show', 'store', 'update', 'destroy']]); // O solo 'index' si solo quieres listar
+    Route::apiResource('users', AppUserController::class, ['only' => ['index', 'show', 'store', 'update', 'destroy']]);
+
+    // NUEVA RUTA: Obtener miembros del inquilino actual
+    Route::get('/tenant-members', [AppUserController::class, 'tenantMembers']);
+
 
     // CRUD de empresas (tenants)
-    // Nota: El acceso a este recurso podría requerir permisos de super-administrador
-    // Si tu aplicación es multi-tenant y los usuarios normales no deben gestionar tenants.
     Route::apiResource('tenants', TenantController::class, ['only' => ['index', 'show', 'store', 'update', 'destroy']]);
 
     // CRUD de roles
@@ -52,13 +54,16 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // Endpoint para asignar permisos a un rol (edición masiva)
     Route::post('roles/{role}/permissions', [RoleController::class, 'setPermissions'])
-         ->name('roles.setPermissions');
+        ->name('roles.setPermissions');
 
     // CRUD de permisos
     Route::apiResource('permissions', PermissionController::class);
 
     // --- Módulo de Calendario (Tipo Trello) API Routes ---
     Route::apiResource('boards', BoardController::class);
+    // NUEVA RUTA: Para sincronizar miembros de un tablero
+    Route::post('boards/{board}/members', [BoardController::class, 'syncMembers']); // <-- ¡AÑADE ESTA LÍNEA!
+
     Route::prefix('boards/{board}')->group(function () {
         Route::apiResource('lists', LListController::class)->except(['show', 'update', 'destroy']);
     });
@@ -68,6 +73,9 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
         Route::put('cards/reorder', [CardController::class, 'reorderCardsInList']);
     });
     Route::apiResource('cards', CardController::class)->only(['show', 'update', 'destroy']);
+
+    Route::post('cards/{card}/members', [CardController::class, 'syncMembers']);
+
 
     // --- MÓDULO DE CULTIVO ---
     // Facilities CRUD
@@ -97,8 +105,6 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     });
 
     Route::get('/test-cors', function () {
-        // dd() detendrá la ejecución y mostrará esto en el navegador
         dd(['message' => 'CORS test successful!', 'headers_sent' => headers_sent()]);
-        // return response()->json(['message' => 'CORS test successful!']); // Esta línea no se ejecutará
     });
 });

@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Spatie\Permission\Models\Permission; // Asegúrate de que este es tu modelo Permission
+use Spatie\Permission\Models\Permission;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth; // <-- ¡Añadir esta importación!
+use Illuminate\Support\Facades\Auth;
 
 class PermissionController extends Controller
 {
@@ -25,7 +25,7 @@ class PermissionController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::guard('sanctum')->user(); // Obtener el usuario autenticado
+        $user = Auth::guard('sanctum')->user();
         Log::info('PermissionController@index: Request received.', [
             'user_id' => $user->id ?? 'guest',
             'is_global_admin' => $user->is_global_admin ?? false,
@@ -33,21 +33,18 @@ class PermissionController extends Controller
         ]);
 
         try {
-            // Si el usuario es un administrador global, devolver TODOS los permisos (globales y de todos los tenants).
             if ($user && $user->is_global_admin) {
                 Log::info('PermissionController@index: Global Admin detected. Fetching all permissions.');
                 $permissions = Permission::all();
                 return response()->json($permissions);
             }
 
-            // Para usuarios de tenant, filtrar permisos por tenant_id
             $tenantId = $request->header('X-Tenant-ID');
             if (!$tenantId) {
                 Log::warning('PermissionController@index: Tenant ID is missing for non-global admin.', ['user_id' => $user->id ?? 'N/A']);
                 return response()->json(['error' => 'Tenant ID is missing.'], 400);
             }
 
-            // Asegurarse de que el tenant_id del usuario coincide con el del header (seguridad adicional)
             if ($user && $user->tenant_id && $user->tenant_id != $tenantId) {
                 Log::warning('PermissionController@index: Tenant ID mismatch between user and header.', [
                     'user_id' => $user->id,
@@ -85,40 +82,31 @@ class PermissionController extends Controller
         $guard = $this->defaultGuard();
 
         try {
+            // Validar los campos iniciales
             $validated = $request->validate([
-                'name' => [
-                    'required',
-                    'string',
-                    'max:255',
-                    // La regla unique se ajustará dinámicamente
-                ],
+                'name' => 'required|string|max:255',
                 'description' => 'nullable|string|max:255',
-                'tenant_id' => 'nullable|exists:tenants,id', // Permitir tenant_id si es global admin
+                'tenant_id' => 'nullable|exists:tenants,id',
             ]);
 
-            // Determinar el tenant_id para el nuevo permiso
             $assignedTenantId = null;
             if ($currentUser->is_global_admin) {
-                // Si es global admin, puede asignar a un tenant específico o dejarlo global (null)
                 $assignedTenantId = $request->input('tenant_id');
             } else {
-                // Si no es global admin, el permiso se asigna a su propio tenant
                 $assignedTenantId = $currentUser->tenant_id;
             }
 
-            // Validación adicional para usuarios no-global-admin
             if (!$currentUser->is_global_admin) {
-                // Un no-global admin no puede crear permisos globales
                 if ($assignedTenantId === null) {
                     abort(403, 'Unauthorized: Non-global admin cannot create global permissions.');
                 }
-                // Un no-global admin no puede crear permisos en otros tenants
                 if ($assignedTenantId != $currentUser->tenant_id) {
                     abort(403, 'Unauthorized: Cannot assign permission to a different tenant.');
                 }
             }
             
             // Re-validar la unicidad del nombre del permiso con el tenant_id asignado
+            // Esto es importante porque la primera validación no puede conocer el tenant_id final
             $request->validate([
                 'name' => [
                     'required',
@@ -132,7 +120,7 @@ class PermissionController extends Controller
             $permission = Permission::create([
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
-                'tenant_id' => $assignedTenantId, // Usar el tenant_id determinado
+                'tenant_id' => $assignedTenantId,
                 'guard_name' => $guard,
             ]);
 
@@ -144,7 +132,12 @@ class PermissionController extends Controller
             return response()->json($permission, 201);
         } catch (ValidationException $e) {
             Log::error('Validation failed during permission store', ['errors' => $e->errors()]);
-            return response()->json(['error' => 'Fallo de validación', 'details' => $e->errors()], 422);
+            // MODIFICACIÓN CLAVE AQUÍ: Devolver los errores de validación de forma más explícita
+            return response()->json([
+                'error' => 'Fallo de validación',
+                'details' => $e->errors(), // Esto ya es un array asociativo con los mensajes
+                'message' => 'Los datos proporcionados no son válidos.' // Mensaje general para el frontend
+            ], 422);
         } catch (\Throwable $e) {
             Log::critical('Unexpected error during permission store', [
                 'error' => $e->getMessage(),
@@ -165,11 +158,9 @@ class PermissionController extends Controller
         try {
             $query = Permission::query();
 
-            // Si es global admin, no aplicar filtro de tenant
             if ($currentUser->is_global_admin) {
                 Log::info('PermissionController@show: Global Admin detected. Fetching permission without tenant filter.');
             } else {
-                // Para usuarios de tenant, filtrar por su propio tenant_id
                 $tenantId = $request->header('X-Tenant-ID');
                 if (!$tenantId || $currentUser->tenant_id != $tenantId) {
                     abort(403, 'Unauthorized: Tenant ID mismatch or missing.');
@@ -180,7 +171,6 @@ class PermissionController extends Controller
 
             $permission = $query->findOrFail($id);
 
-            // Verificación final de seguridad si no es global admin
             if (!$currentUser->is_global_admin && $permission->tenant_id !== $currentUser->tenant_id) {
                 abort(403, 'Unauthorized: You do not have permission to view this permission.');
             }
@@ -212,9 +202,8 @@ class PermissionController extends Controller
         $guard = $this->defaultGuard();
 
         try {
-            $permission = Permission::findOrFail($id); // Encontrar el permiso primero
+            $permission = Permission::findOrFail($id);
 
-            // Validar que el usuario actual tiene permiso para actualizar este permiso
             if (!$currentUser->is_global_admin && $currentUser->tenant_id !== $permission->tenant_id) {
                 abort(403, 'Unauthorized: You do not have permission to update this permission.');
             }
@@ -228,15 +217,13 @@ class PermissionController extends Controller
                         ->where(fn($query) => $query->where('tenant_id', $permission->tenant_id)->where('guard_name', $guard)),
                 ],
                 'description' => 'nullable|string|max:255',
-                'tenant_id' => 'nullable|exists:tenants,id', // Permitir tenant_id para global admin
+                'tenant_id' => 'nullable|exists:tenants,id',
             ];
 
             $validated = $request->validate($rules);
 
-            // Manejo de tenant_id para la actualización
             if (isset($validated['tenant_id'])) {
                 if (!$currentUser->is_global_admin) {
-                    // Un no-global admin no puede cambiar el tenant_id ni asignarse a otro tenant.
                     if ($validated['tenant_id'] !== $permission->tenant_id) {
                          abort(403, 'Unauthorized: Cannot change permission\'s tenant ID.');
                     }
@@ -261,7 +248,12 @@ class PermissionController extends Controller
                 'tenant_id' => $permission->tenant_id ?? 'N/A',
                 'errors' => $e->errors(),
             ]);
-            return response()->json(['error' => 'Fallo de validación', 'details' => $e->errors()], 422);
+            // MODIFICACIÓN CLAVE AQUÍ: Devolver los errores de validación de forma más explícita
+            return response()->json([
+                'error' => 'Fallo de validación',
+                'details' => $e->errors(), // Esto ya es un array asociativo con los mensajes
+                'message' => 'Los datos proporcionados no son válidos.'
+            ], 422);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['error' => 'Permission not found.'], 404);
         } catch (\Throwable $e) {
@@ -284,9 +276,8 @@ class PermissionController extends Controller
         $currentUser = Auth::guard('sanctum')->user();
 
         try {
-            $permission = Permission::findOrFail($id); // Encontrar el permiso primero
+            $permission = Permission::findOrFail($id);
 
-            // Validar que el usuario actual tiene permiso para eliminar este permiso
             if (!$currentUser->is_global_admin && $currentUser->tenant_id !== $permission->tenant_id) {
                 abort(403, 'Unauthorized: You do not have permission to delete this permission.');
             }
@@ -298,7 +289,7 @@ class PermissionController extends Controller
                 'tenant_id' => $permission->tenant_id,
             ]);
 
-            return response()->noContent(); // 204 No Content
+            return response()->noContent();
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['error' => 'Permission not found.'], 404);
         } catch (\Throwable $e) {
