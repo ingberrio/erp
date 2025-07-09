@@ -8,7 +8,7 @@ import {
   AppBar, Toolbar, IconButton, Typography, Box, Drawer, List, ListItem,
   ListItemIcon, ListItemText, CssBaseline, Snackbar, Alert, Menu, MenuItem,
   CircularProgress, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Collapse, Divider, Avatar // Añadido Avatar para el menú de usuario
+  TextField, Collapse, Divider, Avatar
 } from '@mui/material';
 
 // Iconos de Material-UI
@@ -21,8 +21,8 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // Icono para Calendario
-import LocalFloristIcon from '@mui/icons-material/LocalFlorist'; // Icono para Cultivo
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
 
 
 // Componentes de tu aplicación
@@ -34,11 +34,11 @@ import LandingPage from './components/LandingPage';
 
 // Configuración de Axios
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api', // Usar VITE_API_BASE_URL
-  withCredentials: true, // Importante para enviar cookies de sesión (Sanctum)
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+  withCredentials: true,
 });
 
-// Interceptor para añadir el token de autenticación y el Tenant ID
+// Interceptor para añadir SOLO el token de autenticación
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('authToken');
   if (token) {
@@ -46,16 +46,7 @@ api.interceptors.request.use(config => {
   } else {
     delete config.headers.Authorization;
   }
-
-  const currentTenantId = localStorage.getItem('currentTenantId');
-  if (currentTenantId && currentTenantId !== 'null') {
-    config.headers['X-Tenant-ID'] = currentTenantId;
-    console.log('Axios Interceptor: X-Tenant-ID establecido:', currentTenantId);
-  } else {
-    delete config.headers['X-Tenant-ID'];
-    console.log('Axios Interceptor: X-Tenant-ID removido o no establecido.');
-  }
-
+  // La lógica de X-Tenant-ID se maneja ahora en un useEffect en el componente App
   return config;
 }, error => {
   return Promise.reject(error);
@@ -69,7 +60,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null); // Estado para el anclaje del menú de usuario
+  const [anchorEl, setAnchorEl] = useState(null);
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -132,16 +123,8 @@ function App() {
       const userData = response.data;
       setUser(userData);
       setIsGlobalAdmin(userData.is_global_admin);
-      setUserPermissions(userData.permissions || []); // Asegúrate de que los permisos se carguen aquí
+      setUserPermissions(userData.permissions || []);
       setUserFacilityId(userData.facility_id || null);
-
-      if (!userData.is_global_admin && userData.tenant_id) {
-        localStorage.setItem('currentTenantId', String(userData.tenant_id));
-        console.log('App.jsx: Usuario de tenant logueado. Tenant ID establecido en localStorage:', userData.tenant_id);
-      } else {
-        localStorage.removeItem('currentTenantId');
-        console.log('App.jsx: Usuario global admin o sin tenant_id. currentTenantId removido de localStorage.');
-      }
 
       console.log('App.jsx: fetchUserData completado. User object:', userData);
       console.log('App.jsx: User tenant_id (from state):', userData.tenant_id);
@@ -151,7 +134,7 @@ function App() {
     } catch (error) {
       console.error('App.jsx: fetchUserData: Error fetching user data:', error);
       localStorage.removeItem('authToken');
-      localStorage.removeItem('currentTenantId');
+      // No necesitamos limpiar currentTenantId de localStorage aquí, ya que no lo usaremos en el interceptor
       setUser(null);
       setIsGlobalAdmin(false);
       setUserPermissions([]);
@@ -191,6 +174,29 @@ function App() {
     fetchFacilitiesForPermissions();
   }, [isGlobalAdmin, fetchFacilitiesForPermissions]);
 
+  // NUEVO useEffect para manejar el X-Tenant-ID de forma reactiva
+  useEffect(() => {
+    if (user) {
+      if (user.is_global_admin) {
+        // Si es global admin, no se envía X-Tenant-ID
+        delete api.defaults.headers.common['X-Tenant-ID'];
+        console.log('Axios Defaults: X-Tenant-ID eliminado para Global Admin.');
+      } else if (user.tenant_id) {
+        // Si es usuario de inquilino y tiene tenant_id, se establece
+        api.defaults.headers.common['X-Tenant-ID'] = String(user.tenant_id);
+        console.log('Axios Defaults: X-Tenant-ID establecido a:', user.tenant_id);
+      } else {
+        // Caso inesperado: usuario no global admin y sin tenant_id
+        delete api.defaults.headers.common['X-Tenant-ID'];
+        console.log('Axios Defaults: X-Tenant-ID eliminado (usuario sin tenant_id y no global admin).');
+      }
+    } else {
+      // Si no hay usuario logueado, asegúrate de que el encabezado no esté presente
+      delete api.defaults.headers.common['X-Tenant-ID'];
+      console.log('Axios Defaults: X-Tenant-ID eliminado (no hay usuario logueado).');
+    }
+  }, [user]); // Este efecto se ejecuta cada vez que el objeto 'user' cambia
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoadingLogin(true);
@@ -203,15 +209,9 @@ function App() {
       
       localStorage.setItem('authToken', response.data.token);
       
-      if (response.data.user && !response.data.user.is_global_admin && response.data.user.tenant_id) {
-        localStorage.setItem('currentTenantId', String(response.data.user.tenant_id));
-      } else {
-        localStorage.removeItem('currentTenantId');
-      }
-
       setLoginDialogOpen(false);
       
-      const fetchedUser = await fetchUserData(); 
+      const fetchedUser = await fetchUserData(); // Esto actualizará el estado 'user' y, por ende, el X-Tenant-ID via useEffect
 
       if (fetchedUser) {
         const userHasPermission = (permissionName) => {
@@ -225,7 +225,7 @@ function App() {
           navigate('/users');
         } else if (userHasPermission('view-companies')) {
           navigate('/empresas');
-        } else if (userHasPermission('manage-calendar-events')) { // CAMBIO: Usar 'manage-calendar-events'
+        } else if (userHasPermission('manage-calendar-events')) {
           navigate('/calendario');
         } else {
           navigate('/');
@@ -238,7 +238,7 @@ function App() {
       }
 
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error:', error.response?.data || error.message);
       setLoginError(error.response?.data?.message || 'Error al iniciar sesión. Verifique sus credenciales.');
       showSnack('Error al iniciar sesión.', 'error');
     } finally {
@@ -250,8 +250,7 @@ function App() {
     try {
       await api.post('/logout');
       localStorage.removeItem('authToken');
-      localStorage.removeItem('currentTenantId');
-      setUser(null);
+      setUser(null); // Esto disparará el useEffect para limpiar X-Tenant-ID de Axios
       setIsGlobalAdmin(false);
       setUserPermissions([]);
       setUserFacilityId(null);
@@ -438,7 +437,8 @@ function App() {
                 <MenuItem onClick={handleClose} sx={{ '&:hover': { bgcolor: '#3a506b' } }}>
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{user.email}</Typography>
                 </MenuItem>
-                {user.tenant_id && (
+                {/* Muestra el Tenant ID solo si existe y no es global admin */}
+                {user.tenant_id && !user.is_global_admin && (
                   <MenuItem onClick={handleClose} sx={{ '&:hover': { bgcolor: '#3a506b' } }}>
                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>Tenant ID: {user.tenant_id}</Typography>
                   </MenuItem>
@@ -446,7 +446,7 @@ function App() {
                 <Divider sx={{ my: 0.5, bgcolor: 'rgba(255,255,255,0.2)' }} />
                 <MenuItem onClick={handleLogout} sx={{ '&:hover': { bgcolor: '#3a506b' } }}>
                   <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon fontSize="small" /></ListItemIcon>
-                  <ListItemText primary="Cerrar Sesión" sx={{ '& .MuiListItemText-primary': { color: '#e2e8f0' } }} />
+                  <ListItemText primary="Cerrar Sesión" />
                 </MenuItem>
               </Menu>
             </Box>
@@ -480,7 +480,6 @@ function App() {
                 <ListItemText primary="Cultivo" />
               </ListItem>
             )}
-            {/* CAMBIO CLAVE AQUÍ: Usar 'manage-calendar-events' para el menú de Calendario */}
             {hasPermission('manage-calendar-events') && (
               <ListItem button onClick={() => { navigate('/calendario'); setDrawerOpen(false); }} selected={location.pathname === '/calendario'}>
                 <ListItemIcon sx={{ color: '#e2e8f0' }}><CalendarTodayIcon /></ListItemIcon>
@@ -566,7 +565,6 @@ function App() {
               }
             />
           )}
-          {/* CAMBIO CLAVE AQUÍ: Usar 'manage-calendar-events' para la ruta del Calendario */}
           {hasPermission('manage-calendar-events') && (
             <Route
               path="/calendario"
@@ -576,8 +574,8 @@ function App() {
                   isAppReady={appReady}
                   tenantId={user?.tenant_id}
                   isGlobalAdmin={isGlobalAdmin}
-                  user={user} // Pasar el objeto de usuario
-                  hasPermission={hasPermission} // Pasar la función de permisos
+                  user={user}
+                  hasPermission={hasPermission}
                 />
               }
             />
@@ -600,14 +598,14 @@ function App() {
                 setParentSnack={showSnack}
                 isGlobalAdmin={isGlobalAdmin}
               />
-            ) : user && hasPermission('manage-calendar-events') ? ( // CAMBIO: Usar 'manage-calendar-events'
+            ) : user && hasPermission('manage-calendar-events') ? (
               <CalendarPage
                 setParentSnack={showSnack}
                 isAppReady={appReady}
                 tenantId={user?.tenant_id}
                 isGlobalAdmin={isGlobalAdmin}
-                user={user} // Pasar el objeto de usuario
-                hasPermission={hasPermission} // Pasar la función de permisos
+                user={user}
+                hasPermission={hasPermission}
               />
             ) : (
               <LandingPage setLoginDialogOpen={setLoginDialogOpen} />
