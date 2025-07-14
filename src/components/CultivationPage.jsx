@@ -42,14 +42,12 @@ import { CSS } from '@dnd-kit/utilities';
 const SNACK_MESSAGES = {
   FACILITIES_ERROR: 'Error al cargar instalaciones.',
   STAGES_ERROR: 'Error al cargar etapas.',
-  TENANTS_ERROR: 'Error al cargar inquilinos.',
+  TENANTS_ERROR: 'Error al cargar inquilinos.', // Se mantiene por si se usa en otro lugar, pero la lógica de tenants se ha movido
   CULTIVATION_AREAS_ERROR: 'Error al cargar áreas de cultivo.',
   STAGE_NAME_REQUIRED: 'El nombre de la etapa es obligatorio.',
   STAGE_NAME_LENGTH_EXCEEDED: 'El nombre de la etapa no puede exceder los 100 caracteres.',
   STAGE_NAME_INVALID_CHARS: 'El nombre no puede contener caracteres especiales como <, >, o {}.',
-  FACILITY_NAME_REQUIRED: 'El nombre de la instalación es obligatorio.',
-  FACILITY_NAME_LENGTH_EXCEEDED: 'El nombre de la instalación no puede exceder los 100 caracteres.',
-  FACILITY_NAME_INVALID_CHARS: 'El nombre no puede contener caracteres especiales como <, >, o {}.',
+  // Eliminadas las constantes de mensajes específicas de instalaciones
   AREA_NAME_REQUIRED: 'El nombre del área de cultivo es obligatorio.',
   AREA_NAME_LENGTH_EXCEEDED: 'El nombre del área no puede exceder los 100 caracteres.',
   AREA_NAME_INVALID_CHARS: 'El nombre no puede contener caracteres especiales como <, >, o {}.',
@@ -58,14 +56,14 @@ const SNACK_MESSAGES = {
   STAGE_UPDATED: 'Etapa actualizada.',
   STAGE_CREATED: 'Etapa creada.',
   STAGE_DELETED: 'Etapa eliminada.',
-  FACILITY_CREATED: 'Instalación creada exitosamente.',
+  // Eliminado FACILITY_CREATED
   CULTIVATION_AREA_UPDATED: 'Área de cultivo actualizada.',
   CULTIVATION_AREA_CREATED: 'Área de cultivo creada.',
   CULTIVATION_AREA_DELETED: 'Área de cultivo eliminada.',
   CULTIVATION_AREA_MOVED: 'Área de cultivo movida.',
   DRAG_PERMISSION_DENIED: 'No tienes permiso para mover áreas como Operador de Instalación.',
   GENERAL_ERROR_SAVING_STAGE: 'Error al guardar etapa:',
-  GENERAL_ERROR_SAVING_FACILITY: 'Error al crear instalación:',
+  // Eliminado GENERAL_ERROR_SAVING_FACILITY
   GENERAL_ERROR_SAVING_AREA: 'Error al guardar área de cultivo:',
   PERMISSION_DENIED: 'No tienes permisos para realizar esta acción.',
   VALIDATION_ERROR: 'Error de validación:',
@@ -85,7 +83,7 @@ const DIALOG_TITLES = {
   CONFIRM_AREA_DELETION: 'Confirmar Eliminación de Área de Cultivo',
   EDIT_STAGE: 'Editar Etapa',
   CREATE_STAGE: 'Crear Nueva Etapa',
-  CREATE_FACILITY: 'Crear Nueva Instalación',
+  // Eliminado CREATE_FACILITY
   EDIT_AREA: 'Editar Área de Cultivo',
   CREATE_AREA: 'Crear Nueva Área de Cultivo',
   AREA_DETAIL: 'Detalle del Área:',
@@ -98,9 +96,9 @@ const BUTTON_LABELS = {
   CONFIRM: 'Confirmar',
   SAVE_CHANGES: 'Guardar Cambios',
   CREATE_STAGE: 'Crear Etapa',
-  ADD_FACILITY: 'Añadir Instalación',
+  // Eliminado ADD_FACILITY
   ADD_STAGE: 'Añadir Etapa',
-  CREATE_FACILITY: 'Crear Instalación',
+  // Eliminado CREATE_FACILITY
   ADD_CULTIVATION_AREA: 'Añadir un Área de Cultivo',
   CREATE_AREA: 'Crear Área',
   ADVANCE_STAGE: 'Avanzar Etapa',
@@ -1536,11 +1534,12 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
   const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
   const [activeDraggableId, setActiveDraggableId] = useState(null);
 
-  const [openFacilityDialog, setOpenFacilityDialog] = useState(false);
-  const [newFacilityName, setNewFacilityName] = useState('');
-  const [facilityDialogLoading, setFacilityDialogLoading] = useState(false);
-  const [tenants, setTenants] = useState([]);
-  const [selectedTenantForNewFacility, setSelectedTenantForNewFacility] = useState('');
+  // Eliminados estados relacionados con la creación de instalaciones
+  // const [openFacilityDialog, setOpenFacilityDialog] = useState(false);
+  // const [newFacilityName, setNewFacilityName] = useState('');
+  // const [facilityDialogLoading, setFacilityDialogLoading] = useState(false);
+  // const [tenants, setTenants] = useState([]); // Ya no se necesitan aquí
+  // const [selectedTenantForNewFacility, setSelectedTenantForNewFacility] = useState(''); // Ya no se necesitan aquí
 
   const isFacilityOperator = !!userFacilityId;
 
@@ -1617,29 +1616,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
     }
   }, [showSnack]);
 
-  // Función para obtener inquilinos (solo para administradores globales)
-  const fetchTenants = useCallback(async () => {
-    if (!isGlobalAdmin) {
-      return [];
-    }
-    try {
-      const response = await api.get('/tenants');
-      const fetchedTenants = Array.isArray(response.data)
-        ? response.data
-        : Array.isArray(response.data?.data)
-        ? response.data.data
-        : [];
-      setTenants(fetchedTenants);
-      if (fetchedTenants.length > 0 && !selectedTenantForNewFacility) {
-        setSelectedTenantForNewFacility(fetchedTenants[0].id);
-      }
-      return fetchedTenants; // Devuelve los inquilinos para Promise.all
-    } catch (error) {
-      console.error('CultivationPage: Error fetching tenants:', error);
-      showSnack(SNACK_MESSAGES.TENANTS_ERROR, 'error');
-      return [];
-    }
-  }, [isGlobalAdmin, showSnack, selectedTenantForNewFacility]);
+  // Eliminada la función fetchTenants
 
   // Función para obtener áreas de cultivo
   const fetchCultivationAreas = useCallback(async (currentSelectedFacilityId) => {
@@ -1687,7 +1664,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
         const [fetchedFacs] = await Promise.all([
           fetchFacilities(),
           fetchStages(),
-          isGlobalAdmin ? fetchTenants() : Promise.resolve([])
+          // Eliminada la llamada a fetchTenants()
         ]);
 
         let facilityToFetchAreas = null;
@@ -1716,7 +1693,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
     };
 
     loadInitialData();
-  }, [tenantId, isAppReady, isGlobalAdmin, fetchFacilities, fetchStages, fetchTenants, userFacilityId, selectedFacilityId, fetchCultivationAreas]); // Añadida selectedFacilityId a las dependencias
+  }, [tenantId, isAppReady, isGlobalAdmin, fetchFacilities, fetchStages, userFacilityId, selectedFacilityId, fetchCultivationAreas]); // Eliminado fetchTenants de las dependencias
 
   // Effect para cargar áreas de cultivo cuando la instalación seleccionada cambia
   useEffect(() => {
@@ -1889,74 +1866,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
     setConfirmDialogOpen(true);
   }, [handleDeleteStageConfirm]);
 
-  // Handlers para el Diálogo de Instalación
-  const handleOpenFacilityDialog = () => {
-    setNewFacilityName('');
-    if (tenants.length > 0) {
-      setSelectedTenantForNewFacility(tenants[0].id);
-    } else {
-      setSelectedTenantForNewFacility('');
-    }
-    setOpenFacilityDialog(true);
-    setFacilityDialogLoading(false);
-  };
-
-  const handleCloseFacilityDialog = () => {
-    setOpenFacilityDialog(false);
-    setNewFacilityName('');
-    setSelectedTenantForNewFacility('');
-    setFacilityDialogLoading(false);
-  };
-
-  const handleSaveFacility = async (e) => {
-    e.preventDefault();
-    if (!newFacilityName.trim()) {
-      showSnack(SNACK_MESSAGES.FACILITY_NAME_REQUIRED, 'warning');
-      return;
-    }
-    if (newFacilityName.length > 100) {
-      showSnack(SNACK_MESSAGES.FACILITY_NAME_LENGTH_EXCEEDED, 'warning');
-      return;
-    }
-    if (/[<>{}]/.test(newFacilityName)) {
-      showSnack(SNACK_MESSAGES.FACILITY_NAME_INVALID_CHARS, 'warning');
-      return;
-    }
-    if (isGlobalAdmin && !selectedTenantForNewFacility) {
-      showSnack('Como Super Admin, debes seleccionar un inquilino para la nueva instalación.', 'error');
-      return;
-    }
-    
-    setFacilityDialogLoading(true);
-    const headers = {}; // No se necesita X-Tenant-ID aquí, Laravel lo maneja en el payload para instalaciones
-    try {
-      const facilityData = { name: newFacilityName };
-      if (isGlobalAdmin) {
-        facilityData.tenant_id = parseInt(selectedTenantForNewFacility, 10);
-      }
-
-      await api.post('/facilities', facilityData, { headers }); // Pasa los headers (vacíos o no)
-      showSnack(SNACK_MESSAGES.FACILITY_CREATED, 'success');
-      await fetchFacilities(); // Vuelve a cargar las instalaciones para actualizar la UI
-      handleCloseFacilityDialog();
-    } catch (err) {
-      console.error('Error creating facility:', err);
-      const errorMessage = err.response?.data?.message || err.message;
-      if (err.response?.status === 422) {
-        const errors = err.response?.data?.details;
-        const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
-        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
-      } else if (err.response?.status === 400) {
-        showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
-      } else if (err.response?.status === 403) {
-        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
-      } else {
-        showSnack(`${SNACK_MESSAGES.GENERAL_ERROR_SAVING_FACILITY} ${errorMessage}`, 'error');
-      }
-    } finally {
-      setFacilityDialogLoading(false);
-    }
-  };
+  // Eliminados Handlers para el Diálogo de Instalación (handleOpenFacilityDialog, handleCloseFacilityDialog, handleSaveFacility)
 
   // Dnd-Kit Handlers
   const sensors = useSensors(
@@ -2097,7 +2007,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}>
           Gestión de Cultivo
         </Typography>
-        <Box sx={{ flexGrow: 1 }} />
+        {/* Selector de Instalación movido aquí */}
         <FormControl sx={{ minWidth: 200, mr: 1 }}>
           <InputLabel id="facility-select-label" sx={{ color: '#fff' }}>Instalación</InputLabel>
           <Select
@@ -2134,23 +2044,8 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
             )}
           </Select>
         </FormControl>
-        <Button
-          variant="outlined"
-          startIcon={<AddIcon />}
-          onClick={handleOpenFacilityDialog}
-          disabled={loading || isFacilityOperator}
-          sx={{
-            borderRadius: 2,
-            borderColor: '#b0c4de',
-            color: '#b0c4de',
-            '&:hover': {
-              bgcolor: 'rgba(255,255,255,0.1)',
-              borderColor: '#fff',
-            },
-          }}
-        >
-          {BUTTON_LABELS.ADD_FACILITY}
-        </Button>
+        <Box sx={{ flexGrow: 1 }} /> {/* Esto empujará el botón "Añadir Etapa" a la derecha */}
+        {/* Botón "Añadir Instalación" eliminado */}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -2286,7 +2181,8 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
         </form>
       </Dialog>
 
-      <Dialog open={openFacilityDialog} onClose={handleCloseFacilityDialog} maxWidth="xs" fullWidth
+      {/* Eliminado el Diálogo de Instalación */}
+      {/* <Dialog open={openFacilityDialog} onClose={handleCloseFacilityDialog} maxWidth="xs" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
         <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{DIALOG_TITLES.CREATE_FACILITY}</DialogTitle>
@@ -2362,7 +2258,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, 
             </Button>
           </DialogActions>
         </form>
-      </Dialog>
+      </Dialog> */}
 
       <ConfirmationDialog
         open={confirmDialogOpen}

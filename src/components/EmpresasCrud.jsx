@@ -10,6 +10,10 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import BusinessIcon from '@mui/icons-material/Business'; // Importar icono de negocio/instalación
+
+// Importar el nuevo componente de gestión de instalaciones
+import TenantFacilityManagement from './TenantFacilityManagement';
 
 const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) => {
   const [companies, setCompanies] = useState([]);
@@ -19,6 +23,10 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
   const [companyContactEmail, setCompanyContactEmail] = useState('');
   const [editingCompany, setEditingCompany] = useState(null);
   const [dialogLoading, setDialogLoading] = useState(false);
+
+  // --- Nuevos estados para el diálogo de gestión de instalaciones ---
+  const [openFacilitiesDialog, setOpenFacilitiesDialog] = useState(false);
+  const [selectedCompanyTenantId, setSelectedCompanyTenantId] = useState(null);
 
   const fetchCompanies = useCallback(async () => {
     // --- CAMBIO CLAVE AQUÍ: Asegurarse de que la app esté lista y el rol sea correcto ---
@@ -140,6 +148,17 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
     }
   };
 
+  // --- Nuevos handlers para el diálogo de gestión de instalaciones ---
+  const handleOpenFacilitiesDialog = (company) => {
+    setSelectedCompanyTenantId(company.id);
+    setOpenFacilitiesDialog(true);
+  };
+
+  const handleCloseFacilitiesDialog = () => {
+    setOpenFacilitiesDialog(false);
+    setSelectedCompanyTenantId(null);
+  };
+
   return (
     <Box sx={{
       p: { xs: 2, sm: 3 },
@@ -209,6 +228,25 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
                   <Typography variant="body2" color="text.secondary" sx={{ color: '#a0aec0' }}>
                     Creada: {new Date(company.created_at).toLocaleDateString()}
                   </Typography>
+                  {/* --- Nuevo botón para gestionar instalaciones --- */}
+                  <Button
+                    variant="outlined"
+                    startIcon={<BusinessIcon />}
+                    onClick={() => handleOpenFacilitiesDialog(company)}
+                    sx={{
+                      mt: 2,
+                      borderRadius: 1,
+                      borderColor: '#b0c4de',
+                      color: '#b0c4de',
+                      '&:hover': {
+                        bgcolor: 'rgba(255,255,255,0.1)',
+                        borderColor: '#fff',
+                      },
+                      width: '100%', // Ocupa todo el ancho de la tarjeta
+                    }}
+                  >
+                    Gestionar Instalaciones
+                  </Button>
                 </Paper>
               </Grid>
             ))
@@ -271,12 +309,22 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
           </DialogActions>
         </form>
       </Dialog>
+
+      {/* --- Diálogo para Gestionar Instalaciones --- */}
+      {openFacilitiesDialog && selectedCompanyTenantId && (
+        <TenantFacilityManagement
+          tenantId={selectedCompanyTenantId}
+          setParentSnack={setParentSnack}
+          onClose={handleCloseFacilitiesDialog}
+          isGlobalAdmin={isGlobalAdmin} // Pasar isGlobalAdmin al componente de gestión de instalaciones
+        />
+      )}
     </Box>
   );
 };
 
 EmpresasCrud.propTypes = {
-  tenantId: PropTypes.string,
+  tenantId: PropTypes.number, // Cambiado a number ya que los IDs suelen ser numéricos
   isAppReady: PropTypes.bool.isRequired,
   setParentSnack: PropTypes.func.isRequired,
   isGlobalAdmin: PropTypes.bool.isRequired,
