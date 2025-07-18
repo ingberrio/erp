@@ -14,7 +14,7 @@ use App\Http\Controllers\FacilityController;
 use App\Http\Controllers\StageController;
 use App\Http\Controllers\CultivationAreaController;
 use App\Http\Controllers\BatchController;
-
+use App\Http\Controllers\TraceabilityEventController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -62,7 +62,7 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     // --- Módulo de Calendario (Tipo Trello) API Routes ---
     Route::apiResource('boards', BoardController::class);
     // NUEVA RUTA: Para sincronizar miembros de un tablero
-    Route::post('boards/{board}/members', [BoardController::class, 'syncMembers']); // <-- ¡AÑADE ESTA LÍNEA!
+    Route::post('boards/{board}/members', [BoardController::class, 'syncMembers']);
 
     Route::prefix('boards/{board}')->group(function () {
         Route::apiResource('lists', LListController::class)->except(['show', 'update', 'destroy']);
@@ -87,22 +87,38 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
 
     // Cultivation Areas CRUD
     Route::apiResource('cultivation-areas', CultivationAreaController::class);
-    // Rutas anidadas para Cultivation Areas bajo Facilities y Stages
+
+    // Rutas anidadas para Cultivation Areas bajo Facilities
     Route::prefix('facilities/{facility}')->group(function () {
         Route::apiResource('cultivation-areas', CultivationAreaController::class)->only(['index']);
     });
+
+    // Rutas anidadas para Stages bajo Cultivation Areas y reordenamiento
     Route::prefix('stages/{stage}')->group(function () {
         Route::apiResource('cultivation-areas', CultivationAreaController::class)->only(['index']);
         // Nueva ruta para reordenar áreas dentro de una etapa
         Route::put('cultivation-areas/reorder', [CultivationAreaController::class, 'reorder']);
     });
 
-    // Batches CRUD
-    Route::apiResource('batches', BatchController::class);
-    // Rutas anidadas para Batches bajo Cultivation Areas
+    // Esto generará: GET /api/cultivation-areas/{cultivationArea}/batches
     Route::prefix('cultivation-areas/{cultivationArea}')->group(function () {
         Route::apiResource('batches', BatchController::class)->only(['index']);
     });
+    
+    // Batches CRUD (Rutas base para lotes: /api/batches, /api/batches/{id}, etc.)
+    Route::apiResource('batches', BatchController::class);
+
+    // Rutas de acciones específicas para lotes (split, process)
+    Route::prefix('batches')->group(function () {
+        // NUEVA RUTA PARA DIVIDIR LOTES
+        Route::post('/{batch}/split', [BatchController::class, 'split']);
+
+        // ¡NUEVA RUTA PARA PROCESAR UN LOTE!
+        Route::post('/{batch}/process', [BatchController::class, 'process']);
+    });
+
+    // Rutas para Eventos de Trazabilidad
+    Route::apiResource('traceability-events', TraceabilityEventController::class);
 
     Route::get('/test-cors', function () {
         dd(['message' => 'CORS test successful!', 'headers_sent' => headers_sent()]);

@@ -56,4 +56,9 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Board::class, 'board_members', 'user_id', 'board_id');
     }
+
+    public function traceabilityEvents()
+    {
+        return $this->hasMany(TraceabilityEvent::class, 'user_id');
+    }
 }

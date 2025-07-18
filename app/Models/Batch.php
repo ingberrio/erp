@@ -18,6 +18,8 @@ class Batch extends Model
         'projected_yield',
         'cultivation_area_id',
         'tenant_id',
+        'facility_id', 
+        'parent_batch_id',
     ];
 
     protected $casts = [
@@ -25,13 +27,38 @@ class Batch extends Model
         'projected_yield' => 'decimal:2',
     ];
 
+    // Relación con el Tenant
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
     }
 
+    // Relación con el CultivationArea
     public function cultivationArea()
     {
         return $this->belongsTo(CultivationArea::class);
+    }
+
+    // NUEVA Relación con la Facility
+    public function facility()
+    {
+        return $this->belongsTo(Facility::class);
+    }
+
+    // NUEVA Relación con el lote padre (si este lote fue dividido de otro)
+    public function parentBatch()
+    {
+        return $this->belongsTo(Batch::class, 'parent_batch_id');
+    }
+
+    // NUEVA Relación con los lotes hijos (si este lote fue dividido en otros)
+    public function childBatches()
+    {
+        return $this->hasMany(Batch::class, 'parent_batch_id');
+    }
+
+    public function traceabilityEvents()
+    {
+        return $this->hasMany(TraceabilityEvent::class, 'batch_id');
     }
 }
