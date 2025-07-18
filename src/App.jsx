@@ -22,8 +22,11 @@ import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
+import LocalFloristIcon from '@mui/icons-material/LocalFlorist'; // Icono para Cultivo
 
+// NUEVOS Iconos para el submenú de cultivo
+import GrassIcon from '@mui/icons-material/Grass'; // Para Áreas de Cultivo
+import InventoryIcon from '@mui/icons-material/Inventory'; // Para Lotes
 
 // Componentes de tu aplicación
 import EmpresasCrud from './components/EmpresasCrud';
@@ -31,6 +34,7 @@ import UsuariosCrudInternal from './components/UsuariosCrudInternal';
 import CultivationPage from './components/CultivationPage';
 import CalendarPage from './components/CalendarPage';
 import LandingPage from './components/LandingPage';
+import BatchManagementPage from './components/BatchManagementPage'; // Importar el nuevo componente de lotes
 
 // Configuración de Axios
 export const api = axios.create({
@@ -73,6 +77,7 @@ function App() {
   const [loginError, setLoginError] = useState(''); 
 
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [cultivationMenuOpen, setCultivationMenuOpen] = useState(false); // NUEVO: Estado para el submenú de Cultivo
 
   const [userPermissions, setUserPermissions] = useState([]);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
@@ -219,8 +224,11 @@ function App() {
             return (fetchedUser.permissions || []).includes(permissionName);
         };
 
+        // Lógica de navegación después del login
         if (userHasPermission('view-cultivation-areas')) {
-          navigate('/cultivo');
+          navigate('/cultivation/areas'); // Cambiado a la nueva ruta
+        } else if (userHasPermission('view-batches')) { // NUEVO: Prioridad para lotes si tiene permiso
+          navigate('/cultivation/batches');
         } else if (userHasPermission('view-users')) {
           navigate('/users');
         } else if (userHasPermission('view-companies')) {
@@ -274,6 +282,10 @@ function App() {
 
   const handleAdminMenuToggle = () => {
     setAdminMenuOpen(!adminMenuOpen);
+  };
+
+  const handleCultivationMenuToggle = () => { // NUEVO: Handler para el submenú de Cultivo
+    setCultivationMenuOpen(!cultivationMenuOpen);
   };
 
   if (loading) {
@@ -445,8 +457,11 @@ function App() {
                 )}
                 <Divider sx={{ my: 0.5, bgcolor: 'rgba(255,255,255,0.2)' }} />
                 <MenuItem onClick={handleLogout} sx={{ '&:hover': { bgcolor: '#3a506b' } }}>
-                  <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon fontSize="small" /></ListItemIcon>
-                  <ListItemText primary="Cerrar Sesión" />
+                  {/* CORRECCIÓN: Envolver los elementos hijos en un fragmento o Box */}
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Cerrar Sesión" />
+                  </Box>
                 </MenuItem>
               </Menu>
             </Box>
@@ -473,13 +488,33 @@ function App() {
               <ListItemText primary="Dashboard" />
             </ListItem>
 
-            {/* Módulos principales con control de permisos */}
-            {hasPermission('view-cultivation-areas') && (
-              <ListItem button onClick={() => { navigate('/cultivo'); setDrawerOpen(false); }} selected={location.pathname === '/cultivo'}>
-                <ListItemIcon sx={{ color: '#e2e8f0' }}><LocalFloristIcon /></ListItemIcon>
-                <ListItemText primary="Cultivo" />
-              </ListItem>
+            {/* Menú de Cultivo con submenú */}
+            {(hasPermission('view-facilities') || hasPermission('view-stages') || hasPermission('view-cultivation-areas') || hasPermission('view-batches')) && (
+              <>
+                <ListItem button onClick={handleCultivationMenuToggle}>
+                  <ListItemIcon sx={{ color: '#e2e8f0' }}><LocalFloristIcon /></ListItemIcon>
+                  <ListItemText primary="Cultivo" />
+                  {cultivationMenuOpen ? <ExpandLess sx={{ color: '#e2e8f0' }} /> : <ExpandMoreIcon sx={{ color: '#e2e8f0' }} />}
+                </ListItem>
+                <Collapse in={cultivationMenuOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    {hasPermission('view-cultivation-areas') && (
+                      <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/cultivation/areas'); setDrawerOpen(false); }} selected={location.pathname === '/cultivation/areas'}>
+                        <ListItemIcon sx={{ color: '#e2e8f0' }}><GrassIcon /></ListItemIcon>
+                        <ListItemText primary="Áreas de Cultivo" />
+                      </ListItem>
+                    )}
+                    {hasPermission('view-batches') && (
+                      <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/cultivation/batches'); setDrawerOpen(false); }} selected={location.pathname === '/cultivation/batches'}>
+                        <ListItemIcon sx={{ color: '#e2e8f0' }}><InventoryIcon /></ListItemIcon>
+                        <ListItemText primary="Lotes" />
+                      </ListItem>
+                    )}
+                  </List>
+                </Collapse>
+              </>
             )}
+
             {hasPermission('manage-calendar-events') && (
               <ListItem button onClick={() => { navigate('/calendario'); setDrawerOpen(false); }} selected={location.pathname === '/calendario'}>
                 <ListItemIcon sx={{ color: '#e2e8f0' }}><CalendarTodayIcon /></ListItemIcon>
@@ -515,8 +550,11 @@ function App() {
             )}
             <Divider sx={{ my: 0.5, bgcolor: 'rgba(255,255,255,0.2)' }} />
             <ListItem button onClick={handleLogout}>
-              <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon /></ListItemIcon>
-              <ListItemText primary="Cerrar Sesión" />
+              {/* CORRECCIÓN: Envolver los elementos hijos en un fragmento o Box */}
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon fontSize="small" /></ListItemIcon>
+                <ListItemText primary="Cerrar Sesión" />
+              </Box>
             </ListItem>
           </List>
         </Box>
@@ -553,9 +591,24 @@ function App() {
           )}
           {hasPermission('view-cultivation-areas') && (
             <Route
-              path="/cultivo"
+              path="/cultivation/areas" // CAMBIO: Nueva ruta para áreas de cultivo
               element={
                 <CultivationPage
+                  tenantId={user?.tenant_id}
+                  isAppReady={appReady}
+                  userFacilityId={userFacilityId}
+                  currentUserId={user?.id}
+                  setParentSnack={showSnack}
+                  isGlobalAdmin={isGlobalAdmin}
+                />
+              }
+            />
+          )}
+          {hasPermission('view-batches') && ( // NUEVO: Ruta para lotes
+            <Route
+              path="/cultivation/batches"
+              element={
+                <BatchManagementPage
                   tenantId={user?.tenant_id}
                   isAppReady={appReady}
                   userFacilityId={userFacilityId}
@@ -584,6 +637,15 @@ function App() {
           <Route path="*" element={
             user && hasPermission('view-cultivation-areas') ? (
               <CultivationPage
+                tenantId={user?.tenant_id}
+                isAppReady={appReady}
+                userFacilityId={userFacilityId}
+                currentUserId={user?.id}
+                setParentSnack={showSnack}
+                isGlobalAdmin={isGlobalAdmin}
+              />
+            ) : user && hasPermission('view-batches') ? ( // NUEVO: Fallback a lotes si tiene permiso
+              <BatchManagementPage
                 tenantId={user?.tenant_id}
                 isAppReady={appReady}
                 userFacilityId={userFacilityId}
