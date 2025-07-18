@@ -676,11 +676,11 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       setParentSnack(SNACK_MESSAGES.BATCH_VARIETY_REQUIRED, 'warning');
       return;
     }
-
+  
     setBatchDialogLoading(true);
     const headers = {};
     let effectiveTenantId = null;
-
+  
     if (isGlobalAdmin) {
         if (selectedFacilityId) {
             const selectedFac = facilities.find(f => f.id === selectedFacilityId);
@@ -705,11 +705,11 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         setBatchDialogLoading(false);
         return;
     }
-
+  
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
-
+  
     try {
       const batchData = {
         name: batchName,
@@ -720,12 +720,27 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         advance_to_harvesting_on: batchAdvanceToHarvestingOn || null,
         cultivation_area_id: currentAreaDetail.id, // Asocia el lote al área actual
       };
-
-      const response = await api.post('/batches', batchData, { headers }); // Pasa los headers aquí
-      console.log('Batch created successfully:', response.data);
+  
+      // 1. Crea el lote
+      const response = await api.post('/batches', batchData, { headers });
+      const newBatch = response.data;
       setParentSnack(SNACK_MESSAGES.BATCH_CREATED, 'success');
-      
-      // Refrescar los lotes del área después de añadir uno nuevo
+  
+      // 2. Crea evento de trazabilidad
+      try {
+        await api.post('/traceability-events', {
+          batch_id: newBatch.id,
+          area_id: currentAreaDetail.id,
+          facility_id: selectedFacilityId,
+          user_id: currentUserId,
+          event_type: 'creation',
+          description: `Lote creado: ${batchName}`,
+        }, { headers });
+      } catch (traceErr) {
+        setParentSnack('Lote creado, pero error al crear evento de trazabilidad.', 'warning');
+      }
+  
+      // 3. Refresca los lotes y cierra diálogo
       const updatedBatches = await fetchBatchesForArea(currentAreaDetail.id);
       setCurrentAreaDetail(prev => ({ ...prev, batches: updatedBatches }));
       handleCloseAddBatchDialog();
@@ -746,9 +761,8 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
     } finally {
       setBatchDialogLoading(false);
     }
-  };
-
-
+  };  
+  
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
     data: {
@@ -1140,37 +1154,33 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       <Dialog open={openAreaDetailDialog} onClose={handleCloseAreaDetail} maxWidth="lg" fullWidth // Ampliado a lg
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2, minHeight: '80vh' } }} // Altura mínima
       >
-        <DialogTitle sx={{
-          bgcolor: '#3a506b',
-          color: '#fff',
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' }, // Column on small, row on larger
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' }, // Align items based on direction
-          pb: { xs: 2, sm: 1 }, // Add some padding bottom for column layout
-          pt: { xs: 2, sm: 1 },
-          px: { xs: 2, sm: 3 },
-          gap: { xs: 2, sm: 1 }, // Gap between title and buttons, and between buttons
-          flexWrap: 'wrap', // Allow wrapping if space is tight, but try to keep it one row
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', mr: 1 }}>
-              {DIALOG_TITLES.AREA_DETAIL} {currentAreaDetail?.name}
-            </Typography>
-            <IconButton onClick={handleCloseAreaDetail} sx={{ color: '#e2e8f0', ml: 'auto' }}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-
-          {/* New container for all action buttons */}
-          <Box sx={{
+        <DialogTitle
+          sx={{
+            bgcolor: '#6b7582',
+            color: '#fff',
             display: 'flex',
-            flexWrap: 'wrap', // Allow wrapping for buttons if space is limited
-            gap: 1, // Small gap between buttons
+            flexDirection: 'row',
             alignItems: 'center',
-            flexGrow: 1, // Allow buttons to take available space
-            justifyContent: { xs: 'flex-start', sm: 'flex-end' }, // Align buttons to end on larger screens
-          }}>
+            justifyContent: 'space-between',
+            pb: { xs: 2, sm: 1 },
+            pt: { xs: 2, sm: 1 },
+            px: { xs: 2, sm: 3 },
+            gap: 2,
+            flexWrap: 'wrap',
+          }}
+        >
+          
+
+          {/* Botones de acción + X alineados */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexWrap: 'wrap',
+              justifyContent: 'flex-end',
+            }}
+          >
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -1181,10 +1191,10 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
                 '&:hover': { bgcolor: '#43A047' },
                 borderRadius: 1,
                 textTransform: 'none',
-                py: '6px', // Smaller padding
+                py: '6px',
                 px: '10px',
-                fontSize: '0.75rem', // Smaller font size
-                whiteSpace: 'nowrap', // Prevent text wrapping within button
+                fontSize: '0.75rem',
+                whiteSpace: 'nowrap',
               }}
               disabled={isFacilityOperator}
             >
@@ -1285,8 +1295,23 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
             >
               {BUTTON_LABELS.REGISTER_DESTRUCTION}
             </Button>
+            {/* Botón de cerrar (X) */}
+            <IconButton
+              onClick={handleCloseAreaDetail}
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                color: '#e2e8f0',
+                zIndex: 5
+              }}
+              aria-label="Cerrar"
+            >
+              <CloseIcon />
+            </IconButton>
           </Box>
         </DialogTitle>
+
         <DialogContent sx={{
           pt: '20px !important',
           display: 'flex',
@@ -1509,46 +1534,53 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
   const fetchFacilities = useCallback(async () => {
     try {
       const headers = {};
-      // La configuración de X-Tenant-ID para Axios ya se maneja en App.jsx a nivel global
-      // para todas las llamadas de 'api'.
-      // Para Super Admin, App.jsx asegura que X-Tenant-ID NO se envíe.
-      // Para usuarios de Tenant, App.jsx asegura que X-Tenant-ID SÍ se envíe.
-      // El error 400 que está viendo aquí es probable que venga de su backend de Laravel,
-      // que podría estar esperando un X-Tenant-ID incluso para rutas que no deberían requerirlo
-      // para un Super Admin, o su middleware 'identify.tenant' tiene una lógica que lo fuerza.
-      // Desde el frontend, esta llamada es correcta.
-      console.log('fetchFacilities: Attempting to fetch facilities. Axios will handle X-Tenant-ID based on user role.');
-      const response = await api.get('/facilities');
-      console.log('fetchFacilities: Facilities fetched successfully:', response.data);
+      let effectiveTenantId = null;
+
+      if (tenantId) {
+        effectiveTenantId = String(tenantId);
+      } else if (isGlobalAdmin && selectedFacilityId) {
+        const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+        }
+      }
+
+      if (effectiveTenantId) {
+        headers['X-Tenant-ID'] = effectiveTenantId;
+      }
+
+      const response = await api.get('/facilities', { headers });
       let fetchedFacilities = Array.isArray(response.data)
         ? response.data
         : Array.isArray(response.data?.data)
         ? response.data.data
         : [];
 
-      if (isFacilityOperator && userFacilityId) {
-        fetchedFacilities = fetchedFacilities.filter(f => f.id === userFacilityId);
-      }
-
       setFacilities(fetchedFacilities);
 
-      // Si hay instalaciones y no hay una seleccionada o la seleccionada ya no existe, selecciona la primera
+      // Selecciona la primera instalación si no hay una seleccionada o si la actual ya no existe
       if (fetchedFacilities.length > 0) {
-        const currentFacilityExists = fetchedFacilities.some(f => f.id === selectedFacilityId);
-        if (!selectedFacilityId || !currentFacilityExists) {
+        const exists = fetchedFacilities.some(f => f.id === selectedFacilityId);
+        if (!selectedFacilityId || !exists) {
           setSelectedFacilityId(fetchedFacilities[0].id);
         }
       } else {
-        setSelectedFacilityId(''); // Si no hay instalaciones, limpia la selección
+        setSelectedFacilityId('');
       }
-      return fetchedFacilities; // Devuelve las instalaciones para Promise.all
+
+      return fetchedFacilities;
     } catch (error) {
-      console.error('CultivationPage: Error fetching facilities:', error);
-      setParentSnack(SNACK_MESSAGES.FACILITIES_ERROR, 'error');
+      console.error('Error al cargar instalaciones:', error);
+      setParentSnack('Error al cargar instalaciones', 'error');
       return [];
     }
-  }, [setParentSnack, isFacilityOperator, userFacilityId, selectedFacilityId]);
+  }, [tenantId, isGlobalAdmin, selectedFacilityId, setParentSnack]);
 
+  // --- useEffect seguro (sin bucles) ---
+  useEffect(() => {
+    fetchFacilities();
+    
+  }, [fetchFacilities]);
   // Función para obtener etapas
   const fetchStages = useCallback(async () => {
     try {
@@ -1638,7 +1670,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
     };
 
     loadInitialData();
-  }, [tenantId, isAppReady, isGlobalAdmin, fetchFacilities, fetchStages, userFacilityId, selectedFacilityId, fetchCultivationAreas, setParentSnack]);
+  }, [tenantId, isAppReady, isGlobalAdmin, fetchFacilities, fetchStages, userFacilityId, selectedFacilityId, fetchCultivationAreas, setParentSnack, isFacilityOperator]);
 
   // Effect para cargar áreas de cultivo cuando la instalación seleccionada cambia
   useEffect(() => {
@@ -2087,7 +2119,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
       <Dialog open={openStageDialog} onClose={handleCloseStageDialog} maxWidth="xs" fullWidth
         PaperProps={{ sx: { bgcolor: '#283e51', color: '#fff', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingStage ? DIALOG_TITLES.EDIT_STAGE : DIALOG_TITLES.CREATE_STAGE}</DialogTitle>
+      <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingStage ? DIALOG_TITLES.EDIT_STAGE : DIALOG_TITLES.CREATE_STAGE}</DialogTitle>
         <form onSubmit={handleSaveStage}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField

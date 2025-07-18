@@ -109,7 +109,7 @@ const TraceabilityEventsGrid = ({
     { field: 'event_type', headerName: 'Tipo Evento', width: 120 },
     { field: 'method', headerName: 'Método', width: 120 },
     { field: 'created_at', headerName: 'Fecha/Hora', width: 180 },
-    { field: 'user_name', headerName: 'Usuario', width: 150 },
+    { field: 'user_name', headerName: 'Usuario que Realizó', width: 150 },
   ];
 
   return (
@@ -168,9 +168,9 @@ const TraceabilityEventsGrid = ({
               borderBottom: '1px solid #4a5568',
               backgroundColor: '#2d3748',
             },
-            '& .MuiDataGrid-columnHeaders': {
+            '& .MuiDataGrid-columnHeaders div[role="row"]': {
               backgroundColor: '#3a506b !important',
-              color: '#fff !important',
+              color: '#000 !important',
               borderBottom: '1px solid #4a5568',
             },
             '& .MuiDataGrid-columnHeaderTitle': {
