@@ -100,16 +100,19 @@ const TraceabilityEventsGrid = ({
   console.log('[TraceabilityEventsGrid] Filas para DataGrid:', rows);
 
   // Columnas adaptadas para tus datos reales
-  const safeRow = (params) => (params && typeof params === 'object' && 'row' in params && params.row) ? params.row : {};
-
   const columns = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'batch_id', headerName: 'Batch', width: 90 },
-    { field: 'area_id', headerName: 'Area', width: 90 },
+    { field: 'batch_id', headerName: 'Lote', width: 90 },
+    { field: 'area_id', headerName: 'Área', width: 90 },
     { field: 'event_type', headerName: 'Tipo Evento', width: 120 },
     { field: 'method', headerName: 'Método', width: 120 },
+    { field: 'from_location', headerName: 'Origen', width: 120 }, // Nueva columna para origen
+    { field: 'to_location', headerName: 'Destino', width: 120 },   // Nueva columna para destino
+    { field: 'quantity', headerName: 'Cantidad', width: 100 },     // Cantidad del evento
+    { field: 'unit', headerName: 'Unidad', width: 80 },            // Unidad de la cantidad
+    { field: 'description', headerName: 'Descripción', flex: 1, minWidth: 200 }, // Descripción del evento
     { field: 'created_at', headerName: 'Fecha/Hora', width: 180 },
-    { field: 'user_name', headerName: 'Usuario que Realizó', width: 150 },
+    { field: 'user_name', headerName: 'Quien registra', width: 100 }, // Cambiado a user_id si el backend no devuelve user_name
   ];
 
   return (
@@ -170,12 +173,12 @@ const TraceabilityEventsGrid = ({
             },
             '& .MuiDataGrid-columnHeaders div[role="row"]': {
               backgroundColor: '#3a506b !important',
-              color: '#000 !important',
+              color: '#fff !important', // Asegura que el texto de la cabecera sea blanco
               borderBottom: '1px solid #4a5568',
             },
             '& .MuiDataGrid-columnHeaderTitle': {
               fontWeight: 'bold',
-              color: '#4a5568',
+              color: '#e2e8f0', // Color del texto de la cabecera
             },
             '& .MuiDataGrid-footerContainer': {
               backgroundColor: '#3a506b',
@@ -186,7 +189,7 @@ const TraceabilityEventsGrid = ({
               color: '#e2e8f0',
             },
             '& .MuiSvgIcon-root': {
-              color: '#2d3748',
+              color: '#e2e8f0', // Iconos de paginación
             },
             '& .MuiDataGrid-virtualScrollerContent': {
               backgroundColor: '#2d3748',
