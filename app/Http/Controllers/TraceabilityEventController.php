@@ -3,9 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\TraceabilityEvent;
+use App\Models\Batch; // Importar el modelo Batch
+use App\Models\CultivationArea; // Importar el modelo CultivationArea
+use App\Models\User; // Importar el modelo User
+use App\Models\Facility; // Importar el modelo Facility
+use App\Models\Stage; // Importar el modelo Stage (si es necesario para alguna relación)
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; // Asegúrate de que esta importación esté presente
-use Illuminate\Support\Facades\Auth; // Asegúrate de que esta importación esté presente
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon; // Para manejar fechas
 
 class TraceabilityEventController extends Controller
 {
@@ -30,15 +37,12 @@ class TraceabilityEventController extends Controller
             }
 
             // Aplicar filtro de tenant_id si no es Super Admin o si hay un tenantId definido
-            // Si su Super Admin puede ver todos los tenants, ajuste esta lógica.
-            // Actualmente, si no hay X-Tenant-ID y no es Super Admin con tenant_id, se requerirá.
             if (!Auth::check() || (!Auth::user()->is_global_admin && $tenantId)) {
                 $query->where('tenant_id', $tenantId);
                 Log::info('TraceabilityEventController@index: Applying tenant filter: ' . $tenantId);
             } else if (Auth::check() && Auth::user()->is_global_admin) {
                 Log::info('TraceabilityEventController@index: Global Admin detected, no tenant filter applied to query.');
             } else {
-                // Si no se pudo determinar el tenantId y no es global admin, retornar error
                 Log::warning('TraceabilityEventController@index: Tenant ID is missing for non-global admin.');
                 return response()->json(['message' => 'Tenant ID is required for this action.'], 400);
             }
@@ -59,13 +63,12 @@ class TraceabilityEventController extends Controller
             // Opcional: Ordenar los resultados (ej. por fecha descendente)
             $query->orderBy('created_at', 'desc');
 
-            // *** CAMBIO CLAVE AQUÍ: Cargar las relaciones 'user' y 'batch' ***
-            $events = $query->with(['user', 'batch'])->get(); // Carga la relación 'user' y 'batch'
+            // Cargar las relaciones 'user' y 'batch'
+            $events = $query->with(['user', 'batch'])->get();
 
             Log::info('TraceabilityEventController@index: Events fetched from DB (with relations):', ['count' => $events->count()]);
 
             // Mapear los eventos para incluir el nombre del usuario y el nombre del lote directamente
-            // Esto es útil si el frontend espera propiedades planas como 'user_name' y 'batch_name'
             $formattedEvents = $events->map(function($event) {
                 return [
                     'id' => $event->id,
@@ -85,8 +88,8 @@ class TraceabilityEventController extends Controller
                     'tenant_id' => $event->tenant_id,
                     'created_at' => $event->created_at,
                     'updated_at' => $event->updated_at,
-                    'user_name' => $event->user ? $event->user->name : 'N/A', // Nombre del usuario
-                    'batch_name' => $event->batch ? $event->batch->name : 'N/A', // Nombre del lote
+                    'user_name' => $event->user ? $event->user->name : 'N/A',
+                    'batch_name' => $event->batch ? $event->batch->name : 'N/A',
                 ];
             });
 
@@ -107,7 +110,7 @@ class TraceabilityEventController extends Controller
         try {
             // Validar los datos de entrada
             $validatedData = $request->validate([
-                'batch_id' => 'nullable|integer|exists:batches,id', // 'batch_id' puede ser nulo para eventos de cultivo generales
+                'batch_id' => 'nullable|integer|exists:batches,id',
                 'event_type' => 'required|string|max:255',
                 'description' => 'nullable|string',
                 'area_id' => 'required|integer|exists:cultivation_areas,id',
@@ -122,13 +125,8 @@ class TraceabilityEventController extends Controller
                 'new_batch_id' => 'nullable|integer|exists:batches,id',
             ]);
 
-            // Asignar el tenant_id si es necesario (depende de su lógica de middleware y modelo)
-            // Si su middleware 'identify.tenant' ya inyecta el tenant_id en la request o en un scope,
-            // esta línea podría ser redundante o necesitar un ajuste.
-            // Por ejemplo, si TraceabilityEvent tiene un campo 'tenant_id' y no se asigna automáticamente:
-            // $validatedData['tenant_id'] = $request->header('X-Tenant-ID') ?: Auth::user()->tenant_id;
-            // La lógica de `booted()` en el modelo TraceabilityEvent debería manejar esto si `tenant()` helper está disponible.
-
+            
+            $validatedData['tenant_id'] = $request->header('X-Tenant-ID') ?: (Auth::user()->tenant_id ?? null);
 
             $event = TraceabilityEvent::create($validatedData);
 
@@ -147,4 +145,127 @@ class TraceabilityEventController extends Controller
         }
     }
 
+    /**
+     * Exporta eventos de trazabilidad a un archivo CSV.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse
+     */
+    public function exportCsv(Request $request)
+    {
+        // 1. Validar y obtener parámetros de la solicitud
+        $request->validate([
+            'facility_id' => 'required|integer|exists:facilities,id',
+            'start_date' => 'nullable|date_format:Y-m-d',
+            'end_date' => 'nullable|date_format:Y-m-d',
+        ]);
+
+        $facilityId = $request->input('facility_id');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        // Obtener el tenant_id del usuario autenticado (ya que estás en un middleware 'identify.tenant')
+        $tenantId = $request->user()->tenant_id;
+
+        // 2. Construir la consulta de eventos de trazabilidad
+        $query = TraceabilityEvent::where('facility_id', $facilityId)
+                                  ->where('tenant_id', $tenantId); // Asegúrate de filtrar por tenant_id
+
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
+        // Cargar relaciones para obtener nombres descriptivos
+        $events = $query->with(['batch', 'area', 'user', 'facility'])
+                        ->orderBy('created_at', 'asc')
+                        ->get();
+
+        // 3. Preparar el archivo CSV
+        $filename = "traceability_events_facility_{$facilityId}_" . Carbon::now()->format('Ymd_His') . ".csv";
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function() use ($events) {
+            $file = fopen('php://output', 'w');
+
+            // Encabezados del CSV (ajusta según los campos que necesites de tus relaciones)
+            fputcsv($file, [
+                'Event ID',
+                'Event Type',
+                'Timestamp',
+                'User ID',
+                'User Name',
+                'Batch ID',
+                'Batch Name',
+                'Batch Variety',
+                'Area ID',
+                'Area Name',
+                'Facility ID',
+                'Facility Name',
+                'Description',
+                'Quantity',
+                'Unit',
+                'From Location',
+                'To Location',
+                'Method',
+                'Reason',
+                'New Batch ID', // Aunque desde el frontend enviamos null, el backend podría tenerlo
+                'New Batch Name', // Si existe un new_batch_id y puedes obtener su nombre
+            ]);
+
+            foreach ($events as $event) {
+                // Obtener nombres de las relaciones (si existen)
+                $userName = $event->user ? $event->user->name : 'N/A';
+                $batchName = $event->batch ? $event->batch->name : 'N/A';
+                $batchVariety = $event->batch ? $event->batch->variety : 'N/A';
+                $areaName = $event->area ? $event->area->name : 'N/A';
+                $facilityName = $event->facility ? $event->facility->name : 'N/A';
+                
+                // Si tienes un new_batch_id en el evento y quieres su nombre
+                $newBatchName = 'N/A';
+                if ($event->new_batch_id) {
+                    // Asegúrate de que el modelo Batch tenga una relación inversa o puedas buscarlo
+                    $newBatch = Batch::find($event->new_batch_id); 
+                    $newBatchName = $newBatch ? $newBatch->name : 'N/A';
+                }
+
+                fputcsv($file, [
+                    $event->id,
+                    $event->event_type,
+                    $event->created_at->toIso8601String(), // Formato ISO 8601 para consistencia
+                    $event->user_id,
+                    $userName,
+                    $event->batch_id,
+                    $batchName,
+                    $batchVariety,
+                    $event->area_id,
+                    $areaName,
+                    $event->facility_id,
+                    $facilityName,
+                    $event->description,
+                    $event->quantity,
+                    $event->unit,
+                    $event->from_location,
+                    $event->to_location,
+                    $event->method,
+                    $event->reason,
+                    $event->new_batch_id,
+                    $newBatchName,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return new StreamedResponse($callback, 200, $headers);
+    }
 }

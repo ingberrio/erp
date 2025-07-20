@@ -9,13 +9,14 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Models\TraceabilityEvent; // Import the TraceabilityEvent model
 
 class BatchController extends Controller
 {
     /**
      * Display a listing of the resource.
      * GET /api/batches
-     * GET /api/cultivation-areas/{cultivationArea}/batches (filtrado por área)
+     * GET /api/cultivation-areas/{cultivationArea}/batches (filtered by area)
      */
     public function index(Request $request, CultivationArea $cultivationArea = null)
     {
@@ -33,7 +34,7 @@ class BatchController extends Controller
                 abort(403, 'Unauthorized access: Cultivation Area does not belong to the current tenant.');
             }
 
-            // Cargar relaciones necesarias para el frontend (cultivationArea y su currentStage)
+            // Load necessary relations for the frontend (cultivationArea and its currentStage)
             $batches = $query->with('cultivationArea.currentStage')->get();
             return response()->json($batches);
         } catch (\Throwable $e) {
@@ -65,6 +66,7 @@ class BatchController extends Controller
                 'current_units' => 'required|integer|min:0',
                 'end_type' => 'required|string|max:50',
                 'variety' => 'required|string|max:255',
+                'product_type' => 'required|string|max:255', // <-- NEW: Added product_type validation
                 'projected_yield' => 'nullable|numeric|min:0',
                 'cultivation_area_id' => [
                     'required',
@@ -127,6 +129,7 @@ class BatchController extends Controller
                 'current_units' => 'sometimes|required|integer|min:0',
                 'end_type' => 'sometimes|required|string|max:50',
                 'variety' => 'sometimes|required|string|max:255',
+                'product_type' => 'sometimes|required|string|max:255', // <-- NEW: Added product_type validation
                 'projected_yield' => 'nullable|numeric|min:0',
                 'cultivation_area_id' => [
                     'sometimes',
@@ -172,11 +175,11 @@ class BatchController extends Controller
         }
 
         try {
-            // TODO: Implementar lógica para verificar eventos de trazabilidad
-            // Si el lote tiene eventos asociados, no permitir la eliminación.
-            // Ejemplo:
+            // TODO: Implement logic to check traceability events
+            // If the batch has associated events, do not allow deletion.
+            // Example:
             // if ($batch->traceabilityEvents()->count() > 0) {
-            //     return response()->json(['message' => 'No se puede eliminar el lote: Tiene eventos de trazabilidad asociados.'], 409);
+            //     return response()->json(['message' => 'Cannot delete batch: It has associated traceability events.'], 409);
             // }
 
             $batch->delete();
@@ -216,11 +219,14 @@ class BatchController extends Controller
                         return $query->where('tenant_id', $tenantId);
                     }),
                 ],
+                // When splitting, the new batch should inherit or be assigned a product_type
+                'newBatchProductType' => 'required|string|max:255', // <-- NEW: Product type for the new batch
             ]);
 
             $splitQuantity = $validatedData['splitQuantity'];
             $newBatchName = $validatedData['newBatchName'];
             $newCultivationAreaId = $validatedData['newCultivationAreaId'];
+            $newBatchProductType = $validatedData['newBatchProductType']; // Get the new product type
 
             $newCultivationArea = CultivationArea::find($newCultivationAreaId);
 
@@ -235,6 +241,7 @@ class BatchController extends Controller
                 'current_units' => $splitQuantity,
                 'end_type' => $batch->end_type,
                 'variety' => $batch->variety,
+                'product_type' => $newBatchProductType, // <-- NEW: Assign product type to new batch
                 'projected_yield' => null,
                 'advance_to_harvesting_on' => null,
                 'cultivation_area_id' => $newCultivationAreaId,
@@ -246,10 +253,27 @@ class BatchController extends Controller
             ]);
             Log::info('New batch created after split.', ['new_batch_id' => $newBatch->id, 'parent_batch_id' => $batch->id]);
 
+            // --- NEW: Create Traceability Event for Split ---
+            TraceabilityEvent::create([
+                'batch_id' => $batch->id, // Original batch is affected
+                'event_type' => 'split',
+                'description' => "Batch '{$batch->name}' split. {$splitQuantity} units moved to new batch '{$newBatch->name}' (Product Type: {$newBatchProductType}).",
+                'area_id' => $batch->cultivation_area_id, // Event occurs in original batch's area
+                'facility_id' => $batch->facility_id,
+                'user_id' => auth()->id(), // Assuming authenticated user
+                'quantity' => $splitQuantity,
+                'unit' => $batch->end_type === 'Dried' ? 'g' : ($batch->end_type === 'Fresh' ? 'g' : 'units'), // Infer unit from end_type or use 'units'
+                'from_location' => $batch->cultivationArea->name,
+                'to_location' => $newCultivationArea->name,
+                'new_batch_id' => $newBatch->id, // Link to the new batch created by the split
+                'tenant_id' => $tenantId,
+            ]);
+            // --- END NEW ---
+
             DB::commit();
 
             return response()->json([
-                'message' => 'Lote dividido exitosamente',
+                'message' => 'Batch split successfully',
                 'original_batch' => $batch->load('cultivationArea.currentStage'),
                 'new_batch' => $newBatch->load('cultivationArea.currentStage')
             ], 200);
@@ -288,50 +312,87 @@ class BatchController extends Controller
 
         try {
             $validatedData = $request->validate([
-                'processedQuantity' => 'required|numeric|min:0|max:' . $batch->current_units, // Cantidad final después del procesamiento
-                'processMethod' => 'required|string|max:255', // Ej. 'Lyophilization', 'Air Drying', 'Curing'
-                'processDescription' => 'nullable|string', // Notas adicionales sobre el proceso
+                'processedQuantity' => 'required|numeric|min:0|max:' . $batch->current_units, // Final quantity after processing
+                'processMethod' => 'required|string|max:255', // E.g., 'Lyophilization', 'Air Drying', 'Curing'
+                'processDescription' => 'nullable|string', // Additional notes about the process
+                'newProductType' => 'required|string|max:255', // <-- NEW: Product type AFTER processing
             ]);
 
             $processedQuantity = $validatedData['processedQuantity'];
             $processMethod = $validatedData['processMethod'];
             $processDescription = $validatedData['processDescription'];
+            $newProductType = $validatedData['newProductType']; // Get the new product type
 
-            // Opcional: Podrías registrar un evento de trazabilidad aquí
-            // (requeriría un modelo de TraceabilityEvent y una tabla asociada)
-            /*
-            TraceabilityEvent::create([
-                'batch_id' => $batch->id,
-                'event_type' => 'processing',
-                'details' => "Processed from {$batch->current_units} to {$processedQuantity} units via {$processMethod}. Notes: {$processDescription}",
-                'user_id' => auth()->id(), // Asumiendo autenticación
-                'tenant_id' => $tenantId,
-            ]);
-            */
+            DB::beginTransaction(); // Start transaction
 
+            // Calculate loss
+            $initialQuantity = $batch->current_units;
+            $loss = $initialQuantity - $processedQuantity;
+
+            // Update the original batch's units and product type
             $batch->current_units = $processedQuantity;
+            $batch->product_type = $newProductType; // <-- NEW: Update product type after processing
             $batch->save();
 
             Log::info('Batch processed successfully.', [
                 'batch_id' => $batch->id,
-                'old_units' => $batch->getOriginal('current_units'), // Obtener valor original antes de guardar
+                'old_units' => $initialQuantity,
                 'new_units' => $batch->current_units,
                 'process_method' => $processMethod,
                 'tenant_id' => $tenantId,
+                'old_product_type' => $batch->getOriginal('product_type'), // Log original product type
+                'new_product_type' => $newProductType,
             ]);
 
-            // Cargar relaciones para la respuesta del frontend
+            // --- NEW: Create Traceability Event for Processing ---
+            TraceabilityEvent::create([
+                'batch_id' => $batch->id,
+                'event_type' => 'processing',
+                'description' => "Batch '{$batch->name}' processed from {$initialQuantity} to {$processedQuantity} units via {$processMethod}. Product type changed from '{$batch->getOriginal('product_type')}' to '{$newProductType}'. Notes: {$processDescription}",
+                'area_id' => $batch->cultivation_area_id, // Event occurs in batch's current area
+                'facility_id' => $batch->facility_id,
+                'user_id' => auth()->id(), // Assuming authenticated user
+                'quantity' => $processedQuantity, // Final quantity after processing
+                'unit' => $batch->end_type === 'Dried' ? 'g' : ($batch->end_type === 'Fresh' ? 'g' : 'units'), // Infer unit
+                'method' => $processMethod,
+                'reason' => $processDescription, // Use description as reason for processing
+                'tenant_id' => $tenantId,
+            ]);
+
+            // If there was a loss, record a separate destruction/adjustment event for the loss
+            if ($loss > 0) {
+                TraceabilityEvent::create([
+                    'batch_id' => $batch->id,
+                    'event_type' => 'adjustment_loss', // Or 'destruction' if it's actual destruction
+                    'description' => "Adjustment for processing loss: {$loss} units. Method: {$processMethod}. From product type '{$batch->getOriginal('product_type')}'.",
+                    'area_id' => $batch->cultivation_area_id,
+                    'facility_id' => $batch->facility_id,
+                    'user_id' => auth()->id(),
+                    'quantity' => $loss,
+                    'unit' => $batch->end_type === 'Dried' ? 'g' : ($batch->end_type === 'Fresh' ? 'g' : 'units'),
+                    'method' => $processMethod,
+                    'reason' => 'Processing loss',
+                    'tenant_id' => $tenantId,
+                ]);
+            }
+            // --- END NEW ---
+
+            DB::commit(); // Commit transaction
+
+            // Load relations for frontend response
             $batch->load('cultivationArea.currentStage');
 
             return response()->json([
-                'message' => 'Lote procesado exitosamente.',
+                'message' => 'Batch processed successfully.',
                 'batch' => $batch
             ], 200);
 
         } catch (ValidationException $e) {
+            DB::rollBack(); // Rollback transaction on validation error
             Log::error('Validation failed during batch processing', ['errors' => $e->errors(), 'batch_id' => $batch->id]);
             return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
         } catch (\Throwable $e) {
+            DB::rollBack(); // Rollback transaction on any other error
             Log::error('Unexpected error during batch processing', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'batch_id' => $batch->id]);
             return response()->json(['error' => 'An unexpected error occurred during batch processing.', 'details' => $e->getMessage()], 500);
         }

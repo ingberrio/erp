@@ -46,6 +46,16 @@ class TraceabilityEvent extends Model
     ];
 
     /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    /**
      * The "booted" method of the model.
      *
      * @return void
@@ -54,9 +64,16 @@ class TraceabilityEvent extends Model
     {
         static::creating(function ($event) {
             // Asigna el tenant_id automáticamente si no está presente y el contexto del inquilino existe.
+            // Esto es útil si estás usando un paquete de multi-tenancy como tenancy/tenancy
+            // o si tienes tu propia función global `tenant()`.
             if (empty($event->tenant_id) && function_exists('tenant') && tenant()) {
                 $event->tenant_id = tenant()->id;
             }
+            // Si no usas un paquete de tenancy y el tenant_id viene del Auth::user()
+            // o de un header, asegúrate de que se asigne antes de la creación del modelo
+            // en el controlador o en un evento de modelo más temprano si es necesario.
+            // La lógica en el controlador para el `store` ya lo maneja con $request->header('X-Tenant-ID')
+            // o Auth::user()->tenant_id, así que esta parte es más una salvaguarda.
         });
     }
 
