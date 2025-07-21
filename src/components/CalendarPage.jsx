@@ -1120,6 +1120,9 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
 // --- Componente: ListView (Representa una lista de Trello) ---
 const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, refreshLists, handleDeleteList, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, user, hasPermission }) => {
   const [openAddCardDialog, setOpenAddCardDialog] = useState(false);
+  const [originalCard, setOriginalCard] = useState(null);
+  const [saveTimeout, setSaveTimeout] = useState(null);
+  const [pendingChanges, setPendingChanges] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
   const [cardDescription, setCardDescription] = useState("");
   const [cardDueDate, setCardDueDate] = useState(null);
@@ -1148,6 +1151,14 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
     }
   });
 
+  const cardHasChanged = () => {
+    if (!originalCard) return false;
+    return (
+      cardTitle !== (originalCard.title || "") ||
+      cardDescription !== (originalCard.description || "") ||
+      (cardDueDate ? cardDueDate.format('YYYY-MM-DD') : null) !== (originalCard.due_date || null)
+    );
+  };
 
   const handleOpenCardDialog = async (card = null) => {
     console.log("handleOpenCardDialog: Card parameter received:", card); // LOG DE DEPURACIÓN
@@ -1172,6 +1183,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
     }
 
     setEditingCard(cardToEdit);
+    setOriginalCard(cardToEdit);
     console.log("handleOpenCardDialog: After setEditingCard, current editingCard state:", cardToEdit); // LOG DE DEPURACIÓN
     setCardTitle(cardToEdit ? cardToEdit.title : "");
     setCardDescription(cardToEdit ? (cardToEdit.description || "") : "");
@@ -1326,16 +1338,16 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
       return;
     }
 
-    const handler = setTimeout(() => {
-      console.log("useEffect for autosave: Triggering saveCardChanges."); // LOG DE DEPURACIÓN
-      saveCardChanges();
-    }, 700);
+    if (!cardHasChanged()) return; 
 
-    return () => {
-      console.log("useEffect for autosave: Clearing timeout."); // LOG DE DEPURACIÓN
-      clearTimeout(handler);
-    };
-  }, [cardTitle, cardDescription, cardDueDate, editingCard, saveCardChanges]);
+    if (saveTimeout) clearTimeout(saveTimeout);
+    const timeout = setTimeout(() => {
+      saveCardChanges();
+      setPendingChanges(false);
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [cardTitle, cardDescription, cardDueDate, editingCard, saveTimeout, saveCardChanges, cardHasChanged]);
 
 
   // Función para guardar una tarjeta (solo se usa para CREAR una nueva tarjeta)
@@ -1967,10 +1979,17 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
             </Box>
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b', p: 2, justifyContent: 'flex-end' }}> {/* Estilo oscuro y justificado a la derecha */}
-            {isSaving && (
+            {isSaving ? (
               <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
                 <CircularProgress size={20} sx={{ color: '#a0aec0' }} />
                 <Typography variant="body2" sx={{ ml: 1, color: '#a0aec0' }}>Guardando...</Typography>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+                <CheckCircleOutlineIcon sx={{ color: '#90ee90', fontSize: 20 }} />
+                <Typography variant="body2" sx={{ ml: 1, color: '#a0aec0', opacity: 0.8 }}>
+                  Todos los cambios guardados
+                </Typography>
               </Box>
             )}
             <Button onClick={handleCloseCardDialog} sx={{ color: '#a0aec0' }}>

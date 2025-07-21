@@ -119,12 +119,12 @@ const TraceabilityEventsGrid = ({
     <Box sx={{ width: '100%', flexShrink: 0 }}>
       <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0', display: 'flex', alignItems: 'center' }}>
         <HistoryIcon sx={{ mr: 1, color: '#a0aec0' }} />
-        Trazabilidad del Lote
+        Traceability Batch
       </Typography>
 
       {/* Batch filter for traceability */}
       <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-        <InputLabel sx={{ color: '#fff' }}>Ver Eventos para</InputLabel>
+        <InputLabel sx={{ color: '#fff' }}>See events</InputLabel>
         <Select
           value={selectedBatchForTraceability}
           onChange={(e) => setSelectedBatchForTraceability(e.target.value)}
@@ -142,7 +142,7 @@ const TraceabilityEventsGrid = ({
             },
           }}
         >
-          <MenuItem value="all">Todos los Lotes</MenuItem>
+          <MenuItem value="all">All batches</MenuItem>
           {batchesInCurrentArea?.map(batch => (
             <MenuItem key={batch.id} value={batch.id}>{batch.name}</MenuItem>
           ))}
@@ -178,7 +178,7 @@ const TraceabilityEventsGrid = ({
             },
             '& .MuiDataGrid-columnHeaderTitle': {
               fontWeight: 'bold',
-              color: '#e2e8f0', // Color del texto de la cabecera
+              color: '#4f5155', // Color del texto de la cabecera
             },
             '& .MuiDataGrid-footerContainer': {
               backgroundColor: '#3a506b',
@@ -189,7 +189,7 @@ const TraceabilityEventsGrid = ({
               color: '#e2e8f0',
             },
             '& .MuiSvgIcon-root': {
-              color: '#e2e8f0', // Iconos de paginación
+              color: '#4f5155', // Iconos de paginación
             },
             '& .MuiDataGrid-virtualScrollerContent': {
               backgroundColor: '#2d3748',
