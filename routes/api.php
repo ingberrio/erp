@@ -15,6 +15,7 @@ use App\Http\Controllers\StageController;
 use App\Http\Controllers\CultivationAreaController;
 use App\Http\Controllers\BatchController;
 use App\Http\Controllers\TraceabilityEventController;
+use App\Http\Controllers\RegulatoryReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -122,7 +123,8 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     // IMPORTANTE: Coloca la ruta específica 'export' ANTES del apiResource
     Route::get('traceability-events/export', [TraceabilityEventController::class, 'exportCsv']); // <--- MOVIDA AQUÍ
     Route::apiResource('traceability-events', TraceabilityEventController::class); // <--- DESPUÉS DE LA ESPECÍFICA
-
+    Route::post('/reports/generate-ctls', [RegulatoryReportController::class, 'generateCtls']);
+    
     Route::get('/test-cors', function () {
         dd(['message' => 'CORS test successful!', 'headers_sent' => headers_sent()]);
     });
