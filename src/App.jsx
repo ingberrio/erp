@@ -23,6 +23,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import LocalFloristIcon from '@mui/icons-material/LocalFlorist'; // Icono para Cultivo
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload'; // Icono para Informes Regulatorios
 
 // NUEVOS Iconos para el submenú de cultivo
 import GrassIcon from '@mui/icons-material/Grass'; // Para Áreas de Cultivo
@@ -35,6 +36,7 @@ import CultivationPage from './components/CultivationPage';
 import CalendarPage from './components/CalendarPage';
 import LandingPage from './components/LandingPage';
 import BatchManagementPage from './components/BatchManagementPage'; // Importar el nuevo componente de lotes
+import RegulatoryReportsPage from './components/RegulatoryReportsPage'; // NUEVO: Importar el componente de Informes Regulatorios
 
 // Configuración de Axios
 export const api = axios.create({
@@ -235,7 +237,10 @@ function App() {
           navigate('/empresas');
         } else if (userHasPermission('manage-calendar-events')) {
           navigate('/calendario');
-        } else {
+        } else if (userHasPermission('generate-regulatory-reports')) { // NUEVO: Prioridad para informes regulatorios
+          navigate('/regulatory-reports');
+        }
+        else {
           navigate('/');
           showSnack('Inicio de sesión exitoso, pero no tienes permisos para ver ningún módulo. Contacta al administrador.', 'warning');
         }
@@ -523,7 +528,7 @@ function App() {
             )}
 
             {/* Sección de Administración */}
-            {(hasPermission('view-users') || hasPermission('view-roles') || hasPermission('view-permissions') || hasPermission('view-companies')) && (
+            {(hasPermission('view-users') || hasPermission('view-roles') || hasPermission('view-permissions') || hasPermission('view-companies') || hasPermission('generate-regulatory-reports')) && ( // NUEVO: Añadir permiso para informes
               <>
                 <ListItem button onClick={handleAdminMenuToggle}>
                   <ListItemIcon sx={{ color: '#e2e8f0' }}><LockIcon /></ListItemIcon>
@@ -542,6 +547,12 @@ function App() {
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/users'); setDrawerOpen(false); }} selected={location.pathname === '/users'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><PeopleIcon /></ListItemIcon>
                         <ListItemText primary="Usuarios y Roles" />
+                      </ListItem>
+                    )}
+                    {hasPermission('generate-regulatory-reports') && ( // NUEVO: Elemento de menú para Informes Regulatorios
+                      <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/regulatory-reports'); setDrawerOpen(false); }} selected={location.pathname === '/regulatory-reports'}>
+                        <ListItemIcon sx={{ color: '#e2e8f0' }}><CloudDownloadIcon /></ListItemIcon>
+                        <ListItemText primary="Informes Regulatorios" />
                       </ListItem>
                     )}
                   </List>
@@ -600,6 +611,7 @@ function App() {
                   currentUserId={user?.id}
                   setParentSnack={showSnack}
                   isGlobalAdmin={isGlobalAdmin}
+                  hasPermission={hasPermission} // Pasar hasPermission a CultivationPage
                 />
               }
             />
@@ -614,6 +626,7 @@ function App() {
                   userFacilityId={userFacilityId}
                   setParentSnack={showSnack}
                   isGlobalAdmin={isGlobalAdmin}
+                  hasPermission={hasPermission} // Pasar hasPermission a BatchManagementPage
                 />
               }
             />
@@ -633,6 +646,21 @@ function App() {
               }
             />
           )}
+          {hasPermission('generate-regulatory-reports') && ( // NUEVO: Ruta para Informes Regulatorios
+            <Route
+              path="/regulatory-reports"
+              element={
+                <RegulatoryReportsPage
+                  tenantId={user?.tenant_id}
+                  isAppReady={appReady}
+                  userFacilityId={userFacilityId}
+                  isGlobalAdmin={isGlobalAdmin}
+                  setParentSnack={showSnack}
+                  hasPermission={hasPermission}
+                />
+              }
+            />
+          )}
           {/* Ruta por defecto o de fallback */}
           <Route path="*" element={
             user && hasPermission('view-cultivation-areas') ? (
@@ -643,6 +671,7 @@ function App() {
                 currentUserId={user?.id}
                 setParentSnack={showSnack}
                 isGlobalAdmin={isGlobalAdmin}
+                hasPermission={hasPermission}
               />
             ) : user && hasPermission('view-batches') ? ( // NUEVO: Fallback a lotes si tiene permiso
               <BatchManagementPage
@@ -651,6 +680,7 @@ function App() {
                 userFacilityId={userFacilityId}
                 setParentSnack={showSnack}
                 isGlobalAdmin={isGlobalAdmin}
+                hasPermission={hasPermission}
               />
             ) : user && hasPermission('view-users') ? (
               <UsuariosCrudInternal
@@ -667,6 +697,15 @@ function App() {
                 tenantId={user?.tenant_id}
                 isGlobalAdmin={isGlobalAdmin}
                 user={user}
+                hasPermission={hasPermission}
+              />
+            ) : user && hasPermission('generate-regulatory-reports') ? ( // NUEVO: Fallback a informes regulatorios
+              <RegulatoryReportsPage
+                tenantId={user?.tenant_id}
+                isAppReady={appReady}
+                userFacilityId={userFacilityId}
+                isGlobalAdmin={isGlobalAdmin}
+                setParentSnack={showSnack}
                 hasPermission={hasPermission}
               />
             ) : (
