@@ -40,77 +40,68 @@ class RegulatoryReportController extends Controller
             case 'monthly_inventory':
                 // For Monthly Inventory Report, we typically need the inventory at the END of the period.
                 // This simplified example fetches batches that were created within the date range
-                // and assumes their 'units' represent their current quantity.
+                // and assumes their 'current_units' represent their current quantity.
                 // For a true inventory report, you'd need a more robust inventory tracking system
                 // that updates current quantities or calculates them based on all events up to endDate.
 
                 $batches = DB::table('batches')
                     ->where('facility_id', $facilityId)
-                    // Consider if you need to filter by creation date or if you need all active batches
-                    // For a snapshot, you might need batches that were active at endDate.
-                    // For simplicity, we'll still use created_at for now, but be aware of this limitation.
-                    // ->whereBetween('created_at', [$startDate, $endDate]) // This might not be suitable for actual inventory snapshot
                     ->where(function ($query) use ($endDate) {
-                        // This attempts to get batches that existed and were active up to the end date.
-                        // A more precise inventory would require tracking quantity changes via events.
                         $query->where('created_at', '<=', $endDate);
-                        // And if you have a 'disposed_at' or 'destroyed_at' column:
-                        // $query->where(function ($q) {
-                        //     $q->whereNull('disposed_at')->orWhere('disposed_at', '>', $endDate);
-                        // });
                     })
                     ->select(
                         'id',
-                        'name', // Or a unique product identifier
-                        'units', // Assuming this is the current quantity
+                        'name',
+                        'current_units',
                         'product_type',
                         'variety',
                         'created_at',
-                        'cultivation_area_id' // <-- CORRECTED: Changed to 'cultivation_area_id'
+                        'cultivation_area_id',
+                        'is_packaged' // <-- NEW: Select the is_packaged column
                     )
                     ->get();
 
                 $headers = [
                     'Inventory ID (Batch ID)',
                     'Product Name/Identifier',
-                    'Product Type (HC Category)', // e.g., Dried Cannabis, Cannabis Oil
+                    'Product Type (HC Category)',
                     'Variety/Strain',
                     'Quantity',
-                    'Unit of Measure', // e.g., G (grams), KG (kilograms), EA (each for plants/seeds)
-                    'Packaged Status (Packaged/Unpackaged)', // If tracked
-                    'Location (Cultivation Area ID/Name)', // Current location
-                    'Report Date', // The endDate of the selected period
-                    // Add all other required columns for Monthly Inventory Report as per CTLS
-                    // Example: Date of Last Activity, Unique Identifier for Plants/Packages
+                    'Unit of Measure',
+                    'Packaged Status (Packaged/Unpackaged)', // Now dynamic
+                    'Location (Cultivation Area ID/Name)',
+                    'Report Date',
                 ];
 
                 $data = $batches->map(function ($batch) use ($endDate) {
                     // Fetch cultivation area name for location
                     $cultivationAreaName = null;
-                    if ($batch->cultivation_area_id) { // <-- CORRECTED: Changed to 'cultivation_area_id'
-                        $area = DB::table('cultivation_areas')->where('id', $batch->cultivation_area_id)->first(); // <-- CORRECTED: Changed to 'cultivation_area_id'
+                    if ($batch->cultivation_area_id) {
+                        $area = DB::table('cultivation_areas')->where('id', $batch->cultivation_area_id)->first();
                         $cultivationAreaName = $area ? $area->name : 'Unknown Area';
                     }
+
+                    // Determine packaged status string
+                    $packagedStatus = $batch->is_packaged ? 'Packaged' : 'Unpackaged'; // <-- NEW: Use the column value
 
                     return [
                         $batch->id,
                         $batch->name,
                         $batch->product_type,
                         $batch->variety,
-                        $batch->units,
+                        $batch->current_units,
                         'g', // Placeholder: This needs to be dynamic based on actual units for product_type
-                        'Unpackaged', // Placeholder: Needs actual logic to determine packaged status
+                        $packagedStatus, // <-- NEW: Use the dynamic status
                         $cultivationAreaName,
-                        $endDate->format('Y-m-d'), // The end date of the report period
+                        $endDate->format('Y-m-d'),
                     ];
                 });
                 break;
 
             case 'production':
-                // This would typically involve traceability events like 'harvest' and 'processing'.
                 $data = DB::table('traceability_events')
                     ->where('facility_id', $facilityId)
-                    ->whereIn('event_type', ['harvest', 'processing']) // Filter for relevant event types
+                    ->whereIn('event_type', ['harvest', 'processing'])
                     ->whereBetween('created_at', [$startDate, $endDate])
                     ->select('id', 'event_type', 'batch_id', 'quantity', 'unit', 'description', 'created_at')
                     ->get();
@@ -123,7 +114,6 @@ class RegulatoryReportController extends Controller
                     'Unit of Measure',
                     'Event Date',
                     'Description',
-                    // Add all other required columns for Production Report as per CTLS
                 ];
 
                  $data = $data->map(function ($row) {
@@ -140,10 +130,9 @@ class RegulatoryReportController extends Controller
                 break;
 
             case 'disposition':
-                // This would involve events like 'movement' (for sales/transfers), 'destruction', 'loss_theft'.
                 $data = DB::table('traceability_events')
                     ->where('facility_id', $facilityId)
-                    ->whereIn('event_type', ['movement', 'destruction', 'loss_theft']) // Filter for relevant event types
+                    ->whereIn('event_type', ['movement', 'destruction', 'loss_theft'])
                     ->whereBetween('created_at', [$startDate, $endDate])
                     ->select('id', 'event_type', 'batch_id', 'quantity', 'unit', 'description', 'created_at')
                     ->get();
@@ -156,7 +145,6 @@ class RegulatoryReportController extends Controller
                     'Unit of Measure',
                     'Event Date',
                     'Description',
-                    // Add all other required columns for Disposition Report as per CTLS
                 ];
 
                 $data = $data->map(function ($row) {
@@ -173,7 +161,6 @@ class RegulatoryReportController extends Controller
                 break;
 
             default:
-                // Handle unsupported report types (though validation should prevent this)
                 return response()->json(['message' => 'Unsupported report type.'], 400);
         }
 
