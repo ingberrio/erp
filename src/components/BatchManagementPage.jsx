@@ -1,11 +1,23 @@
 // src/components/BatchManagementPage.jsx
-// Esta versión incluye todas las funcionalidades desarrolladas hasta ahora:
-// - Campo 'product_type' en el diálogo Añadir/Editar Lote.
-// - Campo 'newProductType' en el diálogo Procesar Lote.
-// - Funcionalidad para registrar Lotes Externos (Paso 2.2).
-// - Nuevo tipo de evento de trazabilidad 'loss_theft' (Paso 2.3).
-// Se han revisado y consolidado todos los cambios para asegurar la integridad del archivo.
-
+// This version includes all developed functionalities, consolidated and updated:
+// - Product Type field in Add/Edit Batch dialog.
+// - NewProductType field in Process Batch dialog.
+// - Register External Batches (Paso 2.2 for Health Canada compliance).
+// - New traceability event type 'loss_theft' (Paso 2.3).
+// - 'is_packaged' boolean field in the Add/Edit Batch dialog and displayed in the list.
+// - 'units' field (Unit of Measure) in the Add/Edit Batch and External Batch forms.
+// - FIX: Addressed TypeError in DataGrid valueGetter for cultivation_area_name with more robust checks.
+// - FIX: Corrected logic for current_stage_name in DataGrid with more robust checks.
+// - FIX: Implemented Tenant ID handling for Global Admin when fetching /tenant-members.
+// - FIX: Ensured facility_id is sent in batch processing payload and refined quantity validation.
+// - FIX: Guaranteed 'processed_quantity' is always sent as a valid number in the process batch payload.
+// - FIX: Corrected the useState initialization for 'confirmDialogData' to resolve 'is not iterable' error.
+// - FIX: Corrected payload keys in handleProcessBatch to match Laravel's camelCase validation rules.
+// - FIX: Added facility_id to the payload for batch processing to resolve NOT NULL constraint violation in traceability events.
+// - FIX: Corrected typo in handleCloseRegisterEventEventDialog to handleCloseRegisterEventDialog.
+// - INTEGRATION: Integrated frontend with Laravel API for Traceability Events (fetch and store).
+// - NEW: Added inventory adjustment functionality with sub_location field
+// All UI texts and messages are translated to English.
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { api } from '../App'; // Asegúrate de que esta importación sea correcta
@@ -13,7 +25,7 @@ import {
   Box, Typography, Button, CircularProgress, Snackbar, Alert,
   TextField, Paper, Divider, IconButton, FormControl, InputLabel, Select, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  List, ListItem, ListItemText, Grid,
+  List, ListItem, ListItemText, Grid, Chip, FormControlLabel, Checkbox, ListItemIcon // Import Checkbox, FormControlLabel, Checkbox, ListItemIcon
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
@@ -23,17 +35,19 @@ import EcoIcon from '@mui/icons-material/Agriculture'; // Icono para evento de c
 import HarvestIcon from '@mui/icons-material/LocalFlorist'; // Icono para cosecha (usando flor)
 import ScienceIcon from '@mui/icons-material/Science'; // Icono para muestreo
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'; // Icono para destrucción
-import InventoryIcon from '@mui/icons-material/Inventory'; // Icono principal para lotes
-import EditIcon from '@mui/icons-material/Edit'; // Icono para editar
-import DeleteIcon from '@mui/icons-material/Delete'; // Icono para eliminar
-import VisibilityIcon from '@mui/icons-material/Visibility'; // Icono para ver detalles
-import CallSplitIcon from '@mui/icons-material/CallSplit'; // Icono para dividir lote
-import AutorenewIcon from '@mui/icons-material/Autorenew'; // Icono para procesar lote (transformación)
-import LocalShippingIcon from '@mui/icons-material/LocalShipping'; // Icono para lotes externos/recibidos
-import WarningIcon from '@mui/icons-material/Warning'; // NUEVO: Icono para pérdida/robo
-
-// Importar DataGrid y componentes individuales para la Toolbar según la documentación
-// Asumiendo compatibilidad con Data Grid MUI X v8.8.0
+import InventoryIcon from '@mui/icons-material/Inventory'; // Main icon for batches
+import EditIcon from '@mui/icons-material/Edit'; // Icono para edit
+import DeleteIcon from '@mui/icons-material/Delete'; // Icono para delete
+import VisibilityIcon from '@mui/icons-material/Visibility'; // Icono para view details
+import CallSplitIcon from '@mui/icons-material/CallSplit'; // Icono para split batch
+import TransformIcon from '@mui/icons-material/Transform'; // Icono para process batch (used AutorenewIcon previously, TransformIcon is more fitting)
+import SearchIcon from '@mui/icons-material/Search'; // Icono para search
+import FilterListIcon from '@mui/icons-material/FilterList'; // Icono para filter
+import ClearIcon from '@mui/icons-material/Clear'; // Icono para clear filter
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline'; // Icono para Loss/Theft
+import LocalShippingIcon from '@mui/icons-material/LocalShipping'; // Icono para external batches
+import AddBoxIcon from '@mui/icons-material/AddBox'; // Icono para ajuste de inventario
+// Import DataGrid and individual components for the Toolbar as per documentation
 import {
   DataGrid,
   GridToolbarContainer,
@@ -42,47 +56,59 @@ import {
   GridToolbarDensitySelector,
   GridToolbarExport,
   GridToolbarQuickFilter,
-} from '@mui/x-data-grid';
+} from '@mui/x-data-grid'; // Import the custom hook for facility operator logic
+import useFacilityOperator from '../hooks/useFacilityOperator';
 
-// --- Constantes para Mensajes y Textos ---
+// --- Constants for UI Text and Labels ---
 const SNACK_MESSAGES = {
   FACILITIES_ERROR: 'Error loading facilities.',
   BATCHES_ERROR: 'Error loading batches.',
-  STAGES_ERROR: 'Error loading stages.', // Needed for cultivation area selector
-  CULTIVATION_AREAS_ERROR: 'Error loading cultivation areas.', // Needed for cultivation area selector
+  STAGES_ERROR: 'Error loading stages.',
+  CULTIVATION_AREAS_ERROR: 'Error loading cultivation areas.',
   TENANT_ID_MISSING: 'Could not determine Tenant ID.',
   PERMISSION_DENIED: 'You do not have permission to perform this action.',
   VALIDATION_ERROR: 'Validation error:',
   INVALID_DATA: 'Invalid data:',
-  EVENT_REGISTERED_SUCCESS: 'Traceability event successfully registered (simulated).',
+  EVENT_REGISTERED_SUCCESS: 'Traceability event successfully registered.',
   BATCH_CREATED: 'Batch created successfully.',
   BATCH_UPDATED: 'Batch updated successfully.',
   BATCH_DELETED: 'Batch deleted successfully.',
-  BATCH_SPLIT_SUCCESS: 'Batch successfully split.', // New message
-  BATCH_SPLIT_ERROR: 'Error splitting the batch.', // New message
+  BATCH_SPLIT_SUCCESS: 'Batch successfully split.',
+  BATCH_SPLIT_ERROR: 'Error splitting the batch.',
   BATCH_NAME_REQUIRED: 'Batch name is required.',
   BATCH_UNITS_REQUIRED: 'Current batch units are required.',
   BATCH_END_TYPE_REQUIRED: 'Batch end type is required.',
   BATCH_VARIETY_REQUIRED: 'Batch variety is required.',
   BATCH_AREA_REQUIRED: 'You must select a cultivation area for the batch.',
   CANNOT_DELETE_BATCH_WITH_EVENTS: 'Cannot delete batch: It has associated traceability events.',
-  SPLIT_QUANTITY_INVALID: 'The split quantity must be greater than 0 and less than the current batch units.', // New
-  NEW_BATCH_NAME_REQUIRED: 'New batch name is required.', // New
-  DESTINATION_AREA_REQUIRED: 'You must select a destination cultivation area for the new batch.', // New
-  BATCH_ORIGIN_TYPE_REQUIRED: 'Batch origin type is required.', // New
-  BATCH_PRODUCT_TYPE_REQUIRED: 'Batch product type is required.', // NEW
-  BATCH_PROCESSED_SUCCESS: 'Batch processed successfully.', // New
-  BATCH_PROCESSED_ERROR: 'Error processing the batch.', // New
-  PROCESSED_QUANTITY_INVALID: 'Processed quantity must be a valid number, not negative, and not greater than current units.', // New
-  PROCESS_METHOD_REQUIRED: 'Processing method is required.', // New
-  NEW_PRODUCT_TYPE_REQUIRED: 'New product type is required.', // NEW
-  EXTERNAL_BATCH_CREATED: 'External batch successfully registered.', // NEW
-  EXTERNAL_BATCH_ERROR: 'Error registering external batch:', // NEW
-  LOSS_THEFT_QUANTITY_REQUIRED: 'Loss/theft quantity is required.', // NEW
-  LOSS_THEFT_UNIT_REQUIRED: 'Loss/theft unit is required.', // NEW
-  LOSS_THEFT_REASON_REQUIRED: 'Loss/theft reason is required.', // NEW
+  SPLIT_QUANTITY_INVALID: 'The split quantity must be greater than 0 and less than the current batch units.',
+  NEW_BATCH_NAME_REQUIRED: 'New batch name is required.',
+  DESTINATION_AREA_REQUIRED: 'You must select a destination cultivation area for the new batch.',
+  BATCH_ORIGIN_TYPE_REQUIRED: 'Batch origin type is required.',
+  BATCH_PRODUCT_TYPE_REQUIRED: 'Batch product type is required.',
+  BATCH_PROCESSED_SUCCESS: 'Batch processed successfully.',
+  BATCH_PROCESSED_ERROR: 'Error processing the batch.',
+  PROCESSED_QUANTITY_INVALID: 'Processed quantity must be a valid number, greater than 0, and not greater than current units.',
+  PROCESS_METHOD_REQUIRED: 'Processing method is required.',
+  NEW_PRODUCT_TYPE_REQUIRED: 'New product type is required.',
+  EXTERNAL_BATCH_CREATED: 'External batch successfully registered.',
+  EXTERNAL_BATCH_ERROR: 'Error registering external batch:',
+  LOSS_THEFT_QUANTITY_REQUIRED: 'Loss/theft quantity is required.',
+  LOSS_THEFT_UNIT_REQUIRED: 'Loss/theft unit is required.',
+  LOSS_THEFT_REASON_REQUIRED: 'Loss/theft reason is required.',
+  EVENT_TYPE_REQUIRED: "Event type is required.",
+  EVENT_DATE_REQUIRED: "Event date is required.",
+  EVENT_BATCH_REQUIRED: "Batch for event is required.",
+  EVENT_NEW_LOCATION_REQUIRED: "New location is required for movement event.",
+  EVENT_HARVEST_QUANTITY_REQUIRED: "Harvest quantity is required.",
+  EVENT_SAMPLING_QUANTITY_REQUIRED: "Sampling quantity is required.",
+  EVENT_DESTRUCTION_QUANTITY_REQUIRED: "Destruction quantity is required.",
+  BATCH_UNIT_REQUIRED: "Batch unit of measure is required.",
+  // NEW: Mensajes para ajuste de inventario
+  INVENTORY_ADJUSTMENT_SUCCESS: "Inventory adjustment registered successfully.",
+  INVENTORY_ADJUSTMENT_ERROR: "Error registering inventory adjustment.",
+  INVENTORY_ADJUSTMENT_REQUIRED: "All adjustment fields are required.",
 };
-
 
 const DIALOG_TITLES = {
   ADD_BATCH: 'Add New Batch',
@@ -90,11 +116,12 @@ const DIALOG_TITLES = {
   BATCH_DETAIL: 'Batch Details:',
   REGISTER_EVENT: 'Register Traceability Event',
   CONFIRM_BATCH_DELETION: 'Confirm Batch Deletion',
-  SPLIT_BATCH: 'Split Batch', // New title
-  PROCESS_BATCH: 'Process Batch', // New title
-  REGISTER_EXTERNAL_BATCH: 'Register External Batch', // NEW
+  SPLIT_BATCH: 'Split Batch',
+  PROCESS_BATCH: 'Process Batch',
+  REGISTER_EXTERNAL_BATCH: 'Register External Batch',
+  // NEW: Título para ajuste de inventario
+  INVENTORY_ADJUSTMENT: 'Inventory Adjustment',
 };
-
 const BUTTON_LABELS = {
   CANCEL: 'Cancel',
   CONFIRM: 'Confirm',
@@ -107,17 +134,18 @@ const BUTTON_LABELS = {
   REGISTER_HARVEST: 'Register Harvest',
   REGISTER_SAMPLING: 'Register Sampling',
   REGISTER_DESTRUCTION: 'Register Destruction',
-  REGISTER_LOSS_THEFT: 'Register Loss/Theft', // NEW
+  REGISTER_LOSS_THEFT: 'Register Loss/Theft',
   REGISTER: 'Register',
   VIEW_DETAILS: 'View Details',
   DELETE: 'Delete',
   EDIT: 'Edit',
-  SPLIT_BATCH: 'Split Batch', // New label
-  CREATE_NEW_BATCH: 'Create New Batch', // For split dialog
-  PROCESS: 'Process', // New label
-  REGISTER_EXTERNAL_BATCH: 'Register External Batch', // NEW
+  SPLIT_BATCH: 'Split Batch',
+  CREATE_NEW_BATCH: 'Create New Batch',
+  PROCESS: 'Process',
+  REGISTER_EXTERNAL_BATCH: 'Register External Batch',
+  // NEW: Etiqueta para ajuste de inventario
+  REGISTER_ADJUSTMENT: 'Register Adjustment',
 };
-
 
 // Health Canada Product Types (simplified for initial implementation)
 const HEALTH_CANADA_PRODUCT_TYPES = [
@@ -134,8 +162,28 @@ const HEALTH_CANADA_PRODUCT_TYPES = [
   { value: 'Topicals', label: 'Topicals' },
   { value: 'Other', label: 'Other' },
 ];
-
-// --- Componente de Diálogo de Confirmación Genérico ---
+const UNIT_OPTIONS = ['g', 'kg', 'units', 'ml', 'L']; // Define unit options
+const EVENT_TYPES = [
+  { value: 'movement', label: 'Movement', icon: TrendingUpIcon },
+  { value: 'cultivation', label: 'Cultivation', icon: EcoIcon },
+  { value: 'harvest', label: 'Harvest', icon: HarvestIcon },
+  { value: 'sampling', label: 'Sampling', icon: ScienceIcon },
+  { value: 'destruction', label: 'Destruction', icon: DeleteForeverIcon },
+  { value: 'loss_theft', label: 'Loss/Theft', icon: RemoveCircleOutlineIcon },
+  { value: 'processing', label: 'Processing', icon: TransformIcon },
+  // NEW: Tipo de evento para ajuste de inventario
+  { value: 'inventory_adjustment', label: 'Inventory Adjustment', icon: AddBoxIcon },
+];
+// Helper to format date to YYYY-MM-DD
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+// --- Confirmation Dialog Component ---
 const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
   return (
     <Dialog
@@ -162,7 +210,6 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
     </Dialog>
   );
 };
-
 ConfirmationDialog.propTypes = {
   open: PropTypes.bool.isRequired,
   title: PropTypes.string.isRequired,
@@ -170,38 +217,32 @@ ConfirmationDialog.propTypes = {
   onConfirm: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,
 };
-
-// --- Componente de Toolbar Personalizada para DataGrid (según docs) ---
+// --- Custom Toolbar Component for DataGrid ---
 function CustomDataGridToolbar() {
   return (
     <GridToolbarContainer
       sx={{
-        // Fondo oscuro para la toolbar, con !important para forzar el estilo
         bgcolor: '#3a506b !important',
-        // Color de texto claro para la toolbar, con !important
         color: '#e2e8f0 !important',
         borderBottom: '1px solid #4a5568',
         padding: '8px',
         borderRadius: '4px 4px 0 0',
-        minHeight: '48px', // Asegurar altura mínima para la toolbar
+        minHeight: '48px',
         display: 'flex',
-        justifyContent: 'space-between', // Para alinear los botones a la izquierda y el filtro a la derecha
+        justifyContent: 'space-between',
         alignItems: 'center',
-        flexWrap: 'wrap', // Permite que los elementos se envuelvan en pantallas pequeñas
-        gap: '8px', // Espacio entre elementos de la toolbar
-
-        // Estilos para los botones (GridToolbarButton) dentro de la toolbar
+        flexWrap: 'wrap',
+        gap: '8px',
         '& .MuiButtonBase-root': {
-          color: '#e2e8f0 !important', // Color de los iconos y texto de los botones
+          color: '#e2e8f0 !important',
           '&:hover': {
-            bgcolor: 'rgba(255,255,255,0.1)', // Efecto hover
+            bgcolor: 'rgba(255,255,255,0.1)',
           },
         },
-        // Estilos para el campo de búsqueda (GridToolbarQuickFilter)
-        '& .MuiInputBase-root': { // Contenedor del input (TextField)
-          color: '#e2e8f0 !important', // Color del texto de entrada
+        '& .MuiInputBase-root': {
+          color: '#e2e8f0 !important',
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(255,255,255,0.5) !important', // Borde del input
+            borderColor: 'rgba(255,255,255,0.5) !important',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: 'rgba(255,255,255,0.8) !important',
@@ -210,13 +251,12 @@ function CustomDataGridToolbar() {
             borderColor: '#fff !important',
           },
         },
-        '& .MuiInputBase-input': { // El input real
-          color: '#e2e8f0 !important', // Color del texto de entrada real
+        '& .MuiInputBase-input': {
+          color: '#e2e8f0 !important',
         },
-        '& .MuiInputLabel-root': { // La etiqueta flotante
-          color: 'rgba(255,255,255,0.7) !important', // Etiqueta del input
+        '& .MuiInputLabel-root': {
+          color: 'rgba(255,255,255,0.7) !important',
         },
-        // Estilos para los iconos dentro de la toolbar (ej. icono de búsqueda, filtro)
         '& .MuiSvgIcon-root': {
           color: '#e2e8f0 !important',
         },
@@ -228,103 +268,116 @@ function CustomDataGridToolbar() {
         <GridToolbarDensitySelector />
         <GridToolbarExport />
       </Box>
-      {/* GridToolbarQuickFilter con estilos específicos para visibilidad */}
       <GridToolbarQuickFilter
         sx={{
-          width: { xs: '100%', sm: 'auto' }, // Ancho responsivo
-          minWidth: '150px', // Asegurar que no sea demasiado pequeño
-          ml: { sm: 2 }, // Margen a la izquierda para separación en pantallas grandes
-          // Los estilos para el input interno ya están definidos en GridToolbarContainer,
-          // pero se pueden sobrescribir aquí si es necesario para mayor especificidad.
+          width: { xs: '100%', sm: 'auto' },
+          minWidth: '150px',
+          ml: { sm: 2 },
         }}
       />
     </GridToolbarContainer>
   );
 }
 
-
-const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, setParentSnack }) => {
+const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, setParentSnack, hasPermission }) => {
   const [batches, setBatches] = useState([]);
-  const [facilities, setFacilities] = useState([]); // Para el selector de instalaciones
-  const [selectedFacilityId, setSelectedFacilityId] = useState(''); // Estado para el filtro de instalaciones
-  const [cultivationAreas, setCultivationAreas] = useState([]); // Para el selector en el diálogo de lote
-  const [stages, setStages] = useState([]); // Para obtener el nombre de la etapa de un área
+  const [facilities, setFacilities] = useState([]);
+  const [selectedFacilityId, setSelectedFacilityId] = useState('');
+  const [cultivationAreas, setCultivationAreas] = useState([]);
+  const [stages, setStages] = useState([]);
+  const [users, setUsers] = useState([]); // For event registration (e.g., responsible user)
   const [loading, setLoading] = useState(true);
-
-  // Estados para el diálogo de añadir/editar lote
+  // Snackbar state (using parent snack for consistency)
+  const showSnack = useCallback((message, severity = 'success') => {
+    setParentSnack(message, severity);
+  }, [setParentSnack]);
+  // Add/Edit Batch Dialog States
   const [openBatchDialog, setOpenBatchDialog] = useState(false);
   const [editingBatch, setEditingBatch] = useState(null);
   const [batchName, setBatchName] = useState('');
   const [batchCurrentUnits, setBatchCurrentUnits] = useState('');
+  const [batchUnit, setBatchUnit] = useState('g'); // NEW: State for batch unit, default to 'g'
   const [batchEndType, setBatchEndType] = useState('');
   const [batchVariety, setBatchVariety] = useState('');
-  const [batchProductType, setBatchProductType] = useState(''); // NUEVO: Estado para product_type
+  const [batchProductType, setBatchProductType] = useState('');
   const [batchProjectedYield, setBatchProjectedYield] = useState('');
   const [batchAdvanceToHarvestingOn, setBatchAdvanceToHarvestingOn] = useState('');
-  const [batchCultivationAreaId, setBatchCultivationAreaId] = useState(''); // Nueva propiedad para el área de cultivo
+  const [batchCultivationAreaId, setBatchCultivationAreaId] = useState('');
   const [batchDialogLoading, setBatchDialogLoading] = useState(false);
-  // NUEVOS ESTADOS para el origen del lote
-  const [batchOriginType, setBatchOriginType] = useState('');
+  const [batchOriginType, setBatchOriginType] = useState('internal'); // Default to internal
   const [batchOriginDetails, setBatchOriginDetails] = useState('');
+  const [isPackaged, setIsPackaged] = useState(false); // State for is_packaged
+  const [batchSubLocation, setBatchSubLocation] = useState(''); // NEW: State for sub_location
 
-
-  // Estados para el diálogo de detalle de lote/trazabilidad
+  // Batch Detail/Traceability States
   const [openBatchDetailDialog, setOpenBatchDetailDialog] = useState(false);
   const [currentBatchDetail, setCurrentBatchDetail] = useState(null);
   const [traceabilityEvents, setTraceabilityEvents] = useState([]);
-  // FIX: Declarar selectedBatchForTraceability aquí
-  const [selectedBatchForTraceability, setSelectedBatchForTraceability] = useState('all');
-
-
-  // Estados para el diálogo de registro de eventos
+  const [selectedBatchForTraceability, setSelectedBatchForTraceability] = useState('all'); // Filter for traceability events
+  // Traceability Event Dialog States
   const [openRegisterEventDialog, setOpenRegisterEventDialog] = useState(false);
-  const [currentEventType, setCurrentEventType] = useState(''); // 'movement', 'cultivation', 'harvest', 'sampling', 'destruction', 'loss_theft'
-  const [eventBatchId, setEventBatchId] = useState(''); // Lote al que se aplica el evento
+  const [currentEventType, setCurrentEventType] = useState('');
+  const [eventBatchId, setEventBatchId] = useState('');
   const [eventQuantity, setEventQuantity] = useState('');
   const [eventUnit, setEventUnit] = useState('');
-  const [eventDescription, setEventDescription] = useState('');
-  const [eventFromLocation, setEventFromLocation] = useState(''); // Para movimientos
-  const [eventToLocation, setEventToLocation] = useState('');     // Para movimientos
-  const [eventMethod, setEventMethod] = useState('');             // Para destrucción / tipo de cultivo
-  const [eventReason, setEventReason] = useState('');             // Para destrucción / propósito muestreo / pérdida-robo
-  const [eventNewBatchId, setEventNewBatchId] = useState('');     // Para cosecha
+  const [eventDescription, setEventDescription] = useState(''); // Used for notes/description in DB
+  const [eventFromLocation, setEventFromLocation] = useState('');
+  const [eventToLocation, setEventToLocation] = useState('');
+  const [eventMethod, setEventMethod] = useState('');
+  const [eventReason, setEventReason] = useState('');
+  const [eventNewBatchId, setEventNewBatchId] = useState(''); // For harvest
+  const [eventResponsibleUserId, setEventResponsibleUserId] = useState(''); // Responsible user for event
+  const [eventDialogLoading, setEventDialogLoading] = useState(false);
 
-  // NUEVOS ESTADOS para el diálogo de dividir lote
+  // Split Batch Dialog States
   const [openSplitBatchDialog, setOpenSplitBatchDialog] = useState(false);
   const [batchToSplit, setBatchToSplit] = useState(null);
   const [splitQuantity, setSplitQuantity] = useState('');
   const [newSplitBatchName, setNewSplitBatchName] = useState('');
   const [splitBatchCultivationAreaId, setSplitBatchCultivationAreaId] = useState('');
+  const [newSplitBatchProductType, setNewSplitBatchProductType] = useState(''); // NEW: Product type for new split batch
   const [splitBatchDialogLoading, setSplitBatchDialogLoading] = useState(false);
-
-  // NUEVOS ESTADOS para el diálogo de procesar lote
+  // Process Batch Dialog States
   const [openProcessBatchDialog, setOpenProcessBatchDialog] = useState(false);
   const [batchToProcess, setBatchToProcess] = useState(null);
   const [processedQuantity, setProcessedQuantity] = useState('');
   const [processMethod, setProcessMethod] = useState('');
-  const [processNotes, setProcessNotes] = useState('');
-  const [newProductType, setNewProductType] = useState(''); // NUEVO: Estado para el nuevo tipo de producto
+  const [processNotes, setProcessNotes] = useState(''); // For notes in processing
+  const [newProductType, setNewProductType] = useState('');
   const [processBatchDialogLoading, setProcessBatchDialogLoading] = useState(false);
-
-  // NUEVOS ESTADOS para el diálogo de registrar lote externo
+  // External Batch Dialog States
   const [openExternalBatchDialog, setOpenExternalBatchDialog] = useState(false);
   const [externalBatchName, setExternalBatchName] = useState('');
   const [externalBatchUnits, setExternalBatchUnits] = useState('');
+  const [externalBatchUnit, setExternalBatchUnit] = useState('g'); // NEW: State for external batch unit, default to 'g'
   const [externalBatchProductType, setExternalBatchProductType] = useState('');
   const [externalBatchVariety, setExternalBatchVariety] = useState('');
   const [externalBatchOriginDetails, setExternalBatchOriginDetails] = useState('');
   const [externalBatchCultivationAreaId, setExternalBatchCultivationAreaId] = useState('');
   const [externalBatchDialogLoading, setExternalBatchDialogLoading] = useState(false);
 
-
-  // Estados para el diálogo de confirmación
+  // Confirmation Dialog States
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  // FIX: Corrected useState initialization for confirmDialogData
   const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
+  
+  // -------------------- NEW: ESTADOS PARA AJUSTE DE INVENTARIO --------------------
+  const [openAdjustmentDialog, setOpenAdjustmentDialog] = useState(false);
+  const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
+  const [adjustmentUnit, setAdjustmentUnit] = useState('g');
+  const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [selectedBatchForAdjustment, setSelectedBatchForAdjustment] = useState(null);
+  const [adjustmentDialogLoading, setAdjustmentDialogLoading] = useState(false);
+  // ------------------------------------------------------------------------
 
-  const isFacilityOperator = !!userFacilityId;
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterProductType, setFilterProductType] = useState("");
+  const [filterCultivationAreaId, setFilterCultivationAreaId] = useState("");
+  
+  const isFacilityOperator = useFacilityOperator(hasPermission);
 
-  // --- Funciones de Fetching ---
-
+  // --- Data Fetching Functions ---
   const fetchFacilities = useCallback(async () => {
     try {
       const response = await api.get('/facilities');
@@ -333,19 +386,17 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         : Array.isArray(response.data?.data)
         ? response.data.data
         : [];
-
       if (isFacilityOperator && userFacilityId) {
         fetchedFacilities = fetchedFacilities.filter(f => f.id === userFacilityId);
       }
-      console.log('BatchManagementPage: Fetched Facilities:', fetchedFacilities); // Log para depuración
+      console.log('BatchManagementPage: Fetched Facilities:', fetchedFacilities);
       return fetchedFacilities;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching facilities:', error);
-      setParentSnack(SNACK_MESSAGES.FACILITIES_ERROR, 'error');
+      showSnack(SNACK_MESSAGES.FACILITIES_ERROR, 'error');
       return [];
     }
-  }, [setParentSnack, isFacilityOperator, userFacilityId]);
-
+  }, [showSnack, isFacilityOperator, userFacilityId]);
   const fetchCultivationAreas = useCallback(async (currentSelectedFacilityId) => {
     if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
       return [];
@@ -355,7 +406,6 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         setCultivationAreas([]);
         return [];
     }
-
     try {
       let url = '/cultivation-areas';
       if (currentSelectedFacilityId) {
@@ -371,11 +421,10 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       return fetchedAreas;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching cultivation areas:', error);
-      setParentSnack(SNACK_MESSAGES.CULTIVATION_AREAS_ERROR, 'error');
+      showSnack(SNACK_MESSAGES.CULTIVATION_AREAS_ERROR, 'error');
       return [];
     }
-  }, [tenantId, isAppReady, setParentSnack, isGlobalAdmin, isFacilityOperator]);
-
+  }, [tenantId, isAppReady, showSnack, isGlobalAdmin, isFacilityOperator]);
   const fetchStages = useCallback(async () => {
     try {
       const response = await api.get('/stages');
@@ -388,302 +437,347 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       return fetchedStages;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching stages:', error);
-      setParentSnack(SNACK_MESSAGES.STAGES_ERROR, 'error');
+      showSnack(SNACK_MESSAGES.STAGES_ERROR, 'error');
       return [];
     }
-  }, [setParentSnack]);
+  }, [showSnack]);
+  const fetchUsers = useCallback(async (currentSelectedFacilityId) => {
+    if (!isAppReady || (!tenantId && !isGlobalAdmin)) return;
+    const headers = {};
+    let effectiveTenantId = null;
+    if (isGlobalAdmin) {
+        if (currentSelectedFacilityId) {
+            const selectedFac = facilities.find(f => f.id === currentSelectedFacilityId);
+            if (selectedFac && selectedFac.tenant_id) {
+                effectiveTenantId = String(selectedFac.tenant_id);
+            } else {
+                console.warn('fetchUsers: Global Admin - Selected facility has no valid Tenant ID. Cannot fetch users.');
+                setUsers([]);
+                return;
+            }
+        } else {
+            console.log('fetchUsers: Global Admin, no facility selected. Not fetching tenant members.');
+            setUsers([]);
+            return;
+        }
+    } else if (tenantId) {
+        effectiveTenantId = String(tenantId);
+    } else {
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        setUsers([]);
+        return;
+    }
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    try {
+      const response = await api.get('/tenant-members', { headers });
+      setUsers(Array.isArray(response.data) ? response.data : response.data.data || []);
+    } catch (error) {
+      console.error("Error fetching users:", error.response?.data || error.message);
+      showSnack("Error fetching users: " + (error.response?.data?.message || error.message), "error");
+      setUsers([]);
+    }
+  }, [isAppReady, tenantId, isGlobalAdmin, showSnack, facilities]);
 
   const fetchBatches = useCallback(async (currentSelectedFacilityId) => {
     if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
       setBatches([]);
       return;
     }
-
     if (!currentSelectedFacilityId && !isFacilityOperator && isGlobalAdmin) {
       console.log('BatchManagementPage: Global Admin, no facility selected. Skipping batch fetch.');
       setBatches([]);
       setLoading(false);
       return;
     }
-
-    setLoading(true); // Activa el loading antes de la llamada API
+    setLoading(true);
     const headers = {};
     let effectiveTenantId = null;
-
     if (isGlobalAdmin) {
         if (currentSelectedFacilityId) {
             const selectedFac = facilities.find(f => f.id === currentSelectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
-                console.log('fetchBatches: Global Admin, using effectiveTenantId from selected facility:', effectiveTenantId); // Log para depuración
+                console.log('fetchBatches: Global Admin, using effectiveTenantId from selected facility:', effectiveTenantId);
             } else {
-                setParentSnack('Error: Como Super Admin, la instalación seleccionada no tiene un Tenant ID válido para cargar lotes.', 'error');
-                setLoading(false); // Desactiva el loading en caso de error
+                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to load batches.', 'error');
+                setLoading(false);
                 setBatches([]);
                 return;
             }
         } else {
-            // Global Admin sin instalación seleccionada, no debería cargar lotes
-            console.log('fetchBatches: Global Admin, no facility selected. Not fetching batches.'); // Log para depuración
+            console.log('fetchBatches: Global Admin, no facility selected. Not fetching batches.');
             setBatches([]);
             setLoading(false);
             return;
         }
     } else if (tenantId) {
         effectiveTenantId = String(tenantId);
-        console.log('fetchBatches: Tenant user, using effectiveTenantId from tenantId prop:', effectiveTenantId); // Log para depuración
+        console.log('fetchBatches: Tenant user, using effectiveTenantId from tenantId prop:', effectiveTenantId);
     } else {
-        setParentSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
         setLoading(false);
         setBatches([]);
         return;
     }
-
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
-
     try {
       const response = await api.get('/batches', { headers });
       setBatches(response.data);
     } catch (error) {
       console.error('BatchManagementPage: Error fetching batches:', error.response?.data || error.message);
-      setParentSnack(SNACK_MESSAGES.BATCHES_ERROR, 'error');
+      showSnack(SNACK_MESSAGES.BATCHES_ERROR, 'error');
       setBatches([]);
     } finally {
-      setLoading(false); // Desactiva el loading al finalizar la llamada (éxito o error)
-    }
-  }, [isAppReady, tenantId, isGlobalAdmin, setParentSnack, isFacilityOperator, facilities]);
-
-  // Mock data for traceability events (replace with API call later)
-  const fetchTraceabilityEvents = useCallback(async (batchId) => {
-    // Simula una llamada API
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const mockEvents = [
-          { id: 1, date: '2025-07-01 08:00', type: 'Entrada de Lote', batch_id: 1, details: 'Lote transferido desde Propagación.', user: 'Eduard Berrio' },
-          { id: 2, date: '2025-07-03 10:30', type: 'Aplicación Nutriente', batch_id: 1, details: 'Aplicación de Nutriente X (50g).', user: 'Juan Pérez' },
-          { id: 3, date: '2025-07-05 02:00', type: 'Riego', batch_id: 2, details: 'Riego general del área.', user: 'Ana Gómez' },
-          { id: 4, date: '2025-07-08 09:00', type: 'Muestreo', batch_id: 1, details: 'Muestra tomada para análisis de THC.', user: 'Eduard Berrio' },
-          { id: 5, date: '2025-07-10 03:00', type: 'Salida de Lote', batch_id: 1, details: 'Lote transferido a Vegetación (Room3).', user: 'Juan Pérez' },
-          { id: 6, date: '2025-07-15 11:00', type: 'Cosecha', batch_id: 2, details: 'Cosecha completada. Peso húmedo: 2.5 kg.', user: 'Ana Gómez' },
-          { id: 7, date: '2025-07-15 11:30', type: 'Salida de Lote', batch_id: 2, details: 'Lote de cosecha transferido a Área de Secado.', user: 'Ana Gómez' },
-          { id: 8, date: '2025-07-18 14:00', type: 'Pérdida/Robo', batch_id: 1, details: '10g perdidos durante el traslado.', user: 'Eduard Berrio' }, // Mock para el nuevo evento
-        ];
-        // Filtra por lote si se selecciona uno
-        const filteredEvents = selectedBatchForTraceability === 'all'
-          ? mockEvents.filter(event => event.batch_id === batchId) // Si es 'all', muestra todos los eventos del lote actual
-          : mockEvents.filter(event => event.batch_id === batchId && event.batch_id === selectedBatchForTraceability); // Si se selecciona un lote específico, filtra por ese
-        resolve(filteredEvents);
-      }, 500); // Simula un delay de red
-    });
-  }, [selectedBatchForTraceability]); // Añadir selectedBatchForTraceability como dependencia
-
-
-  // --- Effects de Carga Inicial y Re-carga ---
-
-  useEffect(() => {
-    const loadInitialData = async () => {
-      if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true); // Activa el loading para la carga inicial
-      try {
-        const fetchedFacs = await fetchFacilities();
-        setFacilities(fetchedFacs); // Asegurarse de que facilities se guarde en el estado
-        await fetchStages(); // Cargar etapas al inicio
-        let initialFacilityId = ''; // Default to empty
-
-        if (isFacilityOperator && userFacilityId) {
-          initialFacilityId = userFacilityId;
-        } else if (isGlobalAdmin) {
-          // Para Super Admin, buscar la primera instalación que tenga un tenant_id
-          const facilityWithTenantId = fetchedFacs.find(f => f.tenant_id);
-          if (facilityWithTenantId) {
-            initialFacilityId = facilityWithTenantId.id;
-            console.log('BatchManagementPage: Global Admin - Initial facility with tenant_id:', initialFacilityId);
-          } else {
-            console.warn('BatchManagementPage: Global Admin - No facilities found with a valid tenant_id. Displaying message.');
-            // Si no hay instalaciones con tenant_id, initialFacilityId se queda vacío.
-            // fetchBatches y fetchCultivationAreas lo manejarán.
-          }
-        } else if (fetchedFacs.length > 0) {
-          // Para usuarios de inquilino regular, usar la primera instalación si está disponible
-          initialFacilityId = fetchedFacs[0].id;
-        }
-        
-        setSelectedFacilityId(initialFacilityId);
-
-      } catch (error) {
-        console.error('BatchManagementPage: Error in initial data load:', error);
-        setParentSnack('Error al cargar datos iniciales de lotes.', 'error');
-        setLoading(false); // Desactiva el loading si hay un error en la carga inicial de facilities
-      }
-    };
-    loadInitialData();
-  }, [isAppReady, tenantId, isGlobalAdmin, fetchFacilities, userFacilityId, setParentSnack, fetchStages]);
-
-  // Este useEffect se encargará de cargar los lotes y áreas cada vez que
-  // selectedFacilityId cambie (ya sea por la carga inicial o por la selección del usuario).
-  useEffect(() => {
-    if (isAppReady && (tenantId || isGlobalAdmin)) {
-      if (selectedFacilityId) {
-        fetchBatches(selectedFacilityId);
-        fetchCultivationAreas(selectedFacilityId);
-      } else if (isGlobalAdmin) { // Si es global admin y no hay instalación seleccionada, limpiar datos
-        setBatches([]);
-        setCultivationAreas([]);
-        setLoading(false); // Desactiva el loading si no hay facility seleccionada para global admin
-      } else { // Usuario de inquilino sin selectedFacilityId (caso que no debería ocurrir si loadInitialData funciona bien)
-        setBatches([]);
-        setCultivationAreas([]);
-        setLoading(false); // Desactiva el loading
-      }
-    } else { // App no lista o sin contexto de inquilino/admin
       setLoading(false);
     }
-  }, [selectedFacilityId, isAppReady, tenantId, isGlobalAdmin, fetchBatches, fetchCultivationAreas]);
-
-
-  // --- Handlers para Lotes (CRUD) ---
-
-  const handleOpenBatchDialog = useCallback((batch = null) => {
-    setEditingBatch(batch);
-    setBatchName(batch ? batch.name : '');
-    setBatchCurrentUnits(batch ? batch.current_units : '');
-    setBatchEndType(batch ? batch.end_type : '');
-    setBatchVariety(batch ? batch.variety : '');
-    setBatchProductType(batch ? batch.product_type || '' : ''); // NUEVO: Inicializar product_type
-    setBatchProjectedYield(batch ? (batch.projected_yield || '') : '');
-    setBatchAdvanceToHarvestingOn(batch ? (batch.advance_to_harvesting_on ? new Date(batch.advance_to_harvesting_on).toISOString().split('T')[0] : '') : '');
-    setBatchCultivationAreaId(batch ? batch.cultivation_area_id : '');
-    // Inicializar los nuevos campos de origen
-    setBatchOriginType(batch ? batch.origin_type || '' : '');
-    setBatchOriginDetails(batch ? batch.origin_details || '' : '');
-    setOpenBatchDialog(true);
-    setBatchDialogLoading(false);
-  }, []);
-
-  const handleCloseBatchDialog = useCallback(() => {
-    setOpenBatchDialog(false);
-    setEditingBatch(null);
-    setBatchName('');
-    setBatchCurrentUnits('');
-    setBatchEndType('');
-    setBatchVariety('');
-    setBatchProductType(''); // Resetear
-    setBatchProjectedYield('');
-    setBatchAdvanceToHarvestingOn('');
-    setBatchCultivationAreaId('');
-    setBatchOriginType(''); // Resetear
-    setBatchOriginDetails(''); // Resetear
-    setBatchDialogLoading(false);
-  }, []);
-
-  const handleSaveBatch = async (e) => {
-    e.preventDefault();
-    if (!batchName.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_NAME_REQUIRED, 'warning'); return; }
-    if (batchCurrentUnits === '' || isNaN(parseInt(batchCurrentUnits))) { setParentSnack(SNACK_MESSAGES.BATCH_UNITS_REQUIRED, 'warning'); return; }
-    if (!batchEndType.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_END_TYPE_REQUIRED, 'warning'); return; }
-    if (!batchVariety.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_VARIETY_REQUIRED, 'warning'); return; }
-    if (!batchProductType.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_PRODUCT_TYPE_REQUIRED, 'warning'); return; } // NUEVO: Validar product_type
-    if (!batchCultivationAreaId) { setParentSnack(SNACK_MESSAGES.BATCH_AREA_REQUIRED, 'warning'); return; }
-    // Nueva validación para el tipo de origen
-    if (!batchOriginType.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_ORIGIN_TYPE_REQUIRED, 'warning'); return; }
-
-
-    setBatchDialogLoading(true);
+  }, [isAppReady, tenantId, isGlobalAdmin, showSnack, isFacilityOperator, facilities]);
+  // --- ACTUALIZACIÓN: FETCH DE EVENTOS DE TRAZABILIDAD DESDE LA API ---
+  const fetchTraceabilityEvents = useCallback(async (batchId) => {
+    if (!selectedFacilityId) {
+      console.warn('fetchTraceabilityEvents: No facility selected. Cannot fetch traceability events.');
+      return [];
+    }
     const headers = {};
     let effectiveTenantId = null;
-
     if (isGlobalAdmin) {
         if (selectedFacilityId) {
             const selectedFac = facilities.find(f => f.id === selectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
             } else {
-                setParentSnack('Error: Como Super Admin, la instalación seleccionada no tiene un inquilino válido para crear/editar lotes.', 'error');
+                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to load traceability events.', 'error');
+                return [];
+            }
+        } else {
+            console.warn('fetchTraceabilityEvents: Global Admin, no facility selected. Cannot fetch traceability events.');
+            return [];
+        }
+    } else if (tenantId) {
+        effectiveTenantId = String(tenantId);
+    } else {
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        return [];
+    }
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    try {
+      const response = await api.get('/traceability-events', {
+        headers,
+        params: {
+          batch_id: batchId,
+          facility_id: selectedFacilityId,
+        }
+      });
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      console.error('BatchManagementPage: Error fetching traceability events:', error.response?.data || error.message);
+      showSnack('Error loading traceability events: ' + (error.response?.data?.message || error.message), 'error');
+      return [];
+    }
+  }, [selectedFacilityId, isGlobalAdmin, tenantId, showSnack, facilities]);
+
+  // --- Initial Load and Re-load Effects ---
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const fetchedFacs = await fetchFacilities();
+        setFacilities(fetchedFacs);
+        await fetchStages();
+        let initialFacilityId = '';
+        if (isFacilityOperator && userFacilityId) {
+          initialFacilityId = userFacilityId;
+        } else if (isGlobalAdmin) {
+          const facilityWithTenantId = fetchedFacs.find(f => f.tenant_id);
+          if (facilityWithTenantId) {
+            initialFacilityId = facilityWithTenantId.id;
+            console.log('BatchManagementPage: Global Admin - Initial facility with tenant_id:', initialFacilityId);
+          } else {
+            console.warn('BatchManagementPage: Global Admin - No facilities found with a valid tenant_id. Displaying message.');
+          }
+        } else if (fetchedFacs.length > 0) {
+          initialFacilityId = fetchedFacs[0].id;
+        }
+        
+        setSelectedFacilityId(initialFacilityId);
+      } catch (error) {
+        console.error('BatchManagementPage: Error in initial data load:', error);
+        showSnack('Error loading initial batch data.', 'error');
+        setLoading(false);
+      }
+    };
+    loadInitialData();
+  }, [isAppReady, tenantId, isGlobalAdmin, fetchFacilities, userFacilityId, showSnack, fetchStages, isFacilityOperator]);
+  useEffect(() => {
+    if (isAppReady && (tenantId || isGlobalAdmin)) {
+      if (selectedFacilityId) {
+        fetchBatches(selectedFacilityId);
+        fetchCultivationAreas(selectedFacilityId);
+        fetchUsers(selectedFacilityId);
+      } else if (isGlobalAdmin) {
+        setBatches([]);
+        setCultivationAreas([]);
+        setUsers([]);
+        setLoading(false);
+      } else {
+        setBatches([]);
+        setCultivationAreas([]);
+        setUsers([]);
+        setLoading(false);
+      }
+    } else {
+      setLoading(false);
+    }
+  }, [selectedFacilityId, isAppReady, tenantId, isGlobalAdmin, fetchBatches, fetchCultivationAreas, fetchUsers]);
+
+  // --- Batch Handlers (CRUD) ---
+  const handleOpenBatchDialog = useCallback((batch = null) => {
+    setEditingBatch(batch);
+    setBatchName(batch ? batch.name : '');
+    setBatchCurrentUnits(batch ? batch.current_units : '');
+    setBatchUnit(batch ? batch.units || 'g' : 'g');
+    setBatchEndType(batch ? batch.end_type : '');
+    setBatchVariety(batch ? batch.variety : '');
+    setBatchProductType(batch ? batch.product_type || '' : '');
+    setBatchProjectedYield(batch ? (batch.projected_yield || '') : '');
+    setBatchAdvanceToHarvestingOn(batch ? (batch.advance_to_harvesting_on ? new Date(batch.advance_to_harvesting_on).toISOString().split('T')[0] : '') : '');
+    setBatchCultivationAreaId(batch ? batch.cultivation_area_id : '');
+    setBatchOriginType(batch ? batch.origin_type || 'internal' : 'internal');
+    setBatchOriginDetails(batch ? batch.origin_details || '' : '');
+    setIsPackaged(batch ? batch.is_packaged : false);
+    setBatchSubLocation(batch ? batch.sub_location || '' : ''); // NEW: Set sub_location
+    setOpenBatchDialog(true);
+    setBatchDialogLoading(false);
+    console.log('handleOpenBatchDialog: isFacilityOperator:', isFacilityOperator);
+  }, [isFacilityOperator]);
+  const handleCloseBatchDialog = useCallback(() => {
+    setOpenBatchDialog(false);
+    setEditingBatch(null);
+    setBatchName('');
+    setBatchCurrentUnits('');
+    setBatchUnit('g');
+    setBatchEndType('');
+    setBatchVariety('');
+    setBatchProductType('');
+    setBatchProjectedYield('');
+    setBatchAdvanceToHarvestingOn('');
+    setBatchCultivationAreaId('');
+    setBatchOriginType('internal');
+    setBatchOriginDetails('');
+    setIsPackaged(false);
+    setBatchSubLocation(''); // NEW: Reset sub_location
+    setBatchDialogLoading(false);
+  }, []);
+  const handleSaveBatch = async (e) => {
+    e.preventDefault();
+    if (!batchName.trim()) { showSnack(SNACK_MESSAGES.BATCH_NAME_REQUIRED, 'warning'); return; }
+    if (batchCurrentUnits === '' || isNaN(parseFloat(batchCurrentUnits))) { showSnack(SNACK_MESSAGES.BATCH_UNITS_REQUIRED, 'warning'); return; }
+    if (!batchUnit.trim()) { showSnack(SNACK_MESSAGES.BATCH_UNIT_REQUIRED, 'warning'); return; }
+    if (!batchEndType.trim()) { showSnack(SNACK_MESSAGES.BATCH_END_TYPE_REQUIRED, 'warning'); return; }
+    if (!batchVariety.trim()) { showSnack(SNACK_MESSAGES.BATCH_VARIETY_REQUIRED, 'warning'); return; }
+    if (!batchProductType.trim()) { showSnack(SNACK_MESSAGES.BATCH_PRODUCT_TYPE_REQUIRED, 'warning'); return; }
+    if (!batchCultivationAreaId) { showSnack(SNACK_MESSAGES.BATCH_AREA_REQUIRED, 'warning'); return; }
+    if (!batchOriginType.trim()) { showSnack(SNACK_MESSAGES.BATCH_ORIGIN_TYPE_REQUIRED, 'warning'); return; }
+    if (batchOriginType === 'external' && !batchOriginDetails.trim()) { showSnack("External origin details are required.", "warning"); return; }
+
+    setBatchDialogLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    if (isGlobalAdmin) {
+        if (selectedFacilityId) {
+            const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+            if (selectedFac && selectedFac.tenant_id) {
+                effectiveTenantId = String(selectedFac.tenant_id);
+            } else {
+                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to create/edit batches.', 'error');
                 setBatchDialogLoading(false);
                 return;
             }
         } else {
-            setParentSnack('Error: Como Super Admin, debe seleccionar una instalación para crear/editar lotes.', 'error');
+            showSnack('Error: As Super Admin, you must select a facility to create/edit batches.', 'error');
             setBatchDialogLoading(false);
             return;
         }
     } else if (tenantId) {
         effectiveTenantId = String(tenantId);
     } else {
-        setParentSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
         setBatchDialogLoading(false);
         return;
     }
-
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
-
     try {
       const batchData = {
         name: batchName,
-        current_units: parseInt(batchCurrentUnits, 10),
+        current_units: parseFloat(batchCurrentUnits),
+        units: batchUnit,
         end_type: batchEndType,
         variety: batchVariety,
-        product_type: batchProductType, // NUEVO: Incluir product_type
+        product_type: batchProductType,
         projected_yield: batchProjectedYield === '' ? null : parseFloat(batchProjectedYield),
         advance_to_harvesting_on: batchAdvanceToHarvestingOn || null,
         cultivation_area_id: batchCultivationAreaId,
-        origin_type: batchOriginType, // Incluir nuevo campo
-        origin_details: batchOriginDetails || null, // Incluir nuevo campo
+        origin_type: batchOriginType,
+        origin_details: batchOriginDetails || null,
+        is_packaged: isPackaged,
+        facility_id: selectedFacilityId,
+        sub_location: batchSubLocation || null, // NEW: Include sub_location
       };
-
       if (editingBatch) {
         await api.put(`/batches/${editingBatch.id}`, batchData, { headers });
-        setParentSnack(SNACK_MESSAGES.BATCH_UPDATED, 'success');
+        showSnack(SNACK_MESSAGES.BATCH_UPDATED, 'success');
       } else {
         await api.post('/batches', batchData, { headers });
-        setParentSnack(SNACK_MESSAGES.BATCH_CREATED, 'success');
+        showSnack(SNACK_MESSAGES.BATCH_CREATED, 'success');
       }
-      await fetchBatches(selectedFacilityId); // Recargar lotes
+      await fetchBatches(selectedFacilityId);
       handleCloseBatchDialog();
     } catch (err) {
-      console.error('Error al guardar lote:', err.response?.data || err.message);
+      console.error('Error saving batch:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 422) {
         const errors = err.response?.data?.details;
         const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
-        setParentSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
+        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
       } else if (err.response?.status === 400) {
-        setParentSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
+        showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
       } else if (err.response?.status === 403) {
-        setParentSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
       } else {
-        setParentSnack(`Error al guardar lote: ${errorMessage}`, 'error');
+        showSnack(`Error saving batch: ${errorMessage}`, 'error');
       }
     } finally {
       setBatchDialogLoading(false);
     }
   };
-
   const handleDeleteBatchConfirm = useCallback(async (batchToDelete) => {
     setLoading(true);
     const headers = {};
     let effectiveTenantId = null;
-
     if (isGlobalAdmin) {
       if (selectedFacilityId) {
           const selectedFac = facilities.find(f => f.id === selectedFacilityId);
           if (selectedFac && selectedFac.tenant_id) {
               effectiveTenantId = String(selectedFac.tenant_id);
           } else {
-              setParentSnack('Error: Como Super Admin, la instalación seleccionada no tiene un Tenant ID válido para eliminar lotes.', 'error');
+              showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to delete batches.', 'error');
               setLoading(false);
               setConfirmDialogOpen(false);
               return;
           }
       } else {
-          setParentSnack('Error: Como Super Admin, debe seleccionar una instalación para eliminar lotes.', 'error');
+          showSnack('Error: As Super Admin, you must select a facility to delete batches.', 'error');
           setLoading(false);
           setConfirmDialogOpen(false);
           return;
@@ -691,74 +785,64 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     } else if (tenantId) {
         effectiveTenantId = String(tenantId);
     } else {
-        setParentSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
         setLoading(false);
         setConfirmDialogOpen(false);
         return;
     }
-
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
-
     try {
       await api.delete(`/batches/${batchToDelete.id}`, { headers });
-      setParentSnack(SNACK_MESSAGES.BATCH_DELETED, 'info');
+      showSnack(SNACK_MESSAGES.BATCH_DELETED, 'info');
       await fetchBatches(selectedFacilityId);
     } catch (err) {
-      console.error('Error al eliminar lote:', err.response?.data || err.message);
+      console.error('Error deleting batch:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      if (err.response?.status === 409) { // Conflict
-        setParentSnack(SNACK_MESSAGES.CANNOT_DELETE_BATCH_WITH_EVENTS, 'error');
+      if (err.response?.status === 409) {
+        showSnack(SNACK_MESSAGES.CANNOT_DELETE_BATCH_WITH_EVENTS, 'error');
       } else if (err.response?.status === 403) {
-        setParentSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
       } else {
-        setParentSnack(`Error al eliminar lote: ${errorMessage}`, 'error');
+        showSnack(`Error deleting batch: ${errorMessage}`, 'error');
       }
     } finally {
       setLoading(false);
       setConfirmDialogOpen(false);
     }
-  }, [fetchBatches, setParentSnack, isGlobalAdmin, selectedFacilityId, facilities, tenantId]);
-
+  }, [fetchBatches, showSnack, isGlobalAdmin, selectedFacilityId, facilities, tenantId]);
   const handleDeleteBatchClick = useCallback((batchToDelete) => {
     setConfirmDialogData({
       title: DIALOG_TITLES.CONFIRM_BATCH_DELETION,
-      message: `¿Estás seguro de que quieres eliminar el lote "${batchToDelete.name}"? Esto fallará si tiene eventos de trazabilidad asociados.`,
+      message: `Are you sure you want to delete the batch "${batchToDelete.name}"? This will fail if it has associated traceability events.`,
       onConfirm: () => handleDeleteBatchConfirm(batchToDelete),
     });
     setConfirmDialogOpen(true);
   }, [handleDeleteBatchConfirm]);
-
-  // --- Handlers para Detalle y Trazabilidad de Lotes ---
-
+  // --- Handlers for Batch Details and Traceability ---
   const handleOpenBatchDetail = useCallback(async (batch) => {
     setCurrentBatchDetail(batch);
-    // Resetear el filtro de trazabilidad al abrir un nuevo detalle de lote
     setSelectedBatchForTraceability('all');
     setOpenBatchDetailDialog(true);
-    // Cargar eventos de trazabilidad para el lote seleccionado
     try {
         const events = await fetchTraceabilityEvents(batch.id);
         setTraceabilityEvents(events);
     } catch (error) {
         console.error('BatchManagementPage: Error loading traceability events:', error);
-        setParentSnack('Error al cargar eventos de trazabilidad.', 'error');
+        showSnack('Error loading traceability events.', 'error');
     }
-  }, [fetchTraceabilityEvents, setParentSnack]);
-
+  }, [fetchTraceabilityEvents, showSnack]);
   const handleCloseBatchDetailDialog = useCallback(() => {
     setOpenBatchDetailDialog(false);
     setCurrentBatchDetail(null);
     setTraceabilityEvents([]);
-    setSelectedBatchForTraceability('all'); // Asegurarse de resetear al cerrar
+    setSelectedBatchForTraceability('all');
   }, []);
-
-  // Handlers para el diálogo de registro de eventos
+  // Handlers for event registration dialog
   const handleOpenRegisterEventDialog = useCallback((eventType, batchIdToPreselect = '') => {
     setCurrentEventType(eventType);
-    setEventBatchId(batchIdToPreselect); // Preselecciona el lote si se pasó
-    // Resetear otros campos del formulario al abrir
+    setEventBatchId(batchIdToPreselect);
     setEventQuantity('');
     setEventUnit('');
     setEventDescription('');
@@ -767,249 +851,355 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     setEventMethod('');
     setEventReason('');
     setEventNewBatchId('');
+    setEventResponsibleUserId('');
     setOpenRegisterEventDialog(true);
   }, []);
-
   const handleCloseRegisterEventDialog = useCallback(() => {
     setOpenRegisterEventDialog(false);
     setCurrentEventType('');
+    setEventDialogLoading(false);
   }, []);
-
+  // --- ACTUALIZACIÓN: REGISTRO DE EVENTOS DE TRAZABILIDAD A LA API ---
   const handleRegisterEvent = async (e) => {
     e.preventDefault();
-    // Validaciones específicas para el nuevo evento 'loss_theft'
-    if (currentEventType === 'loss_theft') {
-      if (eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0) {
-        setParentSnack(SNACK_MESSAGES.LOSS_THEFT_QUANTITY_REQUIRED, 'warning');
-        return;
-      }
-      if (!eventUnit.trim()) {
-        setParentSnack(SNACK_MESSAGES.LOSS_THEFT_UNIT_REQUIRED, 'warning');
-        return;
-      }
-      if (!eventReason.trim()) {
-        setParentSnack(SNACK_MESSAGES.LOSS_THEFT_REASON_REQUIRED, 'warning');
-        return;
-      }
-    }
+    if (!currentEventType) { showSnack(SNACK_MESSAGES.EVENT_TYPE_REQUIRED, 'warning'); return; }
+    if (!eventBatchId) { showSnack(SNACK_MESSAGES.EVENT_BATCH_REQUIRED, 'warning'); return; }
+    if (!eventResponsibleUserId) { showSnack("Responsible user is required.", 'warning'); return; }
+    if (!selectedFacilityId) { showSnack("Facility ID is missing. Cannot register event.", 'error'); return; }
+    if (!batchCultivationAreaId) { showSnack(SNACK_MESSAGES.BATCH_AREA_REQUIRED, 'warning'); return; }
 
-    // Aquí iría la lógica para enviar los datos a la API de trazabilidad
-    // Por ahora, solo mostramos un snackbar
-    setParentSnack(SNACK_MESSAGES.EVENT_REGISTERED_SUCCESS, 'success');
-    handleCloseRegisterEventDialog();
-    // En una implementación real, aquí se llamaría a fetchTraceabilityEvents
-    // para actualizar la lista de eventos después de registrar uno nuevo.
-    if (currentBatchDetail) {
-      const updatedEvents = await fetchTraceabilityEvents(currentBatchDetail.id);
-      setTraceabilityEvents(updatedEvents);
+    let eventData = {
+      batch_id: eventBatchId,
+      event_type: currentEventType,
+      user_id: eventResponsibleUserId,
+      facility_id: selectedFacilityId,
+      area_id: batchCultivationAreaId,
+      description: eventDescription,
+    };
+    switch (currentEventType) {
+      case 'movement':
+        if (!eventToLocation) { showSnack(SNACK_MESSAGES.EVENT_NEW_LOCATION_REQUIRED, "warning"); return; }
+        eventData.from_location = eventFromLocation || null;
+        eventData.to_location = eventToLocation;
+        eventData.quantity = eventQuantity === '' ? null : parseFloat(eventQuantity);
+        eventData.unit = eventUnit || null;
+        break;
+      case 'cultivation':
+        if (!eventMethod.trim()) { showSnack("Cultivation method is required.", "warning"); return; }
+        eventData.method = eventMethod;
+        break;
+      case 'harvest':
+        if (eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0) { showSnack(SNACK_MESSAGES.EVENT_HARVEST_QUANTITY_REQUIRED, "warning"); return; }
+        eventData.quantity = parseFloat(eventQuantity);
+        eventData.unit = eventUnit || 'g';
+        eventData.new_batch_id = eventNewBatchId || null;
+        break;
+      case 'sampling':
+        if (eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0) { showSnack(SNACK_MESSAGES.EVENT_SAMPLING_QUANTITY_REQUIRED, "warning"); return; }
+        if (!eventUnit.trim()) { showSnack("Sample unit is required.", "warning"); return; }
+        if (!eventReason.trim()) { showSnack("Sampling reason is required.", "warning"); return; }
+        eventData.quantity = parseFloat(eventQuantity);
+        eventData.unit = eventUnit;
+        eventData.reason = eventReason;
+        break;
+      case 'destruction':
+        if (eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0) { showSnack(SNACK_MESSAGES.EVENT_DESTRUCTION_QUANTITY_REQUIRED, "warning"); return; }
+        if (!eventUnit.trim()) { showSnack("Destruction unit is required.", "warning"); return; }
+        if (!eventMethod.trim()) { showSnack("Destruction method is required.", "warning"); return; }
+        if (!eventReason.trim()) { showSnack("Destruction reason is required.", "warning"); return; }
+        eventData.quantity = parseFloat(eventQuantity);
+        eventData.unit = eventUnit;
+        eventData.method = eventMethod;
+        eventData.reason = eventReason;
+        break;
+      case 'loss_theft':
+        if (eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0) { showSnack(SNACK_MESSAGES.LOSS_THEFT_QUANTITY_REQUIRED, "warning"); return; }
+        if (!eventUnit.trim()) { showSnack(SNACK_MESSAGES.LOSS_THEFT_UNIT_REQUIRED, "warning"); return; }
+        if (!eventReason.trim()) { showSnack(SNACK_MESSAGES.LOSS_THEFT_REASON_REQUIRED, "warning"); return; }
+        eventData.quantity = parseFloat(eventQuantity);
+        eventData.unit = eventUnit;
+        eventData.reason = eventReason;
+        break;
+      case 'processing':
+        if (eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0) { showSnack(SNACK_MESSAGES.PROCESSED_QUANTITY_INVALID, "warning"); return; }
+        if (!eventUnit.trim()) { showSnack("Processing unit is required.", "warning"); return; }
+        if (!eventMethod.trim()) { showSnack("Processing method is required.", "warning"); return; }
+        eventData.quantity = parseFloat(eventQuantity);
+        eventData.unit = eventUnit;
+        eventData.method = eventMethod;
+        eventData.description = eventDescription;
+        break;
+      // NEW: Caso para ajuste de inventario
+      case 'inventory_adjustment':
+        if (eventQuantity === '' || isNaN(parseFloat(eventQuantity))) { showSnack("Adjustment quantity is required.", "warning"); return; }
+        if (!eventUnit.trim()) { showSnack("Adjustment unit is required.", "warning"); return; }
+        if (!eventReason.trim()) { showSnack("Adjustment reason is required.", "warning"); return; }
+        eventData.quantity = parseFloat(eventQuantity);
+        eventData.unit = eventUnit;
+        eventData.reason = eventReason;
+        break;
+      default:
+        break;
+    }
+    setEventDialogLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    if (isGlobalAdmin) {
+        if (selectedFacilityId) {
+            const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+            if (selectedFac && selectedFac.tenant_id) {
+                effectiveTenantId = String(selectedFac.tenant_id);
+            } else {
+                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to register traceability events.', 'error');
+                setEventDialogLoading(false);
+                return;
+            }
+        } else {
+            showSnack('Error: As Super Admin, you must select a facility to register traceability events.', 'error');
+            setEventDialogLoading(false);
+            return;
+        }
+    } else if (tenantId) {
+        effectiveTenantId = String(tenantId);
+    } else {
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        setEventDialogLoading(false);
+        return;
+    }
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    try {
+      const selectedBatch = batches.find(b => b.id === eventBatchId);
+      if (selectedBatch) {
+        eventData.area_id = selectedBatch.cultivation_area_id;
+      } else {
+        showSnack("Could not find cultivation area for the selected batch.", "error");
+        setEventDialogLoading(false);
+        return;
+      }
+      console.log('Sending traceability event payload:', eventData);
+      await api.post('/traceability-events', eventData, { headers });
+      showSnack(SNACK_MESSAGES.EVENT_REGISTERED_SUCCESS, "success");
+      await fetchBatches(selectedFacilityId);
+      if (currentBatchDetail) {
+        const updatedEvents = await fetchTraceabilityEvents(currentBatchDetail.id);
+        setTraceabilityEvents(updatedEvents);
+      }
+      handleCloseRegisterEventDialog();
+    } catch (error) {
+      console.error('Error registering event:', error.response?.data || error.message);
+      const errorMessage = error.response?.data?.message || error.message;
+      if (error.response?.status === 422) {
+        const errors = error.response?.data?.details;
+        const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
+        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
+      } else if (error.response?.status === 400) {
+        showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
+      } else if (error.response?.status === 403) {
+        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+      } else {
+        showSnack('Error registering event: ' + errorMessage, "error");
+      }
+    } finally {
+      setEventDialogLoading(false);
     }
   };
 
-  // --- Handlers para la división de lotes ---
+  // --- Handlers for Batch Splitting ---
   const handleOpenSplitBatchDialog = useCallback((batch) => {
     setBatchToSplit(batch);
     setSplitQuantity('');
-    setNewSplitBatchName(`${batch.name} - Split`); // Nombre sugerido
-    setSplitBatchCultivationAreaId(batch.cultivation_area_id || ''); // Sugerir área actual
+    setNewSplitBatchName(`${batch.name} - Split`);
+    setSplitBatchCultivationAreaId(batch.cultivation_area_id || '');
+    setNewSplitBatchProductType(batch.product_type || '');
     setOpenSplitBatchDialog(true);
     setSplitBatchDialogLoading(false);
   }, []);
-
   const handleCloseSplitBatchDialog = useCallback(() => {
     setOpenSplitBatchDialog(false);
     setBatchToSplit(null);
     setSplitQuantity('');
     setNewSplitBatchName('');
     setSplitBatchCultivationAreaId('');
+    setNewSplitBatchProductType('');
     setSplitBatchDialogLoading(false);
   }, []);
-
   const handleSplitBatch = async (e) => {
     e.preventDefault();
     if (!batchToSplit) return;
-
-    const quantity = parseInt(splitQuantity, 10);
-    // Validar que la cantidad a dividir sea mayor que 0 y menor que las unidades actuales del lote.
-    // Si es igual, el lote original quedaría con 0 unidades, lo cual es una "transferencia total" o "finalización", no una división.
-    // Si quieres permitir que el lote original quede con 0, cambia `quantity >= batchToSplit.current_units` a `quantity > batchToSplit.current_units`
+    const quantity = parseFloat(splitQuantity);
     if (isNaN(quantity) || quantity <= 0 || quantity >= batchToSplit.current_units) {
-      setParentSnack(SNACK_MESSAGES.SPLIT_QUANTITY_INVALID, 'warning');
+      showSnack(SNACK_MESSAGES.SPLIT_QUANTITY_INVALID, 'warning');
       return;
     }
     if (!newSplitBatchName.trim()) {
-      setParentSnack(SNACK_MESSAGES.NEW_BATCH_NAME_REQUIRED, 'warning');
+      showSnack(SNACK_MESSAGES.NEW_BATCH_NAME_REQUIRED, 'warning');
       return;
     }
     if (!splitBatchCultivationAreaId) {
-      setParentSnack(SNACK_MESSAGES.DESTINATION_AREA_REQUIRED, 'warning');
+      showSnack(SNACK_MESSAGES.DESTINATION_AREA_REQUIRED, 'warning');
       return;
     }
-
+    if (!newSplitBatchProductType.trim()) {
+      showSnack(SNACK_MESSAGES.NEW_PRODUCT_TYPE_REQUIRED, 'warning');
+      return;
+    }
     setSplitBatchDialogLoading(true);
     const headers = {};
     let effectiveTenantId = null;
-
     if (isGlobalAdmin) {
         if (selectedFacilityId) {
             const selectedFac = facilities.find(f => f.id === selectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
             } else {
-                setParentSnack('Error: Como Super Admin, la instalación seleccionada no tiene un inquilino válido para dividir lotes.', 'error');
+                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to split batches.', 'error');
                 setSplitBatchDialogLoading(false);
                 return;
             }
         } else {
-            setParentSnack('Error: Como Super Admin, debe seleccionar una instalación para dividir lotes.', 'error');
+            showSnack('Error: As Super Admin, you must select a facility to split batches.', 'error');
             setSplitBatchDialogLoading(false);
             return;
         }
     } else if (tenantId) {
         effectiveTenantId = String(tenantId);
     } else {
-        setParentSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
         setSplitBatchDialogLoading(false);
         return;
     }
-
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
-
     try {
-      // LLAMADA REAL A LA API DE BACKEND PARA DIVIDIR EL LOTE
       const response = await api.post(`/batches/${batchToSplit.id}/split`, {
         splitQuantity: quantity,
         newBatchName: newSplitBatchName,
         newCultivationAreaId: splitBatchCultivationAreaId,
+        newBatchProductType: newSplitBatchProductType,
       }, { headers });
-
-      setParentSnack(SNACK_MESSAGES.BATCH_SPLIT_SUCCESS, 'success');
-      await fetchBatches(selectedFacilityId); // Recargar todos los lotes para ver los cambios
+      showSnack(SNACK_MESSAGES.BATCH_SPLIT_SUCCESS, 'success');
+      await fetchBatches(selectedFacilityId);
       handleCloseSplitBatchDialog();
     } catch (err) {
-      console.error('Error al dividir lote:', err.response?.data || err.message);
+      console.error('Error splitting batch:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 422) {
         const errors = err.response?.data?.details;
         const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
-        setParentSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
+        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
       } else if (err.response?.status === 400) {
-        setParentSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
+        showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
       } else if (err.response?.status === 403) {
-        setParentSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
       } else {
-        setParentSnack(`${SNACK_MESSAGES.BATCH_SPLIT_ERROR} ${errorMessage}`, 'error');
+        showSnack(`${SNACK_MESSAGES.BATCH_SPLIT_ERROR} ${errorMessage}`, 'error');
       }
     } finally {
       setSplitBatchDialogLoading(false);
     }
   };
-
-  // --- NUEVOS Handlers para Procesar Lote ---
+  // --- Handlers for Batch Processing ---
   const handleOpenProcessBatchDialog = useCallback((batch) => {
     setBatchToProcess(batch);
-    setProcessedQuantity(batch.current_units); // Sugerir la cantidad actual por defecto
+    setProcessedQuantity(batch.current_units);
     setProcessMethod('');
     setProcessNotes('');
-    setNewProductType(''); // NUEVO: Resetear el nuevo tipo de producto
+    setNewProductType(batch.product_type || '');
     setOpenProcessBatchDialog(true);
     setProcessBatchDialogLoading(false);
   }, []);
-
   const handleCloseProcessBatchDialog = useCallback(() => {
     setOpenProcessBatchDialog(false);
     setBatchToProcess(null);
     setProcessedQuantity('');
     setProcessMethod('');
     setProcessNotes('');
-    setNewProductType(''); // NUEVO: Resetear el nuevo tipo de producto
+    setNewProductType('');
     setProcessBatchDialogLoading(false);
   }, []);
-
   const handleProcessBatch = async (e) => {
     e.preventDefault();
     if (!batchToProcess) return;
-
-    const quantity = parseFloat(processedQuantity); // Usar parseFloat para permitir decimales
-    if (isNaN(quantity) || quantity < 0 || quantity > batchToProcess.current_units) {
-      setParentSnack(SNACK_MESSAGES.PROCESSED_QUANTITY_INVALID, 'warning');
+    const quantity = parseFloat(processedQuantity);
+    if (isNaN(quantity) || quantity <= 0 || quantity > batchToProcess.current_units) {
+      showSnack(SNACK_MESSAGES.PROCESSED_QUANTITY_INVALID, 'warning');
       return;
     }
     if (!processMethod.trim()) {
-      setParentSnack(SNACK_MESSAGES.PROCESS_METHOD_REQUIRED, 'warning');
+      showSnack(SNACK_MESSAGES.PROCESS_METHOD_REQUIRED, 'warning');
       return;
     }
-    if (!newProductType.trim()) { // NUEVO: Validar newProductType
-      setParentSnack(SNACK_MESSAGES.NEW_PRODUCT_TYPE_REQUIRED, 'warning');
+    if (!newProductType.trim()) {
+      showSnack(SNACK_MESSAGES.NEW_PRODUCT_TYPE_REQUIRED, 'warning');
       return;
     }
-
     setProcessBatchDialogLoading(true);
     const headers = {};
     let effectiveTenantId = null;
-
     if (isGlobalAdmin) {
         if (selectedFacilityId) {
             const selectedFac = facilities.find(f => f.id === selectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
             } else {
-                setParentSnack('Error: Como Super Admin, la instalación seleccionada no tiene un inquilino válido para procesar lotes.', 'error');
+                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to process batches.', 'error');
                 setProcessBatchDialogLoading(false);
                 return;
             }
         } else {
-            setParentSnack('Error: Como Super Admin, debe seleccionar una instalación para procesar lotes.', 'error');
+            showSnack('Error: As Super Admin, you must select a facility to process batches.', 'error');
             setProcessBatchDialogLoading(false);
             return;
         }
     } else if (tenantId) {
         effectiveTenantId = String(tenantId);
     } else {
-        setParentSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
         setProcessBatchDialogLoading(false);
         return;
     }
-
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
-
     try {
-      const response = await api.post(`/batches/${batchToProcess.id}/process`, {
-        processedQuantity: quantity,
+      const processData = {
+        processedQuantity: Number(processedQuantity),
         processMethod: processMethod,
         processDescription: processNotes,
-        newProductType: newProductType, // NUEVO: Incluir newProductType
-      }, { headers });
-
-      setParentSnack(SNACK_MESSAGES.BATCH_PROCESSED_SUCCESS, 'success');
-      await fetchBatches(selectedFacilityId); // Recargar todos los lotes para ver los cambios
+        newProductType: newProductType,
+        facility_id: selectedFacilityId,
+      };
+      console.log('Sending process batch payload:', processData);
+      const response = await api.post(`/batches/${batchToProcess.id}/process`, processData, { headers });
+      showSnack(SNACK_MESSAGES.BATCH_PROCESSED_SUCCESS, 'success');
+      await fetchBatches(selectedFacilityId);
       handleCloseProcessBatchDialog();
     } catch (err) {
-      console.error('Error al procesar lote:', err.response?.data || err.message);
+      console.error('Error processing batch:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 422) {
         const errors = err.response?.data?.details;
         const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
-        setParentSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
+        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
       } else if (err.response?.status === 400) {
-        setParentSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
+        showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
       } else if (err.response?.status === 403) {
-        setParentSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
       } else {
-        setParentSnack(`${SNACK_MESSAGES.BATCH_PROCESSED_ERROR} ${errorMessage}`, 'error');
+        showSnack(`${SNACK_MESSAGES.BATCH_PROCESSED_ERROR} ${errorMessage}`, 'error');
       }
     } finally {
       setProcessBatchDialogLoading(false);
     }
   };
-
-  // --- NUEVOS Handlers para Registrar Lote Externo ---
+  // --- Handlers for Registering External Batch ---
   const handleOpenExternalBatchDialog = useCallback(() => {
     setExternalBatchName('');
     setExternalBatchUnits('');
+    setExternalBatchUnit('g');
     setExternalBatchProductType('');
     setExternalBatchVariety('');
     setExternalBatchOriginDetails('');
@@ -1017,240 +1207,609 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     setOpenExternalBatchDialog(true);
     setExternalBatchDialogLoading(false);
   }, []);
-
   const handleCloseExternalBatchDialog = useCallback(() => {
     setOpenExternalBatchDialog(false);
     setExternalBatchName('');
     setExternalBatchUnits('');
+    setExternalBatchUnit('g');
     setExternalBatchProductType('');
     setExternalBatchVariety('');
     setExternalBatchOriginDetails('');
     setExternalBatchCultivationAreaId('');
     setExternalBatchDialogLoading(false);
   }, []);
-
   const handleSaveExternalBatch = async (e) => {
     e.preventDefault();
-    if (!externalBatchName.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_NAME_REQUIRED, 'warning'); return; }
-    if (externalBatchUnits === '' || isNaN(parseInt(externalBatchUnits))) { setParentSnack(SNACK_MESSAGES.BATCH_UNITS_REQUIRED, 'warning'); return; }
-    if (!externalBatchProductType.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_PRODUCT_TYPE_REQUIRED, 'warning'); return; }
-    if (!externalBatchVariety.trim()) { setParentSnack(SNACK_MESSAGES.BATCH_VARIETY_REQUIRED, 'warning'); return; }
-    if (!externalBatchCultivationAreaId) { setParentSnack(SNACK_MESSAGES.BATCH_AREA_REQUIRED, 'warning'); return; }
-    if (!externalBatchOriginDetails.trim()) { setParentSnack('Detalles del origen externo son obligatorios.', 'warning'); return; }
-
+    if (!externalBatchName.trim()) { showSnack(SNACK_MESSAGES.BATCH_NAME_REQUIRED, 'warning'); return; }
+    if (externalBatchUnits === '' || isNaN(parseFloat(externalBatchUnits))) { showSnack(SNACK_MESSAGES.BATCH_UNITS_REQUIRED, 'warning'); return; }
+    if (!externalBatchUnit.trim()) { showSnack(SNACK_MESSAGES.BATCH_UNIT_REQUIRED, 'warning'); return; }
+    if (!externalBatchProductType.trim()) { showSnack(SNACK_MESSAGES.BATCH_PRODUCT_TYPE_REQUIRED, 'warning'); return; }
+    if (!externalBatchVariety.trim()) { showSnack(SNACK_MESSAGES.BATCH_VARIETY_REQUIRED, 'warning'); return; }
+    if (!externalBatchCultivationAreaId) { showSnack(SNACK_MESSAGES.BATCH_AREA_REQUIRED, 'warning'); return; }
+    if (!externalBatchOriginDetails.trim()) { showSnack('External origin details are required.', 'warning'); return; }
 
     setExternalBatchDialogLoading(true);
     const headers = {};
     let effectiveTenantId = null;
-
     if (isGlobalAdmin) {
         if (selectedFacilityId) {
             const selectedFac = facilities.find(f => f.id === selectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
             } else {
-                setParentSnack('Error: Como Super Admin, la instalación seleccionada no tiene un inquilino válido para registrar lotes externos.', 'error');
+                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to register external batches.', 'error');
                 setExternalBatchDialogLoading(false);
                 return;
             }
         } else {
-            setParentSnack('Error: Como Super Admin, debe seleccionar una instalación para registrar lotes externos.', 'error');
+            showSnack('Error: As Super Admin, you must select a facility to register external batches.', 'error');
             setExternalBatchDialogLoading(false);
             return;
         }
     } else if (tenantId) {
         effectiveTenantId = String(tenantId);
     } else {
-        setParentSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
         setExternalBatchDialogLoading(false);
         return;
     }
-
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
-
     try {
       const batchData = {
         name: externalBatchName,
-        current_units: parseInt(externalBatchUnits, 10),
+        current_units: parseFloat(externalBatchUnits),
+        units: externalBatchUnit,
         product_type: externalBatchProductType,
         variety: externalBatchVariety,
         cultivation_area_id: externalBatchCultivationAreaId,
-        origin_type: 'external_purchase', // Siempre 'external_purchase' para lotes externos
-        origin_details: externalBatchOriginDetails,
-        end_type: 'N/A', // O un valor predeterminado si no aplica para lotes externos al inicio
+        origin_type: 'external_purchase',
+        end_type: 'N/A',
         projected_yield: null,
         advance_to_harvesting_on: null,
+        is_packaged: false,
+        facility_id: selectedFacilityId,
+        origin_details: externalBatchOriginDetails,
       };
-
       await api.post('/batches', batchData, { headers });
-      setParentSnack(SNACK_MESSAGES.EXTERNAL_BATCH_CREATED, 'success');
-      await fetchBatches(selectedFacilityId); // Recargar lotes
+      showSnack(SNACK_MESSAGES.EXTERNAL_BATCH_CREATED, 'success');
+      await fetchBatches(selectedFacilityId);
       handleCloseExternalBatchDialog();
     } catch (err) {
-      console.error('Error al registrar lote externo:', err.response?.data || err.message);
+      console.error('Error registering external batch:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 422) {
         const errors = err.response?.data?.details;
         const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
-        setParentSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
+        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
       } else if (err.response?.status === 400) {
-        setParentSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
+        showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
       } else if (err.response?.status === 403) {
-        setParentSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
       } else {
-        setParentSnack(`${SNACK_MESSAGES.EXTERNAL_BATCH_ERROR} ${errorMessage}`, 'error');
+        showSnack(`${SNACK_MESSAGES.EXTERNAL_BATCH_ERROR} ${errorMessage}`, 'error');
       }
     } finally {
       setExternalBatchDialogLoading(false);
     }
   };
 
+  // -------------------- NEW: HANDLERS PARA AJUSTE DE INVENTARIO --------------------
+  const handleOpenAdjustmentDialog = useCallback((batch) => {
+    setSelectedBatchForAdjustment(batch);
+    setAdjustmentQuantity('');
+    setAdjustmentUnit(batch.units || 'g');
+    setAdjustmentReason('');
+    setOpenAdjustmentDialog(true);
+    setAdjustmentDialogLoading(false);
+  }, []);
 
-  // Renderiza el formulario específico para cada tipo de evento
+  const handleCloseAdjustmentDialog = useCallback(() => {
+    setOpenAdjustmentDialog(false);
+    setSelectedBatchForAdjustment(null);
+    setAdjustmentQuantity('');
+    setAdjustmentUnit('g');
+    setAdjustmentReason('');
+    setAdjustmentDialogLoading(false);
+  }, []);
+
+  const handleRegisterAdjustment = async (e) => {
+    e.preventDefault();
+    if (
+      !selectedBatchForAdjustment ||
+      adjustmentQuantity === '' ||
+      isNaN(parseFloat(adjustmentQuantity)) ||
+      !adjustmentUnit ||
+      !adjustmentReason.trim()
+    ) {
+      showSnack(SNACK_MESSAGES.INVENTORY_ADJUSTMENT_REQUIRED, 'warning');
+      return;
+    }
+    setAdjustmentDialogLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    
+    if (isGlobalAdmin) {
+      if (selectedFacilityId) {
+        const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+        } else {
+          showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID.', 'error');
+          setAdjustmentDialogLoading(false);
+          return;
+        }
+      } else {
+        showSnack('Error: As Super Admin, you must select a facility.', 'error');
+        setAdjustmentDialogLoading(false);
+        return;
+      }
+    } else if (tenantId) {
+      effectiveTenantId = String(tenantId);
+    } else {
+      showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+      setAdjustmentDialogLoading(false);
+      return;
+    }
+    
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+
+    try {
+      await api.post('/traceability-events', {
+        batch_id: selectedBatchForAdjustment.id,
+        event_type: 'inventory_adjustment',
+        facility_id: selectedFacilityId,
+        area_id: selectedBatchForAdjustment.cultivation_area_id,
+        quantity: parseFloat(adjustmentQuantity),
+        unit: adjustmentUnit,
+        reason: adjustmentReason,
+        sub_location: selectedBatchForAdjustment.sub_location || null,
+        user_id: eventResponsibleUserId || 1,
+      }, { headers });
+      
+      showSnack(SNACK_MESSAGES.INVENTORY_ADJUSTMENT_SUCCESS, 'success');
+      await fetchBatches(selectedFacilityId);
+      handleCloseAdjustmentDialog();
+    } catch (err) {
+      console.error('Error registering inventory adjustment:', err.response?.data || err.message);
+      const errorMessage = err.response?.data?.message || err.message;
+      showSnack(`${SNACK_MESSAGES.INVENTORY_ADJUSTMENT_ERROR} ${errorMessage}`, 'error');
+    } finally {
+      setAdjustmentDialogLoading(false);
+    }
+  };
+  // ------------------------------------------------------------------------
+
+  // Render the specific form for each event type
   const renderEventForm = useCallback(() => {
-    const unitOptions = ['g', 'kg', 'unidades', 'ml', 'L'];
-
     return (
       <Box component="form" onSubmit={handleRegisterEvent} sx={{ mt: 2 }}>
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel sx={{ color: '#fff' }}>Lote Afectado</InputLabel>
-          <Select value={eventBatchId} onChange={(e) => setEventBatchId(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+        <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+          <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Affected Batch</InputLabel>
+          <Select
+            value={eventBatchId}
+            onChange={(e) => setEventBatchId(e.target.value)}
+            required
+            sx={{
+              color: '#fff',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+              '.MuiSvgIcon-root': { color: '#fff' }
+            }}
             MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+            disabled={eventDialogLoading}
           >
-            <MenuItem value="" disabled><em>Seleccionar Lote</em></MenuItem>
+            <MenuItem value=""><em>Select Batch</em></MenuItem>
             {batches.length === 0 ? (
-              <MenuItem value="" disabled><em>No hay lotes disponibles</em></MenuItem>
+              <MenuItem value="" disabled><em>No batches available</em></MenuItem>
             ) : (
               batches.map(batch => <MenuItem key={batch.id} value={batch.id}>{batch.name}</MenuItem>)
             )}
           </Select>
         </FormControl>
-
-        {currentEventType === 'movement' && (
+        <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+          <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Event Type</InputLabel>
+          <Select
+            value={currentEventType}
+            onChange={(e) => setCurrentEventType(e.target.value)}
+            required
+            sx={{
+              color: '#fff',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+              '.MuiSvgIcon-root': { color: '#fff' }
+            }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+            disabled={eventDialogLoading}
+          >
+            <MenuItem value=""><em>Select Event Type</em></MenuItem>
+            {EVENT_TYPES.map((type) => (
+              <MenuItem key={type.value} value={type.value}>
+                <ListItemIcon sx={{ color: '#fff', minWidth: 36 }}>
+                  {type.icon && <type.icon fontSize="small" />}
+                </ListItemIcon>
+                <ListItemText primary={type.label} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <TextField
+          margin="dense"
+          label="Event Date"
+          type="date"
+          fullWidth
+          value={formatDate(new Date())}
+          InputLabelProps={{ shrink: true }}
+          sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+          disabled={true}
+        />
+        {(currentEventType === 'movement') && (
           <>
-            <TextField label="Cantidad" type="number" value={eventQuantity} onChange={(e) => setEventQuantity(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Unidad</InputLabel>
-              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+            <TextField
+              label="Quantity"
+              type="number"
+              value={eventQuantity}
+              onChange={(e) => setEventQuantity(e.target.value)}
+              fullWidth
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+              <Select
+                value={eventUnit}
+                onChange={(e) => setEventUnit(e.target.value)}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                disabled={eventDialogLoading}
               >
-                {unitOptions.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+                <MenuItem value=""><em>Select Unit</em></MenuItem>
+                {UNIT_OPTIONS.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="Origen (ej. 'Room2')" value={eventFromLocation} onChange={(e) => setEventFromLocation(e.target.value)} fullWidth sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <TextField label="Destino (ej. 'Secado')" value={eventToLocation} onChange={(e) => setEventToLocation(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField
+              label="From Location (e.g., 'Room2')"
+              value={eventFromLocation}
+              onChange={(e) => setEventFromLocation(e.target.value)}
+              fullWidth
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <TextField
+              label="To Location (e.g., 'Drying Area')"
+              value={eventToLocation}
+              onChange={(e) => setEventToLocation(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
           </>
         )}
-
         {currentEventType === 'cultivation' && (
-          <TextField label="Tipo de Evento (ej. Riego, Poda, Aplicación)" value={eventMethod} onChange={(e) => setEventMethod(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+          <TextField
+            label="Method (e.g., Irrigation, Pruning, Application)"
+            value={eventMethod}
+            onChange={(e) => setEventMethod(e.target.value)}
+            fullWidth
+            required
+            sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+            disabled={eventDialogLoading}
+          />
         )}
-
         {currentEventType === 'harvest' && (
           <>
-            <TextField label="Peso Húmedo (g)" type="number" value={eventQuantity} onChange={(e) => setEventQuantity(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <TextField label="Nuevo ID de Lote de Cosecha" value={eventNewBatchId} onChange={(e) => setEventNewBatchId(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField
+              label="Wet Weight (g)"
+              type="number"
+              value={eventQuantity}
+              onChange={(e) => setEventQuantity(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <TextField
+              label="New Harvest Batch ID (Optional)"
+              value={eventNewBatchId}
+              onChange={(e) => setEventNewBatchId(e.target.value)}
+              fullWidth
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
           </>
         )}
-
         {currentEventType === 'sampling' && (
           <>
-            <TextField label="Cantidad de Muestra" type="number" value={eventQuantity} onChange={(e) => setEventQuantity(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Unidad de Muestra</InputLabel>
-              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+            <TextField
+              label="Sample Quantity"
+              type="number"
+              value={eventQuantity}
+              onChange={(e) => setEventQuantity(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Sample Unit</InputLabel>
+              <Select
+                value={eventUnit}
+                onChange={(e) => setEventUnit(e.target.value)}
+                required
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                disabled={eventDialogLoading}
               >
-                {unitOptions.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+                <MenuItem value=""><em>Select Unit</em></MenuItem>
+                {UNIT_OPTIONS.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="Propósito del Muestreo" value={eventReason} onChange={(e) => setEventReason(e.target.value)} fullWidth sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField
+              label="Purpose of Sampling"
+              value={eventReason}
+              onChange={(e) => setEventReason(e.target.value)}
+              fullWidth
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
           </>
         )}
-
         {currentEventType === 'destruction' && (
           <>
-            <TextField label="Cantidad Destruida" type="number" value={eventQuantity} onChange={(e) => setEventQuantity(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Unidad de Destrucción</InputLabel>
-              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+            <TextField
+              label="Quantity Destroyed"
+              type="number"
+              value={eventQuantity}
+              onChange={(e) => setEventQuantity(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit of Destruction</InputLabel>
+              <Select
+                value={eventUnit}
+                onChange={(e) => setEventUnit(e.target.value)}
+                required
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                disabled={eventDialogLoading}
               >
-                {unitOptions.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+                <MenuItem value=""><em>Select Unit</em></MenuItem>
+                {UNIT_OPTIONS.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="Método de Destrucción" value={eventMethod} onChange={(e) => setEventMethod(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <TextField label="Razón de la Destrucción" multiline rows={3} value={eventReason} onChange={(e) => setEventReason(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField
+              label="Method of Destruction"
+              value={eventMethod}
+              onChange={(e) => setEventMethod(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <TextField
+              label="Reason for Destruction"
+              multiline
+              rows={3}
+              value={eventReason}
+              onChange={(e) => setEventReason(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
           </>
         )}
-
-        {/* NUEVO: Formulario para el evento de Pérdida/Robo */}
         {currentEventType === 'loss_theft' && (
           <>
-            <TextField label="Cantidad Perdida/Robada" type="number" value={eventQuantity} onChange={(e) => setEventQuantity(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Unidad de Pérdida/Robo</InputLabel>
-              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+            <TextField
+              label="Quantity Lost/Stolen"
+              type="number"
+              value={eventQuantity}
+              onChange={(e) => setEventQuantity(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit of Loss/Theft</InputLabel>
+              <Select
+                value={eventUnit}
+                onChange={(e) => setEventUnit(e.target.value)}
+                required
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                disabled={eventDialogLoading}
               >
-                {unitOptions.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+                <MenuItem value=""><em>Select Unit</em></MenuItem>
+                {UNIT_OPTIONS.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="Razón de Pérdida/Robo" multiline rows={3} value={eventReason} onChange={(e) => setEventReason(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField
+              label="Reason for Loss/Theft"
+              multiline
+              rows={3}
+              value={eventReason}
+              onChange={(e) => setEventReason(e.target.value)}
+              fullWidth
+              required
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
           </>
         )}
-
-        <TextField label="Notas Adicionales" multiline rows={3} value={eventDescription} onChange={(e) => setEventDescription(e.target.value)} fullWidth sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+        {currentEventType === 'processing' && (
+          <>
+            <TextField
+              label="Processed Quantity (g)"
+              type="number"
+              value={eventQuantity}
+              onChange={(e) => setEventQuantity(e.target.value)}
+              fullWidth
+              required
+              inputProps={{ min: 0, step: "any" }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+              <Select
+                value={eventUnit}
+                onChange={(e) => setEventUnit(e.target.value)}
+                required
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                disabled={eventDialogLoading}
+              >
+                <MenuItem value=""><em>Select Unit</em></MenuItem>
+                {UNIT_OPTIONS.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Method"
+              type="text"
+              fullWidth
+              value={eventMethod}
+              onChange={(e) => setEventMethod(e.target.value)}
+              required
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={eventDialogLoading}
+            />
+          </>
+        )}
+        <TextField
+          margin="dense"
+          label="Notes"
+          type="text"
+          fullWidth
+          multiline
+          rows={2}
+          value={eventDescription}
+          onChange={(e) => setEventDescription(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+          disabled={eventDialogLoading}
+        />
+        <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+          <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Responsible User</InputLabel>
+          <Select
+            value={eventResponsibleUserId}
+            onChange={(e) => setEventResponsibleUserId(e.target.value)}
+            required
+            sx={{
+              color: '#fff',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+              '.MuiSvgIcon-root': { color: '#fff' }
+            }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+            disabled={eventDialogLoading}
+          >
+            <MenuItem value=""><em>Select Responsible User</em></MenuItem>
+            {users.map(user => <MenuItem key={user.id} value={user.id}>{user.name}</MenuItem>)}
+          </Select>
+        </FormControl>
         <DialogActions sx={{ bgcolor: '#3a506b', mt: 2 }}>
-          <Button onClick={handleCloseRegisterEventDialog} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
-          <Button type="submit" variant="contained" sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }} disabled={isFacilityOperator}>{BUTTON_LABELS.REGISTER}</Button>
+          <Button onClick={handleCloseRegisterEventDialog} disabled={eventDialogLoading} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={eventDialogLoading || isFacilityOperator || !currentEventType || !eventBatchId || !eventResponsibleUserId ||
+              ((currentEventType === 'movement' && !eventToLocation) ||
+                ((currentEventType === 'harvest' || currentEventType === 'sampling' || currentEventType === 'destruction' || currentEventType === 'loss_theft' || currentEventType === 'processing') && (eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0)) ||
+                (currentEventType === 'loss_theft' && (!eventUnit.trim() || !eventReason.trim())) ||
+                (currentEventType === 'destruction' && (!eventUnit.trim() || !eventMethod.trim() || !eventReason.trim())) ||
+                (currentEventType === 'sampling' && !eventReason.trim()) ||
+                (currentEventType === 'cultivation' && !eventMethod.trim()) ||
+                (currentEventType === 'processing' && (!eventMethod.trim() || eventQuantity === '' || isNaN(parseFloat(eventQuantity)) || parseFloat(eventQuantity) <= 0))
+              )}
+            sx={{
+              bgcolor: '#4CAF50',
+              '&:hover': { bgcolor: '#43A047' }
+            }}
+          >
+            {eventDialogLoading ? <CircularProgress size={24} /> : BUTTON_LABELS.REGISTER}
+          </Button>
         </DialogActions>
       </Box>
     );
-  }, [currentEventType, eventBatchId, eventQuantity, eventUnit, eventDescription, eventFromLocation, eventToLocation, eventMethod, eventReason, eventNewBatchId, handleRegisterEvent, handleCloseRegisterEventDialog, batches, isFacilityOperator]);
-
-  // Filtrar y limpiar los datos de los lotes para el DataGrid
-  const cleanedBatches = useMemo(() => {
-    console.log("Raw batches state:", batches); // Log the raw batches state
-    if (!Array.isArray(batches)) {
-      console.warn("DataGrid: 'batches' prop is not an array:", batches);
-      return [];
+  }, [currentEventType, eventBatchId, eventQuantity, eventUnit, eventDescription, eventFromLocation, eventToLocation, eventMethod, eventReason, eventNewBatchId, handleRegisterEvent, handleCloseRegisterEventDialog, batches, users, eventDialogLoading, isFacilityOperator, showSnack, selectedFacilityId, batchCultivationAreaId]);
+  // Filter and clean batch data for DataGrid
+  const filteredAndCleanedBatches = useMemo(() => {
+    let currentBatches = batches;
+    if (filterProductType) {
+      currentBatches = currentBatches.filter(batch => batch.product_type === filterProductType);
     }
-    const filtered = batches.filter(batch => {
-      if (!batch || typeof batch.id === 'undefined' || batch.id === null) {
-        console.warn("DataGrid: Filtering out invalid batch (missing/null ID or not an object):", batch); // Log invalid batch
-        return false;
-      }
-      return true;
-    });
-    console.log("Cleaned batches for DataGrid:", filtered); // Log the cleaned batches
-    return filtered;
-  }, [batches]);
-
-  // Definición de las columnas para el DataGrid
+    if (filterCultivationAreaId) {
+      currentBatches = currentBatches.filter(batch => batch.cultivation_area_id === parseInt(filterCultivationAreaId));
+    }
+    if (searchTerm) {
+      const lowerCaseSearchTerm = searchTerm.toLowerCase();
+      currentBatches = currentBatches.filter(
+        batch =>
+          batch.name.toLowerCase().includes(lowerCaseSearchTerm) ||
+          (batch.variety && batch.variety.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (batch.product_type && batch.product_type.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (batch.origin_details && batch.origin_details.toLowerCase().includes(lowerCaseSearchTerm))
+      );
+    }
+    const cleaned = currentBatches.filter(batch => batch && (typeof batch.id !== 'undefined' && batch.id !== null));
+    console.log("Cleaned batches for DataGrid:", cleaned);
+    return cleaned;
+  }, [batches, filterProductType, filterCultivationAreaId, searchTerm]);
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setFilterProductType("");
+    setFilterCultivationAreaId("");
+  };
+  // Definition of columns for DataGrid
   const columns = useMemo(() => [
-    { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 150, renderCell: (params) => ( // Flexible
+    { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 150, renderCell: (params) => (
       <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
     )},
-    { field: 'variety', headerName: 'Variety', width: 100, renderCell: (params) => ( // Fixed width
+    { field: 'variety', headerName: 'Variety', width: 100, renderCell: (params) => (
       <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
     )},
-    { field: 'product_type', headerName: 'Product Type', width: 150, renderCell: (params) => ( // NEW: Column for product_type
+    { field: 'product_type', headerName: 'Product Type', width: 150, renderCell: (params) => (
       <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value || 'N/A'}</Typography>
     )},
-    { field: 'current_units', headerName: 'Units', type: 'number', width: 95, renderCell: (params) => ( // Fixed width, adjusted
-      <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+    { field: 'current_units', headerName: 'Units', type: 'number', width: 95, renderCell: (params) => (
+      <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value} {params.row?.units}</Typography>
     )},
-    { field: 'end_type', headerName: 'End Type', width: 95, renderCell: (params) => ( // Fixed width, adjusted
+    { field: 'end_type', headerName: 'End Type', width: 95, renderCell: (params) => (
       <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
     )},
     {
       field: 'projected_yield',
       headerName: 'Projected Yield',
       type: 'number',
-      width: 140, // Fixed width, increased for "Projected Yield"
+      width: 140,
       renderCell: (params) => (
         <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
           {params.value !== null && params.value !== undefined ? `${params.value} kg` : 'N/A'}
@@ -1260,7 +1819,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     {
       field: 'advance_to_harvesting_on',
       headerName: 'Harvest Date',
-      width: 120, // Fixed width, adjusted
+      width: 120,
       renderCell: (params) => (
         <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
           {params.value ? new Date(params.value).toLocaleDateString() : 'N/A'}
@@ -1272,15 +1831,14 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       headerName: 'Cultivation Area',
       flex: 1, minWidth: 150,
       valueGetter: (params) => {
-        if (!params || !params.row) return '';
-        if (params.row.cultivation_area && params.row.cultivation_area.name) {
-            return params.row.cultivation_area.name;
+        if (!params || !params.row) {
+            return '';
+        }
+        if (!Array.isArray(cultivationAreas) || cultivationAreas.length === 0) {
+            return '';
         }
         const cultivationAreaId = params.row.cultivation_area_id;
         if (cultivationAreaId === undefined || cultivationAreaId === null) {
-            return '';
-        }
-        if (!Array.isArray(cultivationAreas)) {
             return '';
         }
         const area = cultivationAreas.find(ca => ca.id === cultivationAreaId);
@@ -1290,34 +1848,56 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
       )
     },
-    
     {
       field: 'current_stage_name',
       headerName: 'Current Stage',
-      width: 120, // Fixed width, adjusted
+      width: 120,
       valueGetter: (params) => {
-        if (!params || !params.row) return '';
-        if (params.row.cultivation_area && params.row.cultivation_area.name) {
-            return params.row.cultivation_area.name;
+        if (!params || !params.row) {
+            return '';
+        }
+        if (!Array.isArray(cultivationAreas) || cultivationAreas.length === 0 || !Array.isArray(stages) || stages.length === 0) {
+            return '';
         }
         const cultivationAreaId = params.row.cultivation_area_id;
         if (cultivationAreaId === undefined || cultivationAreaId === null) {
             return '';
         }
-        if (!Array.isArray(cultivationAreas)) {
-            return '';
-        }
         const area = cultivationAreas.find(ca => ca.id === cultivationAreaId);
-        return area ? area.name : '';
+        if (area && area.current_stage_id !== undefined && area.current_stage_id !== null) {
+            const stage = stages.find(s => s.id === area.current_stage_id);
+            return stage ? stage.name : 'N/A';
+        }
+        return 'N/A';
       },
       renderCell: (params) => (
         <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+      )
+    },
+    {
+      field: 'is_packaged',
+      headerName: 'Packaged',
+      width: 100,
+      type: 'boolean',
+      renderCell: (params) => (
+        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value ? 'Yes' : 'No'}</Typography>
+      )
+    },
+    // NEW: Columna para sub_location
+    {
+      field: 'sub_location',
+      headerName: 'Sub-location',
+      width: 140,
+      renderCell: (params) => (
+        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
+          {params.value || '—'}
+        </Typography>
       )
     },
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 200, // Increased to accommodate the new button
+      width: 250,
       sortable: false,
       filterable: false,
       renderCell: (params) => (
@@ -1336,27 +1916,40 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
             onClick={() => handleOpenBatchDialog(params.row)}
             aria-label={`Edit ${params.row.name}`}
             disabled={isFacilityOperator}
+            title="Edit Batch"
           >
             <EditIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#fff' }} />
           </IconButton>
           <IconButton
             size="small"
-            color="secondary" // Changed to secondary for differentiation
+            color="secondary"
             onClick={() => handleOpenSplitBatchDialog(params.row)}
             aria-label={`Split ${params.row.name}`}
-            disabled={isFacilityOperator || params.row.current_units <= 1} // Cannot split if 1 or fewer units
+            disabled={isFacilityOperator || params.row.current_units <= 1}
+            title="Split Batch"
           >
-            <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 ? '#666' : '#ffa726' }} /> {/* Orange color */}
+            <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 ? '#666' : '#ffa726' }} />
           </IconButton>
-          {/* NEW PROCESS BUTTON */}
           <IconButton
             size="small"
-            color="success" // Color for processing action
+            color="success"
             onClick={() => handleOpenProcessBatchDialog(params.row)}
             aria-label={`Process ${params.row.name}`}
-            disabled={isFacilityOperator || params.row.current_units <= 0} // Cannot process if no units
+            disabled={isFacilityOperator || params.row.current_units <= 0}
+            title="Process Batch"
           >
-            <AutorenewIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 ? '#666' : '#4CAF50' }} /> {/* Green for process */}
+            <TransformIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 ? '#666' : '#4CAF50' }} />
+          </IconButton>
+          
+          <IconButton
+            size="small"
+            color="primary"
+            onClick={() => handleOpenAdjustmentDialog(params.row)}
+            aria-label={`Inventory Adjustment for ${params.row.name}`}
+            disabled={isFacilityOperator}
+            title="Inventory Adjustment"
+          >
+            <AddBoxIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#4CAF50' }} />
           </IconButton>
           <IconButton
             size="small"
@@ -1370,50 +1963,46 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         </Box>
       ),
     },
-  ], [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages]);
+  ], [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages, handleOpenAdjustmentDialog]);
   
-  console.log("DataGrid will render with batches:", cleanedBatches); // Final log before DataGrid
-
-  // Función para obtener el label y placeholder dinámico para origin_details
+  // Function to get dynamic label and placeholder for origin_details
   const getOriginDetailsLabel = useCallback(() => {
     switch (batchOriginType) {
       case 'seeds':
-        return { label: 'Proveedor de Semillas / Lote de Semillas', placeholder: 'Ej: Green Genetics Lote #XYZ' };
+        return { label: 'Seed Provider / Seed Lot', placeholder: 'Ex: Green Genetics Lot #XYZ' };
       case 'clones':
-        return { label: 'ID de Planta Madre', placeholder: 'Ej: Madre #123' };
+        return { label: 'Mother Plant ID', placeholder: 'Ex: Mother #123' };
       case 'tissue_culture':
-        return { label: 'Laboratorio / Lote de Tejido', placeholder: 'Ej: BioLab Lote TC-456' };
-      case 'external_purchase':
-        return { label: 'Proveedor Externo / ID de Lote Externo', placeholder: 'Ej: FarmCo Lote #ABC' };
+        return { label: 'Lab / Tissue Lot', placeholder: 'Ex: BioLab Lot TC-456' };
+      case 'external':
+        return { label: 'External Provider / External Lot ID', placeholder: 'Ex: FarmCo Lot #ABC' };
       default:
-        return { label: 'Detalles del Origen', placeholder: 'Información adicional sobre el origen' };
+        return { label: 'Origin Details', placeholder: 'Additional information about the origin' };
     }
   }, [batchOriginType]);
-
-  // Función para obtener el label y placeholder dinámico para externalBatchOriginDetails
+  // Function to get dynamic label and placeholder for externalBatchOriginDetails
   const getExternalOriginDetailsLabel = useCallback(() => {
-    return { label: 'Detalles del Origen Externo', placeholder: 'Ej: Nombre del proveedor, número de factura, lote de importación' };
+    return { label: 'External Origin Details', placeholder: 'Ex: Provider name, invoice number, import lot' };
   }, []);
-
 
   return (
     <Box sx={{
       p: { xs: 2, sm: 3 },
       minHeight: 'calc(100vh - 64px)',
-      bgcolor: '#004d80',
+      bgcolor: '#1a202c',
       color: '#fff',
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <InventoryIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} />
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}>
-          Gestión de Lotes
+          Batch Management
         </Typography>
         <FormControl sx={{ minWidth: 200, mr: 1 }}>
-          <InputLabel id="facility-select-label" sx={{ color: '#fff' }}>Instalación</InputLabel>
+          <InputLabel id="facility-select-label" sx={{ color: 'rgba(255,255,255,0.7)' }}>Facility</InputLabel>
           <Select
             labelId="facility-select-label"
             value={selectedFacilityId}
-            label="Instalación"
+            label="Facility"
             onChange={(e) => {
                 setSelectedFacilityId(e.target.value);
             }}
@@ -1433,7 +2022,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           >
             {facilities.length === 0 && !loading ? (
               <MenuItem value="" sx={{ color: '#aaa' }}>
-                <em>No hay instalaciones disponibles</em>
+                <em>No facilities available</em>
               </MenuItem>
             ) : (
               facilities.map((facility) => (
@@ -1449,56 +2038,54 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenBatchDialog(null)}
-          disabled={loading || isFacilityOperator}
+          disabled={loading || isFacilityOperator || !selectedFacilityId}
           sx={{
             borderRadius: 2,
             bgcolor: '#4CAF50',
             '&:hover': { bgcolor: '#43A047' },
-            mr: 1, // Añadir margen a la derecha
+            mr: 1,
           }}
         >
           {BUTTON_LABELS.ADD_NEW_BATCH}
         </Button>
-        {/* NUEVO BOTÓN PARA REGISTRAR LOTE EXTERNO */}
         <Button
           variant="contained"
           startIcon={<LocalShippingIcon />}
           onClick={handleOpenExternalBatchDialog}
-          disabled={loading || isFacilityOperator || !selectedFacilityId} // Deshabilitar si no hay instalación seleccionada
+          disabled={loading || isFacilityOperator || !selectedFacilityId}
           sx={{
             borderRadius: 2,
-            bgcolor: '#007bff', // Un color diferente para distinguirlo
+            bgcolor: '#007bff',
             '&:hover': { bgcolor: '#0056b3' },
           }}
         >
           {BUTTON_LABELS.REGISTER_EXTERNAL_BATCH}
         </Button>
       </Box>
-
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400, color: '#fff' }}> {/* Altura ajustada para el spinner */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400, color: '#fff' }}>
           <CircularProgress color="inherit" />
-          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Cargando lotes...</Typography>
+          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Loading batches...</Typography>
         </Box>
       ) : (
         <Box sx={{ height: 'auto', minHeight: 400, width: '100%' }}>
-          {cleanedBatches.length === 0 && selectedFacilityId ? (
-            <Typography variant="h6" sx={{ color: '#aaa', textAlign: 'center', width: '100%', mt: 5 }}>
-              No hay lotes disponibles para esta instalación.
+          {filteredAndCleanedBatches.length === 0 && selectedFacilityId ? (
+            <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', width: '100%', mt: 5 }}>
+              No batches available for this facility.
             </Typography>
-          ) : cleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length > 0 ? (
-            <Typography variant="h6" sx={{ color: '#aaa', textAlign: 'center', width: '100%', mt: 5 }}>
-              Como Super Admin, por favor selecciona una instalación con un Tenant ID válido para ver los lotes.
+          ) : filteredAndCleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length > 0 ? (
+            <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', width: '100%', mt: 5 }}>
+              As Super Admin, please select a facility with a valid Tenant ID to view batches.
             </Typography>
-          ) : cleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length === 0 ? (
-            <Typography variant="h6" sx={{ color: '#aaa', textAlign: 'center', width: '100%', mt: 5 }}>
-              Como Super Admin, no hay instalaciones registradas en el sistema. Por favor, crea una instalación.
+          ) : filteredAndCleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length === 0 ? (
+            <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', width: '100%', mt: 5 }}>
+              As Super Admin, no facilities are registered in the system. Please create a facility.
             </Typography>
           ) : (
             <DataGrid
-              rows={cleanedBatches}
+              rows={filteredAndCleanedBatches}
               columns={columns}
-              getRowId={(row) => row.id || row.ID || row.batch_id || row.batchId || row._id || row.id}
+              getRowId={(row) => row.id}
               pageSize={10}
               pageSizeOptions={[5, 10, 25, 50]}
               initialState={{
@@ -1507,61 +2094,53 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
                 },
               }}
               disableRowSelectionOnClick
-              // Usar nuestro componente de toolbar personalizado
               slots={{ toolbar: CustomDataGridToolbar }}
               sx={{
-                bgcolor: '#2d3748', // Fondo del DataGrid
-                color: '#e2e8f0', // Color de texto general
-                border: 'none', // Sin borde
+                bgcolor: '#2d3748',
+                color: '#e2e8f0',
+                border: 'none',
                 minHeight: 350,
-                // Estilos para los encabezados de columna
                 '& .MuiDataGrid-columnHeaders': {
                   bgcolor: '#3a506b',
                   borderBottom: '1px solid #4a5568',
                 },
-                // Estilos para el texto dentro de los encabezados, asegurando visibilidad
                 '& .MuiDataGrid-columnHeaderTitle': {
                   fontWeight: 'bold',
-                  color: '#4f5155 !important', // Asegurar que el texto del título sea blanco y visible
+                  color: '#4a5568 !important',
                 },
-                // Estilos para los iconos de ordenación en los encabezados
                 '& .MuiDataGrid-iconButtonContainer': {
-                  color: '#e2e8f0 !important', // Color de los iconos de ordenación
+                  color: '#e2e8f0 !important',
                 },
                 '& .MuiDataGrid-sortIcon': {
-                  color: '#4cb051 !important', // Color del icono de ordenación
+                  color: '#4cb051 !important',
                 },
-                // Estilos para las celdas de datos
                 '& .MuiDataGrid-cell': {
                   borderColor: 'rgba(255,255,255,0.1)',
                   color: '#e2e8f0',
                 },
-                // Estilos para las filas (efecto cebra y hover)
                 '& .MuiDataGrid-row': {
                   '&:nth-of-type(odd)': {
-                    backgroundColor: 'rgba(0,0,0,0.05)', // Rayas cebra suaves
+                    backgroundColor: 'rgba(0,0,0,0.05)',
                   },
                   '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)', // Fondo al pasar el ratón
+                    backgroundColor: 'rgba(255,255,255,0.1)',
                   },
                 },
-                // Estilos para el pie de página (paginación)
                 '& .MuiDataGrid-footerContainer': {
                   bgcolor: '#3a506b',
                   color: '#fff',
                   borderTop: '1px solid #4a5568',
                 },
                 '& .MuiTablePagination-root': {
-                  color: '#000', // Color del texto de la paginación
+                  color: '#e2e8f0',
                 },
-                // Estilos para los selectores de paginación (rows per page)
                 '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                  color: '#fff !important', // Texto de "Rows per page" y el contador
+                  color: '#e2e8f0 !important',
                 },
                 '& .MuiTablePagination-select': {
-                  color: '#fff !important', // El número del selector (ej. "10")
+                  color: '#e2e8f0 !important',
                   '.MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(255,255,255,0.5) !important', // Borde del selector
+                    borderColor: 'rgba(255,255,255,0.5) !important',
                   },
                   '&:hover .MuiOutlinedInput-notchedOutline': {
                     borderColor: 'rgba(255,255,255,0.8) !important',
@@ -1571,17 +2150,14 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
                   },
                 },
                 '& .MuiTablePagination-actions .MuiButtonBase-root': {
-                  color: '#fff !important', // Botones de flecha de paginación
+                  color: '#e2e8f0 !important',
                 },
-                // Estilos para los iconos generales del DataGrid (ordenación, paginación)
                 '& .MuiSvgIcon-root': {
                   color: '#4cb051',
                 },
-                // Estilos para el overlay de carga/sin filas
                 '& .MuiDataGrid-overlay': {
                   bgcolor: '#2d3748',
                 },
-                // Estilos para el spinner de carga
                 '& .MuiCircularProgress-root': {
                   color: '#4cb051',
                 },
@@ -1590,8 +2166,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           )}
         </Box>
       )}
-
-      {/* --- Diálogo para Añadir/Editar Lote --- */}
+      {/* --- Add/Edit Batch Dialog --- */}
       <Dialog open={openBatchDialog} onClose={handleCloseBatchDialog} maxWidth="sm" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
@@ -1604,86 +2179,123 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         <form onSubmit={handleSaveBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField
-              label="Nombre del Lote"
+              autoFocus
+              margin="dense"
+              label="Batch Name"
+              type="text"
+              fullWidth
               value={batchName}
               onChange={e => setBatchName(e.target.value)}
-              fullWidth
               required
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
-            <TextField
-              label="Unidades Actuales"
-              type="number"
-              value={batchCurrentUnits}
-              onChange={e => setBatchCurrentUnits(e.target.value)}
-              fullWidth
-              required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
-              disabled={batchDialogLoading || isFacilityOperator}
-            />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Tipo de Finalización</InputLabel>
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+              <TextField
+                margin="dense"
+                label="Current Units"
+                type="number"
+                fullWidth
+                value={batchCurrentUnits}
+                onChange={e => setBatchCurrentUnits(e.target.value)}
+                required
+                inputProps={{ step: "any" }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+                disabled={batchDialogLoading || isFacilityOperator}
+              />
+              <FormControl margin="dense" sx={{ minWidth: 120 }}>
+                <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+                <Select
+                  value={batchUnit}
+                  onChange={e => setBatchUnit(e.target.value)}
+                  required
+                  sx={{
+                    color: '#fff',
+                    '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                    '.MuiSvgIcon-root': { color: '#fff' }
+                  }}
+                  MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                  disabled={batchDialogLoading || isFacilityOperator}
+                >
+                  <MenuItem value=""><em>Select Unit</em></MenuItem>
+                  {UNIT_OPTIONS.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Box>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>End Type</InputLabel>
               <Select
                 value={batchEndType}
                 onChange={e => setBatchEndType(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Tipo</em></MenuItem>
+                <MenuItem value=""><em>Select Type</em></MenuItem>
                 <MenuItem value="Dried">Dried</MenuItem>
                 <MenuItem value="Fresh">Fresh</MenuItem>
               </Select>
             </FormControl>
             <TextField
-              label="Variedad"
+              label="Variety"
               value={batchVariety}
               onChange={e => setBatchVariety(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
-            {/* NUEVO: Campo para Product Type */}
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Tipo de Producto</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Product Type</InputLabel>
               <Select
                 value={batchProductType}
                 onChange={e => setBatchProductType(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Tipo de Producto</em></MenuItem>
+                <MenuItem value=""><em>Select Product Type</em></MenuItem>
                 {HEALTH_CANADA_PRODUCT_TYPES.map(type => (
                   <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Tipo de Origen</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Origin Type</InputLabel>
               <Select
                 value={batchOriginType}
                 onChange={e => {
                   setBatchOriginType(e.target.value);
-                  setBatchOriginDetails(''); // Limpiar detalles al cambiar el tipo
+                  setBatchOriginDetails('');
                 }}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Origen</em></MenuItem>
-                <MenuItem value="seeds">Semillas</MenuItem>
-                <MenuItem value="clones">Clones (Planta Madre)</MenuItem>
-                <MenuItem value="tissue_culture">Cultivo de Tejido</MenuItem>
-                <MenuItem value="external_purchase">Compra Externa</MenuItem>
+                <MenuItem value=""><em>Select Origin</em></MenuItem>
+                <MenuItem value="internal">Internal</MenuItem>
+                <MenuItem value="external">External</MenuItem>
               </Select>
             </FormControl>
-            {batchOriginType && ( // Mostrar campo de detalles solo si se selecciona un tipo de origen
+            {batchOriginType === 'external' && (
               <TextField
                 label={getOriginDetailsLabel().label}
                 placeholder={getOriginDetailsLabel().placeholder}
@@ -1697,16 +2309,18 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               />
             )}
             <TextField
-              label="Rendimiento Proyectado"
+              label="Projected Yield"
               type="number"
               value={batchProjectedYield}
               onChange={e => setBatchProjectedYield(e.target.value)}
               fullWidth
+              inputProps={{ step: "any" }}
+              InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
             <TextField
-              label="Fecha de Cosecha (Opcional)"
+              label="Advance to Harvesting On (Optional)"
               type="date"
               value={batchAdvanceToHarvestingOn}
               onChange={e => setBatchAdvanceToHarvestingOn(e.target.value)}
@@ -1715,31 +2329,67 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Área de Cultivo</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Cultivation Area</InputLabel>
               <Select
                 value={batchCultivationAreaId}
                 onChange={e => setBatchCultivationAreaId(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Área</em></MenuItem>
+                <MenuItem value=""><em>Select Area</em></MenuItem>
                 {cultivationAreas.length === 0 ? (
-                  <MenuItem value="" disabled><em>No hay áreas de cultivo disponibles en la instalación seleccionada</em></MenuItem>
+                  <MenuItem value="" disabled><em>No cultivation areas available in the selected facility</em></MenuItem>
                 ) : (
-                  cultivationAreas.map(area => <MenuItem key={area.id} value={area.id}>{area.name} ({area.current_stage?.name || 'Sin Etapa'})</MenuItem>)
+                  cultivationAreas.map(area => <MenuItem key={area.id} value={area.id}>{area.name} ({stages.find(s => s.id === area.current_stage_id)?.name || 'No Stage'})</MenuItem>)
                 )}
               </Select>
             </FormControl>
+            {/* NEW: Campo para sub_location */}
+            <TextField
+              margin="dense"
+              label="Sub-location"
+              type="text"
+              fullWidth
+              value={batchSubLocation}
+              onChange={e => setBatchSubLocation(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={batchDialogLoading || isFacilityOperator}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={isPackaged}
+                  onChange={(e) => setIsPackaged(e.target.checked)}
+                  sx={{
+                    color: 'rgba(255,255,255,0.7)',
+                    '&.Mui-checked': {
+                      color: '#4CAF50',
+                    },
+                  }}
+                  disabled={batchDialogLoading || isFacilityOperator}
+                />
+              }
+              label={<Typography sx={{ color: '#e2e8f0' }}>Is Packaged?</Typography>}
+              sx={{ mb: 2 }}
+            />
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b' }}>
             <Button onClick={handleCloseBatchDialog} disabled={batchDialogLoading || isFacilityOperator} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
-              disabled={batchDialogLoading || !batchName.trim() || batchCurrentUnits === '' || !batchEndType.trim() || !batchVariety.trim() || !batchProductType.trim() || !batchCultivationAreaId || !batchOriginType.trim() || isFacilityOperator}
+              disabled={(() => {
+                const isDisabled = batchDialogLoading || !batchName.trim() || batchCurrentUnits === '' || !batchUnit.trim() || !batchEndType.trim() || !batchVariety.trim() || !batchProductType.trim() || !batchCultivationAreaId || !batchOriginType.trim() || (batchOriginType === 'external' && !batchOriginDetails.trim()) || isFacilityOperator;
+                return isDisabled;
+              })()}
               sx={{
                 bgcolor: '#4CAF50',
                 '&:hover': { bgcolor: '#43A047' }
@@ -1750,8 +2400,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           </DialogActions>
         </form>
       </Dialog>
-
-      {/* --- Diálogo de Detalle del Lote (con Trazabilidad) --- */}
+      {/* --- Batch Detail Dialog (with Traceability) --- */}
       <Dialog open={openBatchDetailDialog} onClose={handleCloseBatchDetailDialog} maxWidth="lg" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2, minHeight: '80vh' } }}
       >
@@ -1776,7 +2425,6 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               <CloseIcon />
             </IconButton>
           </Box>
-
           <Box sx={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -1790,53 +2438,52 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               startIcon={<TrendingUpIcon />}
               onClick={() => handleOpenRegisterEventDialog('movement', currentBatchDetail.id)}
               sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              {BUTTON_LABELS.REGISTER_MOVEMENT}
+              Register Movement
             </Button>
             <Button
               variant="contained"
               startIcon={<EcoIcon />}
               onClick={() => handleOpenRegisterEventDialog('cultivation', currentBatchDetail.id)}
               sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              {BUTTON_LABELS.REGISTER_CULTIVATION_EVENT}
+              Register Cultivation Event
             </Button>
             <Button
               variant="contained"
               startIcon={<HarvestIcon />}
               onClick={() => handleOpenRegisterEventDialog('harvest', currentBatchDetail.id)}
               sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              {BUTTON_LABELS.REGISTER_HARVEST}
+              Register Harvest
             </Button>
             <Button
               variant="contained"
               startIcon={<ScienceIcon />}
               onClick={() => handleOpenRegisterEventDialog('sampling', currentBatchDetail.id)}
               sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              {BUTTON_LABELS.REGISTER_SAMPLING}
+              Register Sampling
             </Button>
             <Button
               variant="contained"
               startIcon={<DeleteForeverIcon />}
               onClick={() => handleOpenRegisterEventDialog('destruction', currentBatchDetail.id)}
               sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              {BUTTON_LABELS.REGISTER_DESTRUCTION}
+              Register Destruction
             </Button>
-            {/* NUEVO BOTÓN PARA REGISTRAR PÉRDIDA/ROBO */}
             <Button
               variant="contained"
-              startIcon={<WarningIcon />}
+              startIcon={<RemoveCircleOutlineIcon />}
               onClick={() => handleOpenRegisterEventDialog('loss_theft', currentBatchDetail.id)}
               sx={{
-                bgcolor: '#d32f2f', // Rojo para advertencia/peligro
+                bgcolor: '#d32f2f',
                 color: '#fff',
                 '&:hover': { bgcolor: '#b71c1c' },
                 borderRadius: 1,
@@ -1846,9 +2493,29 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
                 fontSize: '0.75rem',
                 whiteSpace: 'nowrap',
               }}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              {BUTTON_LABELS.REGISTER_LOSS_THEFT}
+              Register Loss/Theft
+            </Button>
+            {/* NEW: Botón para ajuste de inventario en el detalle del lote */}
+            <Button
+              variant="contained"
+              startIcon={<AddBoxIcon />}
+              onClick={() => handleOpenAdjustmentDialog(currentBatchDetail)}
+              sx={{
+                bgcolor: '#4CAF50',
+                color: '#fff',
+                '&:hover': { bgcolor: '#43A047' },
+                borderRadius: 1,
+                textTransform: 'none',
+                py: '6px',
+                px: '10px',
+                fontSize: '0.75rem',
+                whiteSpace: 'nowrap',
+              }}
+              disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
+            >
+              Inventory Adjustment
             </Button>
           </Box>
         </DialogTitle>
@@ -1858,70 +2525,68 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           flexDirection: { xs: 'column', md: 'row' },
           gap: { xs: 3, md: 4 },
         }}>
-          {/* Sección Izquierda: Información General del Lote */}
           <Box sx={{ flexGrow: 1, minWidth: { md: '40%' } }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0' }}>Información General</Typography>
+            <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0' }}>General Information</Typography>
             <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, color: '#e2e8f0' }}>
-              Variedad: {currentBatchDetail?.variety || 'N/A'}
+              Variety: {currentBatchDetail?.variety || 'N/A'}
             </Typography>
             <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-              Tipo de Producto: {currentBatchDetail?.product_type || 'N/A'} {/* NUEVO: Mostrar product_type */}
+              Product Type: {currentBatchDetail?.product_type || 'N/A'}
             </Typography>
             <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-              Unidades Actuales: {currentBatchDetail?.current_units}
+              Current Units: {currentBatchDetail?.current_units} {currentBatchDetail?.units || 'g'}
             </Typography>
             <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-              Tipo de Finalización: {currentBatchDetail?.end_type || 'N/A'}
+              End Type: {currentBatchDetail?.end_type || 'N/A'}
             </Typography>
             <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-              Rendimiento Proyectado: {currentBatchDetail?.projected_yield || 'N/A'}
+              Projected Yield: {currentBatchDetail?.projected_yield || 'N/A'}
             </Typography>
             {currentBatchDetail?.advance_to_harvesting_on && (
               <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-                Fecha de Cosecha: {new Date(currentBatchDetail.advance_to_harvesting_on).toLocaleDateString()}
+                Harvest Date: {new Date(currentBatchDetail.advance_to_harvesting_on).toLocaleDateString()}
               </Typography>
             )}
             <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-              Área de Cultivo: {currentBatchDetail?.cultivation_area?.name || 'N/A'}
+              Cultivation Area: {cultivationAreas.find(area => area.id === currentBatchDetail?.cultivation_area_id)?.name || 'N/A'}
             </Typography>
             <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-              Etapa Actual: {currentBatchDetail?.cultivation_area?.current_stage?.name || 'N/A'}
+              Current Stage: {stages.find(s => s.id === cultivationAreas.find(area => area.id === currentBatchDetail?.cultivation_area_id)?.current_stage_id)?.name || 'N/A'}
             </Typography>
-            <Divider sx={{ my: 2, borderColor: '#4a5568' }} /> {/* Divisor para separar */}
+            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+              Packaged: {currentBatchDetail?.is_packaged ? 'Yes' : 'No'}
+            </Typography>
+            {/* NEW: Mostrar sub_location */}
+            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+              Sub-location: {currentBatchDetail?.sub_location || '—'}
+            </Typography>
+            <Divider sx={{ my: 2, borderColor: '#4a5568' }} />
             <Typography variant="body2" sx={{ color: '#e2e8f0', fontWeight: 'bold' }}>
-              Tipo de Origen: {(() => {
+              Origin Type: {(() => {
                 switch (currentBatchDetail?.origin_type) {
-                  case 'seeds': return 'Semillas';
-                  case 'clones': return 'Clones';
-                  case 'tissue_culture': return 'Cultivo de Tejido';
-                  case 'external_purchase': return 'Compra Externa';
+                  case 'internal': return 'Internal';
+                  case 'external': return 'External';
                   default: return 'N/A';
                 }
               })()}
             </Typography>
             {currentBatchDetail?.origin_details && (
               <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-                Detalles del Origen: {currentBatchDetail.origin_details}
+                Origin Details: {currentBatchDetail.origin_details}
               </Typography>
             )}
           </Box>
-
-          {/* Sección Derecha: Trazabilidad del Lote */}
           <Box sx={{ width: { md: '60%' }, flexShrink: 0, ml: { md: 4 } }}>
             <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0', display: 'flex', alignItems: 'center' }}>
               <HistoryIcon sx={{ mr: 1, color: '#a0aec0' }} />
-              Eventos de Trazabilidad
+              Traceability Events
             </Typography>
-
-            {/* Los botones de acción se han movido al DialogTitle */}
-
-            {/* Filtro de Lotes para Trazabilidad */}
             <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Ver Eventos para</InputLabel>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>View Events for</InputLabel>
               <Select
                 value={selectedBatchForTraceability}
                 onChange={(e) => setSelectedBatchForTraceability(e.target.value)}
-                label="Ver Eventos para"
+                label="View Events for"
                 sx={{
                   color: '#fff',
                   '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
@@ -1935,42 +2600,36 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
                   },
                 }}
               >
-                <MenuItem value="all">Todos los Lotes</MenuItem>
-                {/* currentBatchDetail.batches no existe aquí, debería ser currentBatchDetail.id para filtrar por el lote actual */}
-                {/* Si necesitas filtrar eventos por lotes relacionados, la mock data de fetchTraceabilityEvents debería manejarlo */}
-                {/* Por ahora, este filtro es solo para la mock data */}
+                <MenuItem value="all">All Batches</MenuItem>
                 {currentBatchDetail && <MenuItem value={currentBatchDetail.id}>{currentBatchDetail.name}</MenuItem>}
               </Select>
             </FormControl>
-
-            {/* Tabla/Lista de Eventos de Trazabilidad */}
             <Box sx={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #4a5568', borderRadius: 1, mb: 2 }}>
               <List disablePadding>
-                {/* Encabezados de la tabla */}
                 <ListItem sx={{ bgcolor: '#3a506b', py: 1, borderBottom: '1px solid #4a5568' }}>
                   <Grid container spacing={1}>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Fecha/Hora</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Tipo Evento</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Lote</Typography></Grid>
-                    <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Detalles</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Realizado Por</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Date/Time</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Event Type</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Batch</Typography></Grid>
+                    <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Details</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Performed By</Typography></Grid>
                   </Grid>
                 </ListItem>
                 {traceabilityEvents.length > 0 ? (
                   traceabilityEvents.map(event => (
                     <ListItem key={event.id} sx={{ py: 1,  '&:last-child': { borderBottom: 'none' } }}>
                       <Grid container spacing={1}>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{event.date}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{event.type}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{event.batch_id}</Typography></Grid> {/* Usar batch_id */}
-                        <Grid item xs={4}><Typography variant="body2" sx={{ color: '#a0aec0', fontSize: 12 }}>{event.details}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#a0aec0', fontSize: 12 }}>{event.user}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{new Date(event.created_at).toLocaleDateString()} {new Date(event.created_at).toLocaleTimeString()}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{event.event_type}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{event.batch_name || event.batch_id}</Typography></Grid>
+                        <Grid item xs={4}><Typography variant="body2" sx={{ color: '#a0aec0', fontSize: 12 }}>{event.description || event.method || event.reason || 'N/A'}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#a0aec0', fontSize: 12 }}>{event.user_name || event.user_id}</Typography></Grid>
                       </Grid>
                     </ListItem>
                   ))
                 ) : (
                   <ListItem>
-                    <ListItemText primary="No hay eventos de trazabilidad registrados para este lote." primaryTypographyProps={{ sx: { color: '#a0aec0', textAlign: 'center', py: 2 } }} />
+                    <ListItemText primary="No traceability events registered for this batch." primaryTypographyProps={{ sx: { color: '#a0aec0', textAlign: 'center', py: 2 } }} />
                   </ListItem>
                 )}
               </List>
@@ -1978,8 +2637,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           </Box>
         </DialogContent>
       </Dialog>
-
-      {/* --- Diálogo Global de Registro de Eventos --- */}
+      {/* --- Global Event Registration Dialog --- */}
       <Dialog open={openRegisterEventDialog} onClose={handleCloseRegisterEventDialog} maxWidth="sm" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
@@ -1993,8 +2651,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           {renderEventForm()}
         </DialogContent>
       </Dialog>
-
-      {/* --- NUEVO Diálogo para Dividir Lote --- */}
+      {/* --- Split Batch Dialog --- */}
       <Dialog open={openSplitBatchDialog} onClose={handleCloseSplitBatchDialog} maxWidth="sm" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
@@ -2007,16 +2664,16 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         <form onSubmit={handleSplitBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <Typography variant="body1" sx={{ mb: 2, color: '#e2e8f0' }}>
-              Unidades actuales del lote: {batchToSplit?.current_units || 0}
+              Current units of batch: {batchToSplit?.current_units || 0} {batchToSplit?.units || 'g'}
             </Typography>
             <TextField
-              label="Cantity to split"  
+              label="Quantity to split"
               type="number"
               value={splitQuantity}
               onChange={e => setSplitQuantity(e.target.value)}
               fullWidth
               required
-              inputProps={{ min: 1, max: batchToSplit?.current_units - 1 }} // No puede ser 0 ni el total
+              inputProps={{ min: 0.01, max: (batchToSplit?.current_units || 0) - 0.01, step: "any" }}
               sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={splitBatchDialogLoading || isFacilityOperator}
             />
@@ -2026,24 +2683,49 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               onChange={e => setNewSplitBatchName(e.target.value)}
               fullWidth
               required
+              InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={splitBatchDialogLoading || isFacilityOperator}
             />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Área de Cultivo de Destino</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>New Batch Product Type</InputLabel>
+              <Select
+                value={newSplitBatchProductType}
+                onChange={e => setNewSplitBatchProductType(e.target.value)}
+                required
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                disabled={splitBatchDialogLoading || isFacilityOperator}
+              >
+                <MenuItem value=""><em>Select Product Type</em></MenuItem>
+                {HEALTH_CANADA_PRODUCT_TYPES.map(type => (
+                  <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Destination Cultivation Area</InputLabel>
               <Select
                 value={splitBatchCultivationAreaId}
                 onChange={e => setSplitBatchCultivationAreaId(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={splitBatchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Área</em></MenuItem>
+                <MenuItem value=""><em>Select Area</em></MenuItem>
                 {cultivationAreas.length === 0 ? (
-                  <MenuItem value="" disabled><em>No hay áreas de cultivo disponibles en la instalación seleccionada</em></MenuItem>
+                  <MenuItem value="" disabled><em>No cultivation areas available in the selected facility</em></MenuItem>
                 ) : (
-                  cultivationAreas.map(area => <MenuItem key={area.id} value={area.id}>{area.name} ({area.current_stage?.name || 'Sin Etapa'})</MenuItem>)
+                  cultivationAreas.map(area => <MenuItem key={area.id} value={area.id}>{area.name} ({stages.find(s => s.id === area.current_stage_id)?.name || 'No Stage'})</MenuItem>)
                 )}
               </Select>
             </FormControl>
@@ -2053,10 +2735,10 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
             <Button
               type="submit"
               variant="contained"
-              disabled={splitBatchDialogLoading || !splitQuantity || parseInt(splitQuantity, 10) <= 0 || parseInt(splitQuantity, 10) >= (batchToSplit?.current_units || 0) || !newSplitBatchName.trim() || !splitBatchCultivationAreaId || isFacilityOperator}
+              disabled={splitBatchDialogLoading || !splitQuantity || parseFloat(splitQuantity) <= 0 || parseFloat(splitQuantity) >= (batchToSplit?.current_units || 0) || !newSplitBatchName.trim() || !newSplitBatchProductType.trim() || !splitBatchCultivationAreaId || isFacilityOperator}
               sx={{
-                bgcolor: '#4CAF50',
-                '&:hover': { bgcolor: '#43A047' }
+                bgcolor: '#ff9800',
+                '&:hover': { bgcolor: '#fb8c00' }
               }}
             >
               {splitBatchDialogLoading ? <CircularProgress size={24} /> : BUTTON_LABELS.SPLIT_BATCH}
@@ -2064,8 +2746,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           </DialogActions>
         </form>
       </Dialog>
-
-      {/* --- NUEVO Diálogo para Procesar Lote --- */}
+      {/* --- Process Batch Dialog --- */}
       <Dialog open={openProcessBatchDialog} onClose={handleCloseProcessBatchDialog} maxWidth="sm" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
@@ -2078,49 +2759,57 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         <form onSubmit={handleProcessBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <Typography variant="body1" sx={{ mb: 2, color: '#e2e8f0' }}>
-              Unidades actuales del lote: {batchToProcess?.current_units || 0}
+              Current units of batch: {batchToProcess?.current_units || 0} {batchToProcess?.units || 'g'}
             </Typography>
             <TextField
-              label="Process Cantity (Final unities after processing)"
+              label="Processed Quantity (Final units after processing)"
               type="number"
               value={processedQuantity}
               onChange={e => setProcessedQuantity(e.target.value)}
               fullWidth
               required
-              inputProps={{ min: 0, max: batchToProcess?.current_units }} // No puede ser más que lo actual
+              inputProps={{ min: 0, step: "any" }}
+              InputLabelProps={{ shrink: true, sx: { color: 'rgba(255,255,255,0.7)' } }}
               sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={processBatchDialogLoading || isFacilityOperator}
             />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Método de Procesamiento</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Processing Method</InputLabel>
               <Select
                 value={processMethod}
                 onChange={e => setProcessMethod(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={processBatchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Método</em></MenuItem>
-                <MenuItem value="Lyophilization">Liofilización</MenuItem>
-                <MenuItem value="Air Drying">Secado al Aire</MenuItem>
-                <MenuItem value="Curing">Curado</MenuItem>
-                <MenuItem value="Trimming">Recorte</MenuItem>
-                <MenuItem value="Extraction">Extracción</MenuItem>
+                <MenuItem value=""><em>Select Method</em></MenuItem>
+                <MenuItem value="Lyophilization">Lyophilization</MenuItem>
+                <MenuItem value="Air Drying">Air Drying</MenuItem>
+                <MenuItem value="Curing">Curing</MenuItem>
+                <MenuItem value="Trimming">Trimming</MenuItem>
+                <MenuItem value="Extraction">Extraction</MenuItem>
               </Select>
             </FormControl>
-            {/* NUEVO: Campo para el nuevo tipo de producto */}
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Nuevo Tipo de Producto</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>New Product Type</InputLabel>
               <Select
                 value={newProductType}
                 onChange={e => setNewProductType(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={processBatchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Nuevo Tipo de Producto</em></MenuItem>
+                <MenuItem value=""><em>Select New Product Type</em></MenuItem>
                 {HEALTH_CANADA_PRODUCT_TYPES.map(type => (
                   <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
                 ))}
@@ -2133,6 +2822,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               fullWidth
               multiline
               rows={3}
+              InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={processBatchDialogLoading || isFacilityOperator}
             />
@@ -2142,7 +2832,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
             <Button
               type="submit"
               variant="contained"
-              disabled={processBatchDialogLoading || processedQuantity === '' || isNaN(parseFloat(processedQuantity)) || parseFloat(processedQuantity) < 0 || parseFloat(processedQuantity) > (batchToProcess?.current_units || 0) || !processMethod.trim() || !newProductType.trim() || isFacilityOperator}
+              disabled={processBatchDialogLoading || processedQuantity === '' || isNaN(parseFloat(processedQuantity)) || parseFloat(processedQuantity) <= 0 || parseFloat(processedQuantity) > (batchToProcess?.current_units || 0) || !processMethod.trim() || !newProductType.trim() || isFacilityOperator}
               sx={{
                 bgcolor: '#4CAF50',
                 '&:hover': { bgcolor: '#43A047' }
@@ -2153,8 +2843,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           </DialogActions>
         </form>
       </Dialog>
-
-      {/* --- NUEVO Diálogo para Registrar Lote Externo --- */}
+      {/* --- External Batch Registration Dialog --- */}
       <Dialog open={openExternalBatchDialog} onClose={handleCloseExternalBatchDialog} maxWidth="sm" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
@@ -2167,35 +2856,62 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         <form onSubmit={handleSaveExternalBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField
-              label="Name extern batch"
+              label="External Batch Name"
               value={externalBatchName}
               onChange={e => setExternalBatchName(e.target.value)}
               fullWidth
               required
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={externalBatchDialogLoading || isFacilityOperator}
             />
-            <TextField
-              label="Units receibed"
-              type="number"
-              value={externalBatchUnits}
-              onChange={e => setExternalBatchUnits(e.target.value)}
-              fullWidth
-              required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
-              disabled={externalBatchDialogLoading || isFacilityOperator}
-            />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Tipo de Producto</InputLabel>
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+              <TextField
+                label="Units Received"
+                type="number"
+                value={externalBatchUnits}
+                onChange={e => setExternalBatchUnits(e.target.value)}
+                fullWidth
+                required
+                inputProps={{ step: "any" }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+                disabled={externalBatchDialogLoading || isFacilityOperator}
+              />
+              <FormControl margin="dense" sx={{ minWidth: 120 }}>
+                <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+                <Select
+                  value={externalBatchUnit}
+                  onChange={e => setExternalBatchUnit(e.target.value)}
+                  required
+                  sx={{
+                    color: '#fff',
+                    '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                    '.MuiSvgIcon-root': { color: '#fff' }
+                  }}
+                  MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                  disabled={externalBatchDialogLoading || isFacilityOperator}
+                >
+                  <MenuItem value=""><em>Select Unit</em></MenuItem>
+                  {UNIT_OPTIONS.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Box>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Product Type</InputLabel>
               <Select
                 value={externalBatchProductType}
                 onChange={e => setExternalBatchProductType(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={externalBatchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Tipo de Producto</em></MenuItem>
+                <MenuItem value=""><em>Select Product Type</em></MenuItem>
                 {HEALTH_CANADA_PRODUCT_TYPES.map(type => (
                   <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
                 ))}
@@ -2207,7 +2923,8 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               onChange={e => setExternalBatchVariety(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={externalBatchDialogLoading || isFacilityOperator}
             />
             <TextField
@@ -2219,24 +2936,29 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               multiline
               rows={2}
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={externalBatchDialogLoading || isFacilityOperator}
             />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Área de Cultivo de Recepción</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Receiving Cultivation Area</InputLabel>
               <Select
                 value={externalBatchCultivationAreaId}
                 onChange={e => setExternalBatchCultivationAreaId(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
                 MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
                 disabled={externalBatchDialogLoading || isFacilityOperator}
               >
-                <MenuItem value="" disabled><em>Seleccionar Área</em></MenuItem>
+                <MenuItem value=""><em>Select Area</em></MenuItem>
                 {cultivationAreas.length === 0 ? (
-                  <MenuItem value="" disabled><em>No hay áreas de cultivo disponibles en la instalación seleccionada</em></MenuItem>
+                  <MenuItem value="" disabled><em>No cultivation areas available in the selected facility</em></MenuItem>
                 ) : (
-                  cultivationAreas.map(area => <MenuItem key={area.id} value={area.id}>{area.name} ({area.current_stage?.name || 'Sin Etapa'})</MenuItem>)
+                  cultivationAreas.map(area => <MenuItem key={area.id} value={area.id}>{area.name} ({stages.find(s => s.id === area.current_stage_id)?.name || 'No Stage'})</MenuItem>)
                 )}
               </Select>
             </FormControl>
@@ -2246,7 +2968,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
             <Button
               type="submit"
               variant="contained"
-              disabled={externalBatchDialogLoading || !externalBatchName.trim() || externalBatchUnits === '' || !externalBatchProductType.trim() || !externalBatchVariety.trim() || !externalBatchOriginDetails.trim() || !externalBatchCultivationAreaId || isFacilityOperator}
+              disabled={externalBatchDialogLoading || !externalBatchName.trim() || externalBatchUnits === '' || !externalBatchUnit.trim() || !externalBatchProductType.trim() || !externalBatchVariety.trim() || !externalBatchOriginDetails.trim() || !externalBatchCultivationAreaId || isFacilityOperator}
               sx={{
                 bgcolor: '#007bff',
                 '&:hover': { bgcolor: '#0056b3' }
@@ -2257,8 +2979,116 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           </DialogActions>
         </form>
       </Dialog>
-
-
+      
+      {/* --- NEW: DIÁLOGO DE AJUSTE DE INVENTARIO --- */}
+      <Dialog 
+        open={openAdjustmentDialog} 
+        onClose={handleCloseAdjustmentDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#3a506b', 
+          color: '#fff', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center' 
+        }}>
+          {DIALOG_TITLES.INVENTORY_ADJUSTMENT}
+          <IconButton onClick={handleCloseAdjustmentDialog} sx={{ color: '#e2e8f0' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: '20px !important' }}>
+          <Box component="form" onSubmit={handleRegisterAdjustment}>
+            <Typography sx={{ mb: 2, color: '#e2e8f0' }}>
+              Batch: <b>{selectedBatchForAdjustment?.name || ''}</b>
+            </Typography>
+            <Typography sx={{ mb: 2, color: '#a0aec0' }}>
+              Current Units: {selectedBatchForAdjustment?.current_units} {selectedBatchForAdjustment?.units}
+            </Typography>
+            <TextField
+              label="Adjustment Quantity"
+              type="number"
+              fullWidth
+              value={adjustmentQuantity}
+              onChange={e => setAdjustmentQuantity(e.target.value)}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              disabled={adjustmentDialogLoading}
+              required
+              inputProps={{ step: "any" }}
+            />
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+              <Select
+                value={adjustmentUnit}
+                onChange={e => setAdjustmentUnit(e.target.value)}
+                disabled={adjustmentDialogLoading}
+                required
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+              >
+                {UNIT_OPTIONS.map(unit => (
+                  <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Reason for Adjustment"
+              fullWidth
+              value={adjustmentReason}
+              onChange={e => setAdjustmentReason(e.target.value)}
+              disabled={adjustmentDialogLoading}
+              required
+              multiline
+              rows={3}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+            />
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Responsible User</InputLabel>
+              <Select
+                value={eventResponsibleUserId}
+                onChange={e => setEventResponsibleUserId(e.target.value)}
+                required
+                sx={{
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '.MuiSvgIcon-root': { color: '#fff' }
+                }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                disabled={adjustmentDialogLoading}
+              >
+                <MenuItem value=""><em>Select Responsible User</em></MenuItem>
+                {users.map(user => <MenuItem key={user.id} value={user.id}>{user.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#3a506b' }}>
+          <Button onClick={handleCloseAdjustmentDialog} color="secondary" sx={{ color: '#a0aec0' }}>
+            {BUTTON_LABELS.CANCEL}
+          </Button>
+          <Button
+            onClick={handleRegisterAdjustment}
+            color="primary"
+            disabled={adjustmentDialogLoading || !adjustmentQuantity || !adjustmentUnit || !adjustmentReason.trim() || !eventResponsibleUserId}
+            type="submit"
+            variant="contained"
+            sx={{
+              bgcolor: '#4CAF50',
+              '&:hover': { bgcolor: '#43A047' }
+            }}
+          >
+            {adjustmentDialogLoading ? <CircularProgress size={24} /> : BUTTON_LABELS.REGISTER_ADJUSTMENT}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
       <ConfirmationDialog
         open={confirmDialogOpen}
         title={confirmDialogData.title}
@@ -2269,13 +3099,12 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     </Box>
   );
 };
-
 BatchManagementPage.propTypes = {
   tenantId: PropTypes.number,
   isAppReady: PropTypes.bool.isRequired,
   userFacilityId: PropTypes.number,
   isGlobalAdmin: PropTypes.bool.isRequired,
   setParentSnack: PropTypes.func.isRequired,
+  hasPermission: PropTypes.func.isRequired,
 };
-
 export default BatchManagementPage;

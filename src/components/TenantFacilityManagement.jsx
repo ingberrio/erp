@@ -26,6 +26,7 @@ const SNACK_MESSAGES = {
   PERMISSION_DENIED: 'No tienes permisos para realizar esta acción.',
   GENERAL_ERROR_SAVING_FACILITY: 'Error al guardar instalación:',
   CANNOT_DELETE_FACILITY_WITH_AREAS: 'No se puede eliminar la instalación: Tiene áreas de cultivo asociadas.',
+  LICENCE_NUMBER_LENGTH_EXCEEDED: 'El número de licencia no puede exceder los 255 caracteres.', // NEW
 };
 
 const DIALOG_TITLES = {
@@ -47,6 +48,7 @@ const TenantFacilityManagement = ({ tenantId, setParentSnack, onClose, isGlobalA
   const [loading, setLoading] = useState(true);
   const [openFacilityDialog, setOpenFacilityDialog] = useState(false);
   const [newFacilityName, setNewFacilityName] = useState('');
+  const [newFacilityLicenceNumber, setNewFacilityLicenceNumber] = useState(''); // NEW state for licence number
   const [editingFacility, setEditingFacility] = useState(null);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [confirmDeleteDialogOpen, setConfirmDeleteDialogOpen] = useState(false);
@@ -90,6 +92,7 @@ const TenantFacilityManagement = ({ tenantId, setParentSnack, onClose, isGlobalA
   const handleOpenFacilityDialog = useCallback((facility = null) => {
     setEditingFacility(facility);
     setNewFacilityName(facility ? facility.name : '');
+    setNewFacilityLicenceNumber(facility ? (facility.licence_number || '') : ''); // NEW: Populate licence number
     setOpenFacilityDialog(true);
     setDialogLoading(false);
   }, []);
@@ -98,6 +101,7 @@ const TenantFacilityManagement = ({ tenantId, setParentSnack, onClose, isGlobalA
     setOpenFacilityDialog(false);
     setEditingFacility(null);
     setNewFacilityName('');
+    setNewFacilityLicenceNumber(''); // NEW: Clear licence number on close
     setDialogLoading(false);
   }, []);
 
@@ -115,6 +119,11 @@ const TenantFacilityManagement = ({ tenantId, setParentSnack, onClose, isGlobalA
       setParentSnack(SNACK_MESSAGES.FACILITY_NAME_INVALID_CHARS, 'warning');
       return;
     }
+    // NEW: Validate licence number length
+    if (newFacilityLicenceNumber.length > 255) {
+      setParentSnack(SNACK_MESSAGES.LICENCE_NUMBER_LENGTH_EXCEEDED, 'warning');
+      return;
+    }
     if (!tenantId) {
       setParentSnack('Error: No se pudo determinar el Tenant ID para guardar la instalación.', 'error');
       return;
@@ -124,7 +133,9 @@ const TenantFacilityManagement = ({ tenantId, setParentSnack, onClose, isGlobalA
     try {
       const facilityData = {
         name: newFacilityName,
+        address: '', // Add address field or remove if not used
         tenant_id: tenantId, // El tenant_id debe ir en el payload para Laravel
+        licence_number: newFacilityLicenceNumber.trim() || null, // NEW: Include licence number in payload
       };
 
       if (editingFacility) {
@@ -265,6 +276,11 @@ const TenantFacilityManagement = ({ tenantId, setParentSnack, onClose, isGlobalA
                     <Typography variant="body2" color="text.secondary" sx={{ color: '#a0aec0' }}>
                       ID: {facility.id}
                     </Typography>
+                    {facility.licence_number && ( // NEW: Display licence number if available
+                      <Typography variant="body2" color="text.secondary" sx={{ color: '#a0aec0' }}>
+                        Licence ID: {facility.licence_number}
+                      </Typography>
+                    )}
                     <Typography variant="body2" color="text.secondary" sx={{ color: '#a0aec0' }}>
                       Creada: {new Date(facility.created_at).toLocaleDateString()}
                     </Typography>
@@ -299,6 +315,22 @@ const TenantFacilityManagement = ({ tenantId, setParentSnack, onClose, isGlobalA
               }}
               disabled={dialogLoading}
               inputProps={{ maxLength: 100 }}
+            />
+            {/* NEW: Licence ID TextField */}
+            <TextField
+              label="Licence ID (Opcional)"
+              value={newFacilityLicenceNumber}
+              onChange={e => setNewFacilityLicenceNumber(e.target.value)}
+              fullWidth
+              sx={{ mb: 2,
+                '& .MuiInputBase-input': { color: '#fff' },
+                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+              }}
+              disabled={dialogLoading}
+              inputProps={{ maxLength: 255 }}
             />
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b' }}>
