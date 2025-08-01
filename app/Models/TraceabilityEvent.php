@@ -39,6 +39,8 @@ class TraceabilityEvent extends Model
         'unit',
         'from_location',
         'to_location',
+        'from_sub_location', // AÑADIDO: Nueva columna
+        'to_sub_location',   // AÑADIDO: Nueva columna
         'method',
         'reason',
         'new_batch_id',

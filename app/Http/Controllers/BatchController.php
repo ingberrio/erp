@@ -66,7 +66,7 @@ class BatchController extends Controller
                 'current_units' => 'required|integer|min:0',
                 'end_type' => 'required|string|max:50',
                 'variety' => 'required|string|max:255',
-                'product_type' => 'required|string|max:255', // <-- NEW: Added product_type validation
+                'product_type' => 'required|string|max:255',
                 'projected_yield' => 'nullable|numeric|min:0',
                 'cultivation_area_id' => [
                     'required',
@@ -75,8 +75,11 @@ class BatchController extends Controller
                         return $query->where('tenant_id', $tenantId);
                     }),
                 ],
-                'origin_type' => ['nullable', 'string', Rule::in(['seeds', 'clones', 'tissue_culture', 'external_purchase'])],
+                'sub_location' => 'nullable|string|max:255', // AÑADIDO: Validación para sub_location
+                'origin_type' => ['nullable', 'string', Rule::in(['seeds', 'clones', 'tissue_culture', 'external_purchase', 'internal'])],
                 'origin_details' => 'nullable|string',
+                'is_packaged' => 'boolean', // Asegúrate de validar si lo envías desde el frontend
+                'units' => 'required|string|max:50', // Asegúrate de validar si lo envías desde el frontend
             ]);
 
             $cultivationArea = CultivationArea::find($validated['cultivation_area_id']);
@@ -84,6 +87,8 @@ class BatchController extends Controller
             $batch = Batch::create(array_merge($validated, [
                 'tenant_id' => $tenantId,
                 'facility_id' => $cultivationArea->facility_id,
+                'is_packaged' => $validated['is_packaged'] ?? false, // Default a false si no se envía
+                'units' => $validated['units'] ?? 'g', // Default a 'g' si no se envía
             ]));
 
             Log::info('Batch created successfully.', ['batch_id' => $batch->id, 'tenant_id' => $tenantId]);
@@ -129,7 +134,7 @@ class BatchController extends Controller
                 'current_units' => 'sometimes|required|integer|min:0',
                 'end_type' => 'sometimes|required|string|max:50',
                 'variety' => 'sometimes|required|string|max:255',
-                'product_type' => 'sometimes|required|string|max:255', // <-- NEW: Added product_type validation
+                'product_type' => 'sometimes|required|string|max:255',
                 'projected_yield' => 'nullable|numeric|min:0',
                 'cultivation_area_id' => [
                     'sometimes',
@@ -139,8 +144,11 @@ class BatchController extends Controller
                         return $query->where('tenant_id', $tenantId);
                     }),
                 ],
-                'origin_type' => ['sometimes', 'nullable', 'string', Rule::in(['seeds', 'clones', 'tissue_culture', 'external_purchase'])],
+                'sub_location' => 'nullable|string|max:255', // AÑADIDO: Validación para sub_location
+                'origin_type' => ['sometimes', 'nullable', 'string', Rule::in(['seeds', 'clones', 'tissue_culture', 'external_purchase', 'internal'])],
                 'origin_details' => 'sometimes|nullable|string',
+                'is_packaged' => 'sometimes|boolean', // Asegúrate de validar si lo envías desde el frontend
+                'units' => 'sometimes|required|string|max:50', // Asegúrate de validar si lo envías desde el frontend
             ]);
 
             if (isset($validated['cultivation_area_id'])) {
@@ -219,14 +227,15 @@ class BatchController extends Controller
                         return $query->where('tenant_id', $tenantId);
                     }),
                 ],
-                // When splitting, the new batch should inherit or be assigned a product_type
-                'newBatchProductType' => 'required|string|max:255', // <-- NEW: Product type for the new batch
+                'newBatchProductType' => 'required|string|max:255',
+                'newSubLocation' => 'nullable|string|max:255', // AÑADIDO: Sub-ubicación para el nuevo lote
             ]);
 
             $splitQuantity = $validatedData['splitQuantity'];
             $newBatchName = $validatedData['newBatchName'];
             $newCultivationAreaId = $validatedData['newCultivationAreaId'];
-            $newBatchProductType = $validatedData['newBatchProductType']; // Get the new product type
+            $newBatchProductType = $validatedData['newBatchProductType'];
+            $newSubLocation = $validatedData['newSubLocation'] ?? null; // Obtener la nueva sub-ubicación
 
             $newCultivationArea = CultivationArea::find($newCultivationAreaId);
 
@@ -241,19 +250,22 @@ class BatchController extends Controller
                 'current_units' => $splitQuantity,
                 'end_type' => $batch->end_type,
                 'variety' => $batch->variety,
-                'product_type' => $newBatchProductType, // <-- NEW: Assign product type to new batch
+                'product_type' => $newBatchProductType,
                 'projected_yield' => null,
                 'advance_to_harvesting_on' => null,
                 'cultivation_area_id' => $newCultivationAreaId,
+                'sub_location' => $newSubLocation, // AÑADIDO: Asignar sub_location al nuevo lote
                 'tenant_id' => $tenantId,
                 'facility_id' => $newCultivationArea->facility_id,
                 'parent_batch_id' => $batch->id,
                 'origin_type' => $batch->origin_type,
                 'origin_details' => $batch->origin_details,
+                'is_packaged' => $batch->is_packaged, // Heredar de la original
+                'units' => $batch->units, // Heredar de la original
             ]);
             Log::info('New batch created after split.', ['new_batch_id' => $newBatch->id, 'parent_batch_id' => $batch->id]);
 
-            // --- NEW: Create Traceability Event for Split ---
+            // --- Crear Traceability Event para Split ---
             TraceabilityEvent::create([
                 'batch_id' => $batch->id, // Original batch is affected
                 'event_type' => 'split',
@@ -262,9 +274,11 @@ class BatchController extends Controller
                 'facility_id' => $batch->facility_id,
                 'user_id' => auth()->id(), // Assuming authenticated user
                 'quantity' => $splitQuantity,
-                'unit' => $batch->end_type === 'Dried' ? 'g' : ($batch->end_type === 'Fresh' ? 'g' : 'units'), // Infer unit from end_type or use 'units'
+                'unit' => $batch->units, // Usar la unidad del lote original
                 'from_location' => $batch->cultivationArea->name,
+                'from_sub_location' => $batch->sub_location, // AÑADIDO: Sub-ubicación de origen
                 'to_location' => $newCultivationArea->name,
+                'to_sub_location' => $newSubLocation, // AÑADIDO: Sub-ubicación de destino
                 'new_batch_id' => $newBatch->id, // Link to the new batch created by the split
                 'tenant_id' => $tenantId,
             ]);
@@ -315,23 +329,36 @@ class BatchController extends Controller
                 'processedQuantity' => 'required|numeric|min:0|max:' . $batch->current_units, // Final quantity after processing
                 'processMethod' => 'required|string|max:255', // E.g., 'Lyophilization', 'Air Drying', 'Curing'
                 'processDescription' => 'nullable|string', // Additional notes about the process
-                'newProductType' => 'required|string|max:255', // <-- NEW: Product type AFTER processing
+                'newProductType' => 'required|string|max:255',
+                'facility_id' => [
+                    'required',
+                    'exists:facilities,id',
+                    Rule::exists('facilities', 'id')->where(function ($query) use ($tenantId) {
+                        return $query->where('tenant_id', $tenantId);
+                    }),
+                ],
+                'newSubLocation' => 'nullable|string|max:255', // AÑADIDO: Sub-ubicación para el lote procesado
             ]);
 
             $processedQuantity = $validatedData['processedQuantity'];
             $processMethod = $validatedData['processMethod'];
             $processDescription = $validatedData['processDescription'];
-            $newProductType = $validatedData['newProductType']; // Get the new product type
+            $newProductType = $validatedData['newProductType'];
+            $eventFacilityId = $validatedData['facility_id'];
+            $newSubLocation = $validatedData['newSubLocation'] ?? null; // Obtener la nueva sub-ubicación
 
-            DB::beginTransaction(); // Start transaction
+            Log::info('Debug: facility_id for traceability event creation', ['facility_id' => $eventFacilityId]);
+
+            DB::beginTransaction();
 
             // Calculate loss
             $initialQuantity = $batch->current_units;
             $loss = $initialQuantity - $processedQuantity;
 
-            // Update the original batch's units and product type
+            // Update the original batch's units, product type, and sub_location
             $batch->current_units = $processedQuantity;
-            $batch->product_type = $newProductType; // <-- NEW: Update product type after processing
+            $batch->product_type = $newProductType;
+            $batch->sub_location = $newSubLocation; // AÑADIDO: Actualizar sub_location del lote
             $batch->save();
 
             Log::info('Batch processed successfully.', [
@@ -340,44 +367,54 @@ class BatchController extends Controller
                 'new_units' => $batch->current_units,
                 'process_method' => $processMethod,
                 'tenant_id' => $tenantId,
-                'old_product_type' => $batch->getOriginal('product_type'), // Log original product type
+                'old_product_type' => $batch->getOriginal('product_type'),
                 'new_product_type' => $newProductType,
+                'facility_id_for_event' => $eventFacilityId,
+                'new_sub_location' => $newSubLocation, // Log la nueva sub-ubicación
             ]);
 
-            // --- NEW: Create Traceability Event for Processing ---
+            // --- Crear Traceability Event para Processing ---
             TraceabilityEvent::create([
                 'batch_id' => $batch->id,
                 'event_type' => 'processing',
                 'description' => "Batch '{$batch->name}' processed from {$initialQuantity} to {$processedQuantity} units via {$processMethod}. Product type changed from '{$batch->getOriginal('product_type')}' to '{$newProductType}'. Notes: {$processDescription}",
-                'area_id' => $batch->cultivation_area_id, // Event occurs in batch's current area
-                'facility_id' => $batch->facility_id,
-                'user_id' => auth()->id(), // Assuming authenticated user
-                'quantity' => $processedQuantity, // Final quantity after processing
-                'unit' => $batch->end_type === 'Dried' ? 'g' : ($batch->end_type === 'Fresh' ? 'g' : 'units'), // Infer unit
+                'area_id' => $batch->cultivation_area_id,
+                'facility_id' => $eventFacilityId,
+                'user_id' => auth()->id(),
+                'quantity' => $initialQuantity, // Cantidad original procesada
+                'unit' => $batch->units, // Usar la unidad del lote
                 'method' => $processMethod,
-                'reason' => $processDescription, // Use description as reason for processing
+                'reason' => $processDescription,
                 'tenant_id' => $tenantId,
+                'from_location' => $batch->cultivationArea->name,
+                'from_sub_location' => $batch->getOriginal('sub_location'), // Sub-ubicación original
+                'to_location' => $batch->cultivationArea->name, // Asumiendo que se procesa en la misma área
+                'to_sub_location' => $newSubLocation, // Nueva sub-ubicación después del proceso
             ]);
 
             // If there was a loss, record a separate destruction/adjustment event for the loss
             if ($loss > 0) {
                 TraceabilityEvent::create([
                     'batch_id' => $batch->id,
-                    'event_type' => 'adjustment_loss', // Or 'destruction' if it's actual destruction
+                    'event_type' => 'adjustment_loss',
                     'description' => "Adjustment for processing loss: {$loss} units. Method: {$processMethod}. From product type '{$batch->getOriginal('product_type')}'.",
                     'area_id' => $batch->cultivation_area_id,
-                    'facility_id' => $batch->facility_id,
+                    'facility_id' => $eventFacilityId,
                     'user_id' => auth()->id(),
                     'quantity' => $loss,
-                    'unit' => $batch->end_type === 'Dried' ? 'g' : ($batch->end_type === 'Fresh' ? 'g' : 'units'),
+                    'unit' => $batch->units,
                     'method' => $processMethod,
                     'reason' => 'Processing loss',
                     'tenant_id' => $tenantId,
+                    'from_location' => $batch->cultivationArea->name,
+                    'from_sub_location' => $newSubLocation, // La pérdida ocurre desde la nueva sub-ubicación
+                    'to_location' => 'N/A', // No se mueve a una ubicación
+                    'to_sub_location' => 'N/A',
                 ]);
             }
             // --- END NEW ---
 
-            DB::commit(); // Commit transaction
+            DB::commit();
 
             // Load relations for frontend response
             $batch->load('cultivationArea.currentStage');
@@ -388,11 +425,11 @@ class BatchController extends Controller
             ], 200);
 
         } catch (ValidationException $e) {
-            DB::rollBack(); // Rollback transaction on validation error
+            DB::rollBack();
             Log::error('Validation failed during batch processing', ['errors' => $e->errors(), 'batch_id' => $batch->id]);
             return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
         } catch (\Throwable $e) {
-            DB::rollBack(); // Rollback transaction on any other error
+            DB::rollBack();
             Log::error('Unexpected error during batch processing', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'batch_id' => $batch->id]);
             return response()->json(['error' => 'An unexpected error occurred during batch processing.', 'details' => $e->getMessage()], 500);
         }

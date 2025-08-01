@@ -15,6 +15,7 @@ class Facility extends Model
         'name',
         'address',
         'tenant_id', // Asegúrate de incluir tenant_id si lo asignas masivamente
+        'licence_number', // AÑADIDO: Para permitir asignación masiva de licence_number
     ];
 
     // Relación con Tenant

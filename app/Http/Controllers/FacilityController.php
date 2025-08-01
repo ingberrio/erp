@@ -6,7 +6,7 @@ use App\Models\Facility;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth; // <-- ¡Asegúrate de que esta línea esté aquí!
+use Illuminate\Support\Facades\Auth;
 use App\Scopes\TenantScope; // Importar el TenantScope (aunque no se usa directamente aquí, es buena práctica)
 use Illuminate\Support\Facades\Schema; // Para Schema::hasColumn en TenantScope si aplica
 
@@ -106,12 +106,14 @@ class FacilityController extends Controller
                 'name' => 'required|string|max:255',
                 'address' => 'nullable|string|max:1000',
                 'tenant_id' => 'required|exists:tenants,id', // Ahora tenant_id es requerido y validado
+                'licence_number' => 'nullable|string|max:255', // AÑADIDO: Validación para licence_number
             ]);
 
             $facility = Facility::create([
                 'name' => $validated['name'],
                 'address' => $validated['address'] ?? null,
-                'tenant_id' => $validated['tenant_id'], // Usar el tenant_id validado
+                'tenant_id' => $validated['tenant_id'],
+                'licence_number' => $validated['licence_number'] ?? null, // AÑADIDO: Asignación de licence_number
             ]);
 
             Log::info('Facility created successfully.', ['facility_id' => $facility->id, 'tenant_id' => $validated['tenant_id']]);
@@ -159,6 +161,7 @@ class FacilityController extends Controller
                 'name' => 'sometimes|required|string|max:255',
                 'address' => 'nullable|string|max:1000',
                 'tenant_id' => 'sometimes|required|exists:tenants,id', // Super Admin puede cambiar el tenant_id
+                'licence_number' => 'nullable|string|max:255', // AÑADIDO: Validación para licence_number
             ]);
             $facility->update($validated);
             Log::info('Facility updated by Global Admin.', ['facility_id' => $facility->id, 'new_tenant_id' => $validated['tenant_id'] ?? $facility->tenant_id]);
@@ -175,6 +178,7 @@ class FacilityController extends Controller
             $validated = $request->validate([
                 'name' => 'sometimes|required|string|max:255',
                 'address' => 'nullable|string|max:1000',
+                'licence_number' => 'nullable|string|max:255', // AÑADIDO: Validación para licence_number
             ]);
 
             $facility->update($validated);
