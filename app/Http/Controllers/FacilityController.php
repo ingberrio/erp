@@ -223,4 +223,16 @@ class FacilityController extends Controller
             return response()->json(['error' => 'Failed to delete facility.'], 500);
         }
     }
+
+    public function getFacilitiesByTenantId($tenantId)
+    {
+        // Asegúrate de que solo los usuarios autorizados puedan ver esto
+        // Por ejemplo, un administrador global o un usuario del mismo tenant.
+        // Aquí se asume que tu middleware 'identify.tenant' ya maneja la mayoría de los casos,
+        // pero podrías añadir lógica de autorización adicional si es necesario.
+
+        $facilities = Facility::where('tenant_id', $tenantId)->get();
+
+        return response()->json($facilities);
+    }
 }

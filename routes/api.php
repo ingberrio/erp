@@ -16,6 +16,8 @@ use App\Http\Controllers\CultivationAreaController;
 use App\Http\Controllers\BatchController;
 use App\Http\Controllers\TraceabilityEventController;
 use App\Http\Controllers\RegulatoryReportController;
+use App\Http\Controllers\InventoryReconciliationController; // ¡IMPORTANTE: Añadir esta línea!
+use App\Http\Controllers\DiscrepancyReasonController; // ¡IMPORTANTE: Añadir esta línea!
 
 /*
 |--------------------------------------------------------------------------
@@ -82,6 +84,7 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     // --- MÓDULO DE CULTIVO ---
     // Facilities CRUD
     Route::apiResource('facilities', FacilityController::class, ['only' => ['index', 'show', 'store', 'update', 'destroy']]);
+    Route::get('/facilities/tenant/{tenantId}', [FacilityController::class, 'getFacilitiesByTenantId']);
 
     // Stages CRUD (Etapas)
     Route::apiResource('stages', StageController::class);
@@ -125,6 +128,16 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::apiResource('traceability-events', TraceabilityEventController::class); // <--- DESPUÉS DE LA ESPECÍFICA
     Route::post('/reports/generate-ctls', [RegulatoryReportController::class, 'generateCtls']);
     
+    // --- RUTAS DE RECONCILIACIÓN DE INVENTARIO (NUEVAS) ---
+    // Agrega estas líneas
+    Route::post('/physical-counts', [InventoryReconciliationController::class, 'storePhysicalCount']);
+    Route::get('/inventory/reconciliation', [InventoryReconciliationController::class, 'index']); 
+    Route::get('/discrepancy-reasons', [DiscrepancyReasonController::class, 'index']);
+    
+    Route::put('/inventory/discrepancies/{id}/justify', [InventoryReconciliationController::class, 'justifyDiscrepancy']);
+    // Route::post('/inventory/discrepancies/{id}/adjust', [InventoryReconciliationController::class, 'adjustDiscrepancy']);
+
+
     Route::get('/test-cors', function () {
         dd(['message' => 'CORS test successful!', 'headers_sent' => headers_sent()]);
     });
