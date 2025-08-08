@@ -166,6 +166,19 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     { label: 'Actualizar Permiso', value: 'update-permission' },
     { label: 'Eliminar Permiso', value: 'delete-permission' },
 
+    // NUEVOS PERMISOS PARA RECONCILIACIÓN DE INVENTARIO
+    { label: 'Ver Reconciliación de Inventario', value: 'view-inventory-reconciliation' },
+    { label: 'Gestionar Reconciliación de Inventario', value: 'manage-inventory-reconciliation' },
+    { label: 'Crear Reconciliación de Inventario', value: 'create-inventory-reconciliation' },
+    { label: 'Actualizar Reconciliación de Inventario', value: 'update-inventory-reconciliation' },
+    { label: 'Eliminar Reconciliación de Inventario', value: 'delete-inventory-reconciliation' },
+
+    // Si también necesitas permisos específicos por instalación para esto:
+    { label: 'Ver Reconciliación (específica por instalación)', value: 'view-inventory-reconciliation-facility-{id}' },
+    { label: 'Gestionar Reconciliación (específica por instalación)', value: 'manage-inventory-reconciliation-facility-{id}' },
+    { label: 'Justificar Discrepancia de Inventario', value: 'justify-inventory-discrepancy' },
+    { label: 'Aplicar Permisos de Administrador de Tenant', value: 'template-apply-tenant-admin' },
+
   ], []);
 
   // --- Estados y funciones para el diálogo de confirmación genérico ---

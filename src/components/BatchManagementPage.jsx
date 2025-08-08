@@ -866,7 +866,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     if (!eventBatchId) { showSnack(SNACK_MESSAGES.EVENT_BATCH_REQUIRED, 'warning'); return; }
     if (!eventResponsibleUserId) { showSnack("Responsible user is required.", 'warning'); return; }
     if (!selectedFacilityId) { showSnack("Facility ID is missing. Cannot register event.", 'error'); return; }
-    if (!batchCultivationAreaId) { showSnack(SNACK_MESSAGES.BATCH_AREA_REQUIRED, 'warning'); return; }
+    
 
     let eventData = {
       batch_id: eventBatchId,
@@ -1264,7 +1264,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         product_type: externalBatchProductType,
         variety: externalBatchVariety,
         cultivation_area_id: externalBatchCultivationAreaId,
-        origin_type: 'external_purchase',
+        origin_type: 'external',
         end_type: 'N/A',
         projected_yield: null,
         advance_to_harvesting_on: null,
@@ -1367,7 +1367,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         unit: adjustmentUnit,
         reason: adjustmentReason,
         sub_location: selectedBatchForAdjustment.sub_location || null,
-        user_id: eventResponsibleUserId || 1,
+        user_id: eventResponsibleUserId,
       }, { headers });
       
       showSnack(SNACK_MESSAGES.INVENTORY_ADJUSTMENT_SUCCESS, 'success');

@@ -28,6 +28,7 @@ import CloudDownloadIcon from '@mui/icons-material/CloudDownload'; // Icono para
 // NUEVOS Iconos para el submenú de cultivo
 import GrassIcon from '@mui/icons-material/Grass'; // Para Áreas de Cultivo
 import InventoryIcon from '@mui/icons-material/Inventory'; // Para Lotes
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'; // NUEVO: Para Reconciliación de Inventario
 
 // Componentes de tu aplicación
 import EmpresasCrud from './components/EmpresasCrud';
@@ -35,8 +36,9 @@ import UsuariosCrudInternal from './components/UsuariosCrudInternal';
 import CultivationPage from './components/CultivationPage';
 import CalendarPage from './components/CalendarPage';
 import LandingPage from './components/LandingPage';
-import BatchManagementPage from './components/BatchManagementPage'; // Importar el nuevo componente de lotes
-import RegulatoryReportsPage from './components/RegulatoryReportsPage'; // NUEVO: Importar el componente de Informes Regulatorios
+import BatchManagementPage from './components/BatchManagementPage';
+import RegulatoryReportsPage from './components/RegulatoryReportsPage';
+import InventoryReconciliationPage from './components/InventoryReconciliationPage'; // NUEVO: Importar el componente de reconciliación
 
 // Configuración de Axios
 export const api = axios.create({
@@ -84,7 +86,7 @@ function App() {
   const [userPermissions, setUserPermissions] = useState([]);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
   const [userFacilityId, setUserFacilityId] = useState(null);
-  const [appReady, setAppReady] = useState(false);
+  const [appReady, setAppReady] = useState(false); // Mantener este estado para controlar la carga de componentes
 
   const [facilities, setFacilities] = useState([]);
 
@@ -121,7 +123,7 @@ function App() {
       setUserPermissions([]);
       setUserFacilityId(null);
       setLoading(false);
-      setAppReady(true);
+      setAppReady(true); // App is ready even if no user is logged in
       return;
     }
 
@@ -150,16 +152,21 @@ function App() {
       return null;
     } finally {
       setLoading(false);
-      setAppReady(true);
+      setAppReady(true); // Mark app as ready once user/tenant info is processed
     }
   }, [showSnack]);
 
+  // MODIFICACIÓN CLAVE AQUÍ: Asegurar que fetchFacilitiesForPermissions solo se ejecute cuando appReady y isGlobalAdmin sean verdaderos
   const fetchFacilitiesForPermissions = useCallback(async () => {
-    if (!isGlobalAdmin) {
-      setFacilities([]);
+    // Solo procede si la aplicación está lista Y el usuario es un administrador global
+    if (!appReady || !isGlobalAdmin) {
+      setFacilities([]); // Asegura que facilities esté vacío si no es global admin o no está listo
+      console.log('App.jsx: Skipping facility fetch for permissions (not ready or not global admin).');
       return;
     }
     try {
+      // En este punto, appReady es verdadero, isGlobalAdmin es verdadero,
+      // y el objeto de usuario ha sido procesado, por lo que X-Tenant-ID debería ser correcto (o ausente para global admin).
       const response = await api.get('/facilities');
       const fetchedFacilities = Array.isArray(response.data)
         ? response.data
@@ -167,19 +174,22 @@ function App() {
         ? response.data.data
         : [];
       setFacilities(fetchedFacilities);
+      console.log('App.jsx: Facilities fetched for Global Admin:', fetchedFacilities);
     } catch (error) {
       console.error('App.jsx: Error cargando instalaciones para permisos:', error);
       showSnack('Error cargando instalaciones para permisos.', 'error');
     }
-  }, [isGlobalAdmin, showSnack]);
+  }, [isGlobalAdmin, appReady, showSnack]); // appReady añadido como dependencia
 
   useEffect(() => {
     fetchUserData();
   }, [fetchUserData]);
 
+  // MODIFICACIÓN CLAVE AQUÍ: Este useEffect ahora depende solo de la función memoizada,
+  // que ya contiene las comprobaciones de appReady e isGlobalAdmin
   useEffect(() => {
     fetchFacilitiesForPermissions();
-  }, [isGlobalAdmin, fetchFacilitiesForPermissions]);
+  }, [fetchFacilitiesForPermissions]);
 
   // NUEVO useEffect para manejar el X-Tenant-ID de forma reactiva
   useEffect(() => {
@@ -231,6 +241,8 @@ function App() {
           navigate('/cultivation/areas'); // Cambiado a la nueva ruta
         } else if (userHasPermission('view-batches')) { // NUEVO: Prioridad para lotes si tiene permiso
           navigate('/cultivation/batches');
+        } else if (userHasPermission('view-inventory-reconciliation')) { // NUEVO: Prioridad para reconciliación
+          navigate('/inventory-reconciliation');
         } else if (userHasPermission('view-users')) {
           navigate('/users');
         } else if (userHasPermission('view-companies')) {
@@ -494,7 +506,7 @@ function App() {
             </ListItem>
 
             {/* Menú de Cultivo con submenú */}
-            {(hasPermission('view-facilities') || hasPermission('view-stages') || hasPermission('view-cultivation-areas') || hasPermission('view-batches')) && (
+            {(hasPermission('view-facilities') || hasPermission('view-stages') || hasPermission('view-cultivation-areas') || hasPermission('view-batches') || hasPermission('view-inventory-reconciliation')) && (
               <>
                 <ListItem button onClick={handleCultivationMenuToggle}>
                   <ListItemIcon sx={{ color: '#e2e8f0' }}><LocalFloristIcon /></ListItemIcon>
@@ -515,6 +527,13 @@ function App() {
                         <ListItemText primary="Lotes" />
                       </ListItem>
                     )}
+                    {/* NUEVO: Elemento de menú para Reconciliación de Inventario */}
+                    {hasPermission('view-inventory-reconciliation') && (
+                      <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/inventory-reconciliation'); setDrawerOpen(false); }} selected={location.pathname === '/inventory-reconciliation'}>
+                        <ListItemIcon sx={{ color: '#e2e8f0' }}><CheckCircleOutlineIcon /></ListItemIcon>
+                        <ListItemText primary="Reconciliación Inv." />
+                      </ListItem>
+                    )}
                   </List>
                 </Collapse>
               </>
@@ -528,7 +547,7 @@ function App() {
             )}
 
             {/* Sección de Administración */}
-            {(hasPermission('view-users') || hasPermission('view-roles') || hasPermission('view-permissions') || hasPermission('view-companies') || hasPermission('generate-regulatory-reports')) && ( // NUEVO: Añadir permiso para informes
+            {(hasPermission('view-users') || hasPermission('view-roles') || hasPermission('view-permissions') || hasPermission('view-companies') || hasPermission('generate-regulatory-reports')) && (
               <>
                 <ListItem button onClick={handleAdminMenuToggle}>
                   <ListItemIcon sx={{ color: '#e2e8f0' }}><LockIcon /></ListItemIcon>
@@ -549,7 +568,7 @@ function App() {
                         <ListItemText primary="Usuarios y Roles" />
                       </ListItem>
                     )}
-                    {hasPermission('generate-regulatory-reports') && ( // NUEVO: Elemento de menú para Informes Regulatorios
+                    {hasPermission('generate-regulatory-reports') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/regulatory-reports'); setDrawerOpen(false); }} selected={location.pathname === '/regulatory-reports'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><CloudDownloadIcon /></ListItemIcon>
                         <ListItemText primary="Informes Regulatorios" />
@@ -593,7 +612,7 @@ function App() {
                 <UsuariosCrudInternal
                   tenantId={user?.tenant_id}
                   isAppReady={appReady}
-                  facilities={facilities}
+                  facilities={facilities} // `facilities` ahora se carga más seguro para global admins
                   setParentSnack={showSnack}
                   isGlobalAdmin={isGlobalAdmin}
                 />
@@ -602,7 +621,7 @@ function App() {
           )}
           {hasPermission('view-cultivation-areas') && (
             <Route
-              path="/cultivation/areas" // CAMBIO: Nueva ruta para áreas de cultivo
+              path="/cultivation/areas"
               element={
                 <CultivationPage
                   tenantId={user?.tenant_id}
@@ -611,12 +630,12 @@ function App() {
                   currentUserId={user?.id}
                   setParentSnack={showSnack}
                   isGlobalAdmin={isGlobalAdmin}
-                  hasPermission={hasPermission} // Pasar hasPermission a CultivationPage
+                  hasPermission={hasPermission}
                 />
               }
             />
           )}
-          {hasPermission('view-batches') && ( // NUEVO: Ruta para lotes
+          {hasPermission('view-batches') && (
             <Route
               path="/cultivation/batches"
               element={
@@ -626,7 +645,22 @@ function App() {
                   userFacilityId={userFacilityId}
                   setParentSnack={showSnack}
                   isGlobalAdmin={isGlobalAdmin}
-                  hasPermission={hasPermission} // Pasar hasPermission a BatchManagementPage
+                  hasPermission={hasPermission}
+                />
+              }
+            />
+          )}
+          {hasPermission('view-inventory-reconciliation') && ( // NUEVO: Ruta para Reconciliación de Inventario
+            <Route
+              path="/inventory-reconciliation"
+              element={
+                <InventoryReconciliationPage
+                  tenantId={user?.tenant_id}
+                  isAppReady={appReady}
+                  userFacilityId={userFacilityId}
+                  isGlobalAdmin={isGlobalAdmin}
+                  setParentSnack={showSnack}
+                  hasPermission={hasPermission}
                 />
               }
             />
@@ -646,7 +680,7 @@ function App() {
               }
             />
           )}
-          {hasPermission('generate-regulatory-reports') && ( // NUEVO: Ruta para Informes Regulatorios
+          {hasPermission('generate-regulatory-reports') && (
             <Route
               path="/regulatory-reports"
               element={
@@ -673,13 +707,22 @@ function App() {
                 isGlobalAdmin={isGlobalAdmin}
                 hasPermission={hasPermission}
               />
-            ) : user && hasPermission('view-batches') ? ( // NUEVO: Fallback a lotes si tiene permiso
+            ) : user && hasPermission('view-batches') ? (
               <BatchManagementPage
                 tenantId={user?.tenant_id}
                 isAppReady={appReady}
                 userFacilityId={userFacilityId}
                 setParentSnack={showSnack}
                 isGlobalAdmin={isGlobalAdmin}
+                hasPermission={hasPermission}
+              />
+            ) : user && hasPermission('view-inventory-reconciliation') ? ( // NUEVO: Fallback a reconciliación
+              <InventoryReconciliationPage
+                tenantId={user?.tenant_id}
+                isAppReady={appReady}
+                userFacilityId={userFacilityId}
+                isGlobalAdmin={isGlobalAdmin}
+                setParentSnack={showSnack}
                 hasPermission={hasPermission}
               />
             ) : user && hasPermission('view-users') ? (
@@ -699,7 +742,7 @@ function App() {
                 user={user}
                 hasPermission={hasPermission}
               />
-            ) : user && hasPermission('generate-regulatory-reports') ? ( // NUEVO: Fallback a informes regulatorios
+            ) : user && hasPermission('generate-regulatory-reports') ? (
               <RegulatoryReportsPage
                 tenantId={user?.tenant_id}
                 isAppReady={appReady}
