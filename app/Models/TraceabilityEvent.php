@@ -39,8 +39,8 @@ class TraceabilityEvent extends Model
         'unit',
         'from_location',
         'to_location',
-        'from_sub_location', // AÑADIDO: Nueva columna
-        'to_sub_location',   // AÑADIDO: Nueva columna
+        'from_sub_location',
+        'to_sub_location',
         'method',
         'reason',
         'new_batch_id',
@@ -55,6 +55,7 @@ class TraceabilityEvent extends Model
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'quantity'   => 'float',
     ];
 
     /**
@@ -65,26 +66,30 @@ class TraceabilityEvent extends Model
     protected static function booted()
     {
         static::creating(function ($event) {
-            // Asigna el tenant_id automáticamente si no está presente y el contexto del inquilino existe.
-            // Esto es útil si estás usando un paquete de multi-tenancy como tenancy/tenancy
-            // o si tienes tu propia función global `tenant()`.
+            // Asigna tenant_id automáticamente si hay contexto de inquilino
             if (empty($event->tenant_id) && function_exists('tenant') && tenant()) {
                 $event->tenant_id = tenant()->id;
             }
-            // Si no usas un paquete de tenancy y el tenant_id viene del Auth::user()
-            // o de un header, asegúrate de que se asigne antes de la creación del modelo
-            // en el controlador o en un evento de modelo más temprano si es necesario.
-            // La lógica en el controlador para el `store` ya lo maneja con $request->header('X-Tenant-ID')
-            // o Auth::user()->tenant_id, así que esta parte es más una salvaguarda.
+
+            // Normalizaciones suaves de strings (evita espacios accidentales)
+            foreach (['event_type','description','from_location','to_location','from_sub_location','to_sub_location','method','reason','unit'] as $attr) {
+                if (isset($event->{$attr}) && is_string($event->{$attr})) {
+                    $event->{$attr} = trim($event->{$attr});
+                }
+            }
         });
     }
+
+    /**
+     * Relationships
+     */
 
     /**
      * Get the batch that owns the traceability event.
      */
     public function batch()
     {
-        return $this->belongsTo(Batch::class);
+        return $this->belongsTo(Batch::class, 'batch_id');
     }
 
     /**
@@ -100,7 +105,7 @@ class TraceabilityEvent extends Model
      */
     public function facility()
     {
-        return $this->belongsTo(Facility::class);
+        return $this->belongsTo(Facility::class, 'facility_id');
     }
 
     /**
@@ -108,11 +113,11 @@ class TraceabilityEvent extends Model
      */
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     /**
-     * Get the new batch associated with the traceability event (e.g., for harvest).
+     * Get the new batch associated with the traceability event (e.g., for harvest/splits).
      */
     public function newBatch()
     {
@@ -124,6 +129,26 @@ class TraceabilityEvent extends Model
      */
     public function tenant()
     {
-        return $this->belongsTo(Tenant::class);
+        return $this->belongsTo(Tenant::class, 'tenant_id');
+    }
+
+    /**
+     * Query Scopes
+     */
+
+    /**
+     * Scope: eventos a nivel de área (sin batch_id).
+     */
+    public function scopeAreaLevel($query)
+    {
+        return $query->whereNull('batch_id');
+    }
+
+    /**
+     * Scope: eventos a nivel de lote (con batch_id).
+     */
+    public function scopeBatchLevel($query)
+    {
+        return $query->whereNotNull('batch_id');
     }
 }

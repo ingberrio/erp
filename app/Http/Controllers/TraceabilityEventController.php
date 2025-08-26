@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Carbon\Carbon; // Para manejar fechas
+use App\Http\Requests\StoreTraceabilityEventRequest; // ADD: Import the FormRequest
 
 class TraceabilityEventController extends Controller
 {
@@ -133,81 +134,16 @@ class TraceabilityEventController extends Controller
     /**
      * Store a newly created resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Http\Requests\StoreTraceabilityEventRequest  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(Request $request)
+    public function store(StoreTraceabilityEventRequest $request)
     {
         try {
-            // Validar los datos de entrada
-            $rules = [
-                'batch_id' => 'required|integer|exists:batches,id',
-                'event_type' => 'required|string|in:movement,cultivation,harvest,sampling,destruction,loss_theft,processing,inventory_adjustment', // AÑADIDO: inventory_adjustment
-                'description' => 'nullable|string',
-                'area_id' => 'required|integer|exists:cultivation_areas,id',
-                'facility_id' => 'required|integer|exists:facilities,id',
-                'user_id' => 'required|integer|exists:users,id',
-                'quantity' => 'nullable|numeric|min:0',
-                'unit' => 'nullable|string|max:50',
-                'from_location' => 'nullable|string|max:255',
-                'to_location' => 'nullable|string|max:255',
-                'from_sub_location' => 'nullable|string|max:255', // AÑADIDO: Validación
-                'to_sub_location' => 'nullable|string|max:255',   // AÑADIDO: Validación
-                'method' => 'nullable|string|max:255',
-                'reason' => 'nullable|string',
-                'new_batch_id' => 'nullable|integer|exists:batches,id',
-            ];
+            // Get validated data from FormRequest (no need for manual validation)
+            $validatedData = $request->validated();
 
-            // Reglas específicas según el tipo de evento
-            switch ($request->event_type) {
-                case 'movement':
-                    $rules['to_location'] = 'required|string|max:255';
-                    // quantity y unit son opcionales para movimiento
-                    break;
-                case 'cultivation':
-                    $rules['method'] = 'required|string|max:255';
-                    break;
-                case 'harvest':
-                    $rules['quantity'] = 'required|numeric|min:0.01';
-                    $rules['unit'] = 'required|string|max:50';
-                    $rules['new_batch_id'] = 'nullable|integer|exists:batches,id';
-                    break;
-                case 'sampling':
-                    $rules['quantity'] = 'required|numeric|min:0.01';
-                    $rules['unit'] = 'required|string|max:50';
-                    $rules['reason'] = 'required|string';
-                    break;
-                case 'destruction':
-                    $rules['quantity'] = 'required|numeric|min:0.01';
-                    $rules['unit'] = 'required|string|max:50';
-                    $rules['method'] = 'required|string|max:255';
-                    $rules['reason'] = 'required|string';
-                    break;
-                case 'loss_theft':
-                    $rules['quantity'] = 'required|numeric|min:0.01';
-                    $rules['unit'] = 'required|string|max:50';
-                    $rules['reason'] = 'required|string';
-                    break;
-                case 'processing':
-                    $rules['quantity'] = 'required|numeric|min:0.01';
-                    $rules['unit'] = 'required|string|max:50';
-                    $rules['method'] = 'required|string|max:255';
-                    break;
-                case 'inventory_adjustment': // NEW: Reglas para ajuste de inventario
-                    $rules['quantity'] = 'required|numeric'; // Puede ser positivo o negativo
-                    $rules['unit'] = 'required|string|max:50';
-                    $rules['reason'] = 'required|string';
-                    // from_location y to_location pueden ser nulos o la ubicación actual del lote
-                    $rules['from_location'] = 'nullable|string|max:255';
-                    $rules['to_location'] = 'nullable|string|max:255';
-                    $rules['from_sub_location'] = 'nullable|string|max:255';
-                    $rules['to_sub_location'] = 'nullable|string|max:255';
-                    break;
-            }
-
-            $validatedData = $request->validate($rules);
-
-            // Asignar tenant_id automáticamente
+            // Assign tenant_id automatically
             $tenantId = $request->header('X-Tenant-ID') ?? (Auth::check() ? Auth::user()->tenant_id : null);
             if (!$tenantId) {
                 Log::error('Tenant ID is missing during traceability event creation.');
@@ -215,14 +151,14 @@ class TraceabilityEventController extends Controller
             }
             $validatedData['tenant_id'] = $tenantId;
 
-            // Crear el evento de trazabilidad
+            // Create the traceability event
             $event = TraceabilityEvent::create($validatedData);
 
-            // NEW: Si es un evento de ajuste de inventario, actualizar la cantidad del lote
-            if ($event->event_type === 'inventory_adjustment') {
+            // If it's an inventory adjustment event, update batch quantity
+            if ($event->event_type === 'inventory_adjustment' && $event->batch_id) {
                 $batch = Batch::find($event->batch_id);
                 if ($batch) {
-                    $batch->current_units += $event->quantity; // Suma la cantidad (puede ser negativa)
+                    $batch->current_units += $event->quantity;
                     $batch->save();
                     Log::info('Batch units adjusted due to inventory_adjustment event.', [
                         'batch_id' => $batch->id,
@@ -234,16 +170,9 @@ class TraceabilityEventController extends Controller
                 }
             }
 
-
             Log::info('Evento de trazabilidad registrado:', ['event' => $event->toArray()]);
 
             return response()->json(['message' => 'Traceability event registered successfully.', 'event' => $event], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Error de validación al registrar evento:', ['errors' => $e->errors(), 'request_data' => $request->all()]);
-            return response()->json([
-                'message' => 'Error de validación al registrar el evento.',
-                'details' => $e->errors()
-            ], 422);
         } catch (\Exception $e) {
             Log::error('Error al registrar evento de trazabilidad: ' . $e->getMessage(), ['trace' => $e->getTraceAsString(), 'request_data' => $request->all()]);
             return response()->json(['message' => 'Error interno del servidor al registrar el evento.', 'error' => $e->getMessage()], 500);
