@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { api } from '../App'; // Ensure this import is correct
+import useFacilityOperator from '../hooks/useFacilityOperator';
 import {
   Box, Typography, Button, CircularProgress, Snackbar, Alert,
   TextField, Paper, FormControl, InputLabel, Select, MenuItem,
@@ -56,7 +57,7 @@ const formatDate = (dateString) => {
 
 const RegulatoryReportsPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, setParentSnack, hasPermission }) => {
   const [loading, setLoading] = useState(true);
-  const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
+  const isFacilityOperator = useFacilityOperator(hasPermission);
 
   const [facilities, setFacilities] = useState([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState(''); // Initialize as empty string
@@ -67,8 +68,10 @@ const RegulatoryReportsPage = ({ tenantId, isAppReady, userFacilityId, isGlobalA
 
   // Helper to show snackbar messages
   const showSnack = useCallback((message, severity = 'success') => {
-    setSnack({ open: true, message, severity });
-  }, []);
+    if (typeof setParentSnack === 'function') {
+      setParentSnack(message, severity);
+    }
+  }, [setParentSnack]);
 
   // Fetch Facilities
   const fetchFacilities = useCallback(async () => {
@@ -81,7 +84,13 @@ const RegulatoryReportsPage = ({ tenantId, isAppReady, userFacilityId, isGlobalA
     setLoading(true);
     try {
       const response = await api.get('/facilities');
-      const fetchedFacilities = Array.isArray(response.data) ? response.data : response.data.data || [];
+      let fetchedFacilities = Array.isArray(response.data) ? response.data : response.data.data || [];
+
+      // Filter facilities if user is a facility operator
+      if (isFacilityOperator && userFacilityId) {
+        fetchedFacilities = fetchedFacilities.filter(f => f.id === userFacilityId);
+      }
+      
       setFacilities(fetchedFacilities);
 
       // Logic to set default selected facility
@@ -104,7 +113,7 @@ const RegulatoryReportsPage = ({ tenantId, isAppReady, userFacilityId, isGlobalA
     } finally {
       setLoading(false);
     }
-  }, [isAppReady, tenantId, userFacilityId, isGlobalAdmin, showSnack]);
+  }, [isAppReady, tenantId, userFacilityId, isGlobalAdmin, showSnack, isFacilityOperator]);
 
   useEffect(() => {
     fetchFacilities();
@@ -349,16 +358,7 @@ const RegulatoryReportsPage = ({ tenantId, isAppReady, userFacilityId, isGlobalA
         </Box>
       </Paper>
 
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={6000}
-        onClose={() => setSnack({ ...snack, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })} sx={{ width: '100%' }}>
-          {snack.message}
-        </Alert>
-      </Snackbar>
+      
     </Box>
   );
 };

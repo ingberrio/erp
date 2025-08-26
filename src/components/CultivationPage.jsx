@@ -1,4 +1,5 @@
 // src/components/CultivationPage.jsx
+// CACHE BREAKER: Force browser refresh - Updated at 2025-08-26
 // This version consolidates all previously developed features, including:
 // - Stage and Cultivation Area management (CRUD, DND)
 // - Batch management with 'Product Type' field
@@ -95,10 +96,13 @@ const SNACK_MESSAGES = {
   BATCH_PRODUCT_TYPE_REQUIRED: 'Batch product type is required.', // Added for new field
   EVENT_REGISTRATION_ERROR: 'Error registering traceability event:',
   MOVEMENT_AREA_EVENT_REGISTERED: 'Cultivation area movement registered successfully.',
+  AREA_STAGE_TRANSITION_REGISTERED: 'Area stage transition traceability event registered successfully.',
   HARVEST_BATCH_CREATED: 'Harvest batch created successfully.',
   HARVEST_BATCH_CREATE_ERROR: 'Error creating harvest batch:',
   EXPORT_SUCCESS: 'Traceability events exported successfully.',
   EXPORT_ERROR: 'Error exporting traceability events:',
+  STAGE_TRANSITION_SUCCESS: 'Stage transition completed and traceability event registered.',
+  STAGE_TRANSITION_WARNING: 'Stage transition completed but traceability event registration failed.',
   BATCH_PROCESSED_SUCCESS: 'Batch processed successfully.', // Added for processing
   BATCH_PROCESS_ERROR: 'Error processing batch:', // Added for processing
   PROCESS_QUANTITY_REQUIRED: 'Processed quantity is required.', // Added for processing
@@ -237,7 +241,7 @@ BatchItem.propTypes = {
 };
 
 // --- Component: CultivationAreaContent ---
-const CultivationAreaContent = ({ area, handleEdit, handleDelete, isFacilityOperator, setParentSnack }) => {
+const CultivationAreaContent = ({ area, handleEdit, handleDelete, isFacilityOperator /*, setParentSnack */ }) => {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -294,7 +298,7 @@ CultivationAreaContent.propTypes = {
 };
 
 // --- Component: CultivationAreaItem ---
-const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setParentSnack, isFacilityOperator, isGlobalAdmin, handleOpenAreaDetail }) => {
+const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setParentSnack, isFacilityOperator, /* isGlobalAdmin, */ handleOpenAreaDetail }) => {
   const {
     attributes,
     listeners,
@@ -348,7 +352,7 @@ CultivationAreaItem.propTypes = {
 };
 
 // --- Component: StageView ---
-const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultivationAreas, handleDeleteStage, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, selectedFacilityId, facilities, isFacilityOperator, isGlobalAdmin, userFacilityId, currentUserId }) => {
+const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultivationAreas, handleDeleteStage, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, selectedFacilityId, facilities, isFacilityOperator, isGlobalAdmin, /* userFacilityId, */ currentUserId }) => {
   const [openAddAreaDialog, setOpenAddAreaDialog] = useState(false);
   const [areaName, setAreaName] = useState('');
   const [areaDescription, setAreaDescription] = useState(''); 
@@ -540,41 +544,67 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
           setParentSnack('You must select a batch to register the event.', 'warning');
           return;
       }
+      
+      // Validate required fields
+      if (!selectedFacilityId) {
+          setParentSnack('Error: Facility ID is required for traceability events.', 'error');
+          return;
+      }
+      
+      if (!currentUserId) {
+          setParentSnack('Error: User ID is required for traceability events.', 'error');
+          return;
+      }
+      
+      if (!currentAreaDetail?.id) {
+          setParentSnack('Error: Area ID is required for traceability events.', 'error');
+          return;
+      }
   
-      // Build the traceability event payload
+      // Build the traceability event payload with enhanced data sanitization
       const eventPayload = {
-        batch_id: eventBatchId, // Use the original affected batch
+        // Only include batch_id if it has a value
+        ...(eventBatchId && { batch_id: parseInt(eventBatchId) }),
         event_type: currentEventType,
-        description: eventDescription,
-        area_id: currentAreaDetail.id, // Associate the event with the current area
-        facility_id: selectedFacilityId, // Associate the event with the current facility
-        user_id: currentUserId, // Use the authenticated user's ID
+        description: eventDescription || null,
+        area_id: parseInt(currentAreaDetail.id), // Associate the event with the current area
+        facility_id: parseInt(selectedFacilityId), // Associate the event with the current facility
+        user_id: parseInt(currentUserId), // Use the authenticated user's ID
         ...(currentEventType === 'movement' && {
-          quantity: parseInt(eventQuantity, 10),
-          unit: eventUnit,
-          from_location: eventFromLocation,
-          to_location: eventToLocation,
+          quantity: eventQuantity ? parseFloat(eventQuantity) : null,
+          unit: eventUnit || null,
+          from_location: eventFromLocation || null,
+          to_location: eventToLocation || null,
         }),
         ...(currentEventType === 'cultivation' && {
-          method: eventMethod,
+          method: eventMethod || null,
         }),
         ...(currentEventType === 'harvest' && {
-          quantity: parseFloat(eventWeight), // Wet weight of the original batch
+          quantity: eventWeight ? parseFloat(eventWeight) : null, // Wet weight of the original batch
           unit: 'kg', // Assume kg for harvest
           new_batch_id: null, // NOW ALWAYS NULL FOR INITIAL HARVEST
         }),
         ...(currentEventType === 'sampling' && {
-          quantity: parseFloat(eventWeight), // Sample quantity (weight)
-          unit: eventUnit,
-          reason: eventReason,
+          quantity: eventWeight ? parseFloat(eventWeight) : null, // Sample quantity (weight)
+          unit: eventUnit || null,
+          reason: eventReason || null,
         }),
         ...(currentEventType === 'destruction' && {
-          quantity: parseFloat(eventWeight), // Destroyed quantity (weight/units)
-          unit: eventUnit,
-          method: eventMethod,
-          reason: eventReason,
+          quantity: eventWeight ? parseFloat(eventWeight) : null, // Destroyed quantity (weight/units)
+          unit: eventUnit || null,
+          method: eventMethod || null,
+          reason: eventReason || null,
         }),
       };
+      
+      // Enhanced data sanitization - convert empty strings and undefined values to null
+      Object.keys(eventPayload).forEach(key => {
+        if (eventPayload[key] === '' || eventPayload[key] === undefined) {
+          eventPayload[key] = null;
+        }
+      });
+      
+      console.log('Sanitized traceability event payload:', eventPayload);
   
       try {
         // Make the backend API call to register the traceability event
@@ -589,24 +619,48 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         setCurrentAreaDetail(prev => ({ ...prev, batches: updatedBatches }));
   
       } catch (err) {
-        console.error('Error registering traceability event:', err.response?.data || err.message);
+        console.group('🚨 Traceability Event Error (CultivationPage)');
+        console.error('Full error object:', err);
+        console.error('HTTP Status:', err.response?.status);
+        console.error('Response data:', err.response?.data);
+        console.error('Original event payload sent:', eventPayload);
+        console.groupEnd();
+        
         let errorMessage = SNACK_MESSAGES.EVENT_REGISTRATION_ERROR;
-        if (err.response && err.response.data) {
+        
+        if (err.response?.status === 422) {
+          // Enhanced error handling for validation errors
+          let detailedError = err.response?.data?.message || err.message;
+          const details = err.response?.data?.details;
+          
+          if (details) {
+            if (Array.isArray(details)) {
+              // FastAPI validation errors format
+              const validationErrors = details.map(error => {
+                const field = error.loc?.join?.('.') || 'field';
+                const message = error.msg || error.message || 'validation error';
+                return `${field}: ${message}`;
+              }).join(', ');
+              detailedError = `Validation errors - ${validationErrors}`;
+            } else if (typeof details === 'object') {
+              const firstDetailKey = Object.keys(details)[0];
+              if (firstDetailKey && Array.isArray(details[firstDetailKey]) && details[firstDetailKey].length > 0) {
+                detailedError = `${firstDetailKey}: ${details[firstDetailKey][0]}`;
+              } else {
+                detailedError = `Validation details: ${JSON.stringify(details)}`;
+              }
+            }
+          }
+          
+          errorMessage = `${errorMessage} ${detailedError}`;
+        } else if (err.response && err.response.data) {
             if (err.response.data.message) {
                 errorMessage = `${errorMessage} ${err.response.data.message}`;
-            }
-            if (err.response.data.details) {
-                const details = err.response.data.details;
-                const firstDetailKey = Object.keys(details)[0];
-                if (firstDetailKey && Array.isArray(details[firstDetailKey]) && details[firstDetailKey].length > 0) {
-                    errorMessage = `${errorMessage} ${firstDetailKey}: ${details[firstDetailKey][0]}`;
-                } else {
-                    errorMessage = `${errorMessage} ${JSON.stringify(details)}`;
-                }
             }
         } else if (err.message) {
             errorMessage = `${errorMessage} ${err.message}`;
         }
+        
         setParentSnack(errorMessage, 'error');
       }
     }, [currentAreaDetail, currentEventType, currentUserId, eventBatchId, eventDescription, eventQuantity, eventWeight, eventUnit, eventFromLocation, eventToLocation, eventMethod, eventReason, isGlobalAdmin, selectedFacilityId, setParentSnack, tenantId, fetchBatchesForArea, handleCloseRegisterEventDialog]);
@@ -806,17 +860,34 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       const newBatch = response.data;
       setParentSnack(SNACK_MESSAGES.BATCH_CREATED, 'success');
   
-      // 2. Create traceability event
+      // 2. Create traceability event with enhanced data sanitization
       try {
-        await api.post('/traceability-events', {
-          batch_id: newBatch.id,
-          area_id: currentAreaDetail.id,
-          facility_id: selectedFacilityId,
-          user_id: currentUserId,
+        const traceabilityEventPayload = {
+          batch_id: parseInt(newBatch.id),
+          area_id: parseInt(currentAreaDetail.id),
+          facility_id: parseInt(selectedFacilityId),
+          user_id: parseInt(currentUserId),
           event_type: 'creation',
           description: `Batch created: ${batchName} (Product Type: ${batchProductType})`, // Include product type in description
-        }, { headers });
-      } catch (traceErr) {
+          quantity: null,
+          unit: null,
+          from_location: null,
+          to_location: null,
+          method: null,
+          reason: null,
+        };
+        
+        // Sanitize payload - convert empty strings and undefined values to null
+        Object.keys(traceabilityEventPayload).forEach(key => {
+          if (traceabilityEventPayload[key] === '' || traceabilityEventPayload[key] === undefined) {
+            traceabilityEventPayload[key] = null;
+          }
+        });
+        
+        console.log('Sanitized batch creation traceability payload:', traceabilityEventPayload);
+        await api.post('/traceability-events', traceabilityEventPayload, { headers });
+      } catch (_traceErr) {
+        console.error('Error creating traceability event for batch creation:', _traceErr);
         setParentSnack('Batch created, but error creating traceability event.', 'warning');
       }
   
@@ -940,6 +1011,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         capacity_unit_type: areaCapacityUnitType,
         facility_id: areaFacilityId,
         current_stage_id: stage.id,
+        tenant_id: parseInt(effectiveTenantId, 10), // Add tenant_id to payload
       };
 
       if (editingArea) {
@@ -1117,7 +1189,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         newProductType: newProductType,
       };
 
-      const response = await api.post(`/batches/${processBatchId}/process`, payload, { headers });
+      /* const response = */ await api.post(`/batches/${processBatchId}/process`, payload, { headers });
       setParentSnack(SNACK_MESSAGES.BATCH_PROCESSED_SUCCESS, 'success');
       handleCloseProcessBatchDialog();
       // Refresh batches to reflect changes in product type and units
@@ -1820,8 +1892,13 @@ StageView.propTypes = {
 
 // --- Main Cultivation Module Component ---
 const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, isGlobalAdmin, setParentSnack }) => {
-  // Added for debugging: Checks if this version of the component is loading
-  console.log("CultivationPage: Component loaded. Version V2025-07-18-TRACEABILITY-GRID-INTEGRATION-FINAL-FIX.");
+// Added for debugging: Checks if this version of the component is loading
+  // FORCE CACHE REFRESH - Version updated with enhanced error logging
+  const CURRENT_TIMESTAMP = new Date().toISOString();
+  console.log("🚀 CultivationPage: Component loaded. Version V2025-08-26-TRACEABILITY-ENABLED.");
+  console.log("🔄 CACHE REFRESH FORCED - Enhanced error logging active - " + CURRENT_TIMESTAMP);
+  console.log("⚡ HOT RELOAD ACTIVE - This should show current time: " + CURRENT_TIMESTAMP);
+  console.log("✅ ENABLED: Traceability events for area movements (backend FormRequest fix)");
 
   const [facilities, setFacilities] = useState([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
@@ -2065,7 +2142,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
         const selectedFac = facilities.find(f => f.id === selectedFacilityId);
         if (selectedFac && selectedFac.tenant_id) {
           effectiveTenantId = String(selectedFac.tenant_id);
-          // stageData.tenant_id = parseInt(effectiveTenantId, 10); // Uncomment if backend needs it in payload
+          stageData.tenant_id = parseInt(effectiveTenantId, 10); // Add tenant_id to payload
           console.log('handleSaveStage: Global Admin, using X-Tenant-ID from selected facility:', effectiveTenantId);
         } else {
           showSnack('Error: As Super Admin, the selected facility does not have a valid tenant to create/edit stages.', 'error');
@@ -2079,6 +2156,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
       }
     } else if (tenantId) {
         effectiveTenantId = String(tenantId);
+        stageData.tenant_id = parseInt(effectiveTenantId, 10); // Add tenant_id to payload
         console.log('handleSaveStage: Tenant user, using X-Tenant-ID from user:', effectiveTenantId);
     } else {
         showSnack('Error: Could not determine Tenant ID to create/edit stages.', 'error');
@@ -2245,6 +2323,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
     sourceStage.cultivationAreas = sourceStage.cultivationAreas.map((area, idx) => ({ ...area, order: idx }));
     destinationStage.cultivationAreas = destinationStage.cultivationAreas.map((area, idx) => ({ ...area, order: idx }));
 
+    // Update cultivation area in backend
     await api.put(`/cultivation-areas/${draggedArea.id}`, {
       current_stage_id: destinationStage.id,
       order: targetIndex,
@@ -2254,6 +2333,8 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
       capacity_unit_type: draggedArea.capacity_unit_type,
       facility_id: draggedArea.facility_id,
     });
+    
+    // Update stage ordering
     await api.put(`/stages/${sourceStage.id}/cultivation-areas/reorder`, {
       area_ids: sourceStage.cultivationAreas.map(area => area.id),
     });
@@ -2261,71 +2342,60 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
       area_ids: destinationStage.cultivationAreas.map(area => area.id),
     });
 
-    // --- Register traceability event for area movement ---
-    const headers = {};
-    let effectiveTenantId = null;
-
-    if (isGlobalAdmin) {
-        if (selectedFacilityId) {
-            const selectedFac = facilities.find(f => f.id === selectedFacilityId);
-            if (selectedFac && selectedFac.tenant_id) {
-                effectiveTenantId = String(selectedFac.tenant_id);
-            }
-        }
-    } else if (tenantId) {
-        effectiveTenantId = String(tenantId);
-    }
-
-    if (effectiveTenantId) {
-        headers['X-Tenant-ID'] = effectiveTenantId;
-    }
-
-    const traceabilityPayload = {
-        area_id: draggedArea.id,
-        event_type: 'movement',
-        description: `Area moved from stage "${sourceStage.name}" to stage "${destinationStage.name}".`,
-        from_location: sourceStage.name,
-        to_location: destinationStage.name,
-        facility_id: selectedFacilityId, // Ensure selectedFacilityId is available here
-        user_id: currentUserId, // Ensure currentUserId is available here
-        batch_id: null, // This event is for area movement, not a specific batch
-        quantity: 1, // One "unit" of area is moved
-        unit: 'area', // Unit for area movement
-    };
-
-    console.log('Traceability payload for area movement:', traceabilityPayload); // Log the payload
-
+    // Register area movement traceability event
     try {
-        await api.post('/traceability-events', traceabilityPayload, { headers });
-        setParentSnack(SNACK_MESSAGES.MOVEMENT_AREA_EVENT_REGISTERED, 'success');
-    } catch (traceErr) {
-        console.error('Error registering area movement event:', traceErr); // Log the full error object
-        let errorMessage = 'Unknown error registering area movement.';
-        if (traceErr.response) {
-            if (traceErr.response.data) {
-                // Try to get a specific message from the response data
-                if (typeof traceErr.response.data === 'string') {
-                    errorMessage = traceErr.response.data;
-                } else if (traceErr.response.data.message) {
-                    errorMessage = traceErr.response.data.message;
-                } else if (traceErr.response.data.details) {
-                    // If there are validation details (e.g., from a Pydantic ValidationError in FastAPI)
-                    const errors = traceErr.response.data.details;
-                    errorMessage = `Validation errors: ${JSON.stringify(errors)}`;
-                } else {
-                    // Fallback for generic object response
-                    errorMessage = `Server error response: ${JSON.stringify(traceErr.response.data)}`;
-                }
-            }
-            if (traceErr.response.status) {
-                errorMessage = `Error ${traceErr.response.status}: ${errorMessage}`;
-            }
-        } else if (traceErr.message) {
-            errorMessage = `${errorMessage} ${traceErr.message}`;
+      const headers = {};
+      let effectiveTenantId = null;
+      
+      if (isGlobalAdmin) {
+        if (selectedFacilityId) {
+          const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+          if (selectedFac && selectedFac.tenant_id) {
+            effectiveTenantId = String(selectedFac.tenant_id);
+          }
         }
-        setParentSnack(errorMessage, 'error');
+      } else if (tenantId) {
+        effectiveTenantId = String(tenantId);
+      }
+      
+      if (effectiveTenantId) {
+        headers['X-Tenant-ID'] = effectiveTenantId;
+      }
+      
+      // Area movement payload (batch_id omitted for area-level movements)
+      const areaMovementPayload = {
+        event_type: 'movement',
+        area_id: parseInt(draggedArea.id),
+        facility_id: parseInt(selectedFacilityId),
+        user_id: parseInt(currentUserId || 1),
+        description: `Area '${draggedArea.name}' moved from '${sourceStage.name}' to '${destinationStage.name}'`,
+        from_location: sourceStage.name,
+        to_location: destinationStage.name
+      };
+      
+      console.log('🚀 Registering AREA MOVEMENT traceability event (backend fixed):');
+      console.log('- Payload:', areaMovementPayload);
+      console.log('- Headers:', headers);
+      
+      await api.post('/traceability-events', areaMovementPayload, { headers });
+      
+      console.log('✅ SUCCESS: Area movement traceability event registered!');
+      setParentSnack(
+        `${SNACK_MESSAGES.CULTIVATION_AREA_MOVED} Traceability event registered successfully.`, 
+        'success'
+      );
+      
+    } catch (traceabilityError) {
+      console.error('🚨 Error registering traceability event:', traceabilityError);
+      console.error('Response data:', traceabilityError.response?.data);
+      
+      setParentSnack(
+        `${SNACK_MESSAGES.CULTIVATION_AREA_MOVED} Warning: Could not register traceability event.`,
+        'warning'
+      );
     }
-  }, [isGlobalAdmin, selectedFacilityId, facilities, tenantId, currentUserId, setParentSnack]); // Add necessary dependencies
+    
+  }, [setParentSnack, isGlobalAdmin, selectedFacilityId, facilities, tenantId, currentUserId]);
 
   const handleDragEnd = useCallback(async (event) => {
     const { active, over } = event;
@@ -2486,7 +2556,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
           const errorText = await error.response.data.text();
           const errorJson = JSON.parse(errorText);
           errorMessage = `${errorMessage} ${errorJson.message || errorText}`;
-        } catch (e) {
+        } catch {
           errorMessage = `${errorMessage} ${error.response.statusText || error.message}`;
         }
       } else {

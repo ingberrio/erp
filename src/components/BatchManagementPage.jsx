@@ -17,8 +17,9 @@
 // - FIX: Corrected typo in handleCloseRegisterEventEventDialog to handleCloseRegisterEventDialog.
 // - INTEGRATION: Integrated frontend with Laravel API for Traceability Events (fetch and store).
 // - NEW: Added inventory adjustment functionality with sub_location field
+// - SECURITY: Enhanced input validation, sanitization, rate limiting, and audit logging
 // All UI texts and messages are translated to English.
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { api } from '../App'; // Asegúrate de que esta importación sea correcta
 import {
@@ -59,121 +60,29 @@ import {
 } from '@mui/x-data-grid'; // Import the custom hook for facility operator logic
 import useFacilityOperator from '../hooks/useFacilityOperator';
 
-// --- Constants for UI Text and Labels ---
-const SNACK_MESSAGES = {
-  FACILITIES_ERROR: 'Error loading facilities.',
-  BATCHES_ERROR: 'Error loading batches.',
-  STAGES_ERROR: 'Error loading stages.',
-  CULTIVATION_AREAS_ERROR: 'Error loading cultivation areas.',
-  TENANT_ID_MISSING: 'Could not determine Tenant ID.',
-  PERMISSION_DENIED: 'You do not have permission to perform this action.',
-  VALIDATION_ERROR: 'Validation error:',
-  INVALID_DATA: 'Invalid data:',
-  EVENT_REGISTERED_SUCCESS: 'Traceability event successfully registered.',
-  BATCH_CREATED: 'Batch created successfully.',
-  BATCH_UPDATED: 'Batch updated successfully.',
-  BATCH_DELETED: 'Batch deleted successfully.',
-  BATCH_SPLIT_SUCCESS: 'Batch successfully split.',
-  BATCH_SPLIT_ERROR: 'Error splitting the batch.',
-  BATCH_NAME_REQUIRED: 'Batch name is required.',
-  BATCH_UNITS_REQUIRED: 'Current batch units are required.',
-  BATCH_END_TYPE_REQUIRED: 'Batch end type is required.',
-  BATCH_VARIETY_REQUIRED: 'Batch variety is required.',
-  BATCH_AREA_REQUIRED: 'You must select a cultivation area for the batch.',
-  CANNOT_DELETE_BATCH_WITH_EVENTS: 'Cannot delete batch: It has associated traceability events.',
-  SPLIT_QUANTITY_INVALID: 'The split quantity must be greater than 0 and less than the current batch units.',
-  NEW_BATCH_NAME_REQUIRED: 'New batch name is required.',
-  DESTINATION_AREA_REQUIRED: 'You must select a destination cultivation area for the new batch.',
-  BATCH_ORIGIN_TYPE_REQUIRED: 'Batch origin type is required.',
-  BATCH_PRODUCT_TYPE_REQUIRED: 'Batch product type is required.',
-  BATCH_PROCESSED_SUCCESS: 'Batch processed successfully.',
-  BATCH_PROCESSED_ERROR: 'Error processing the batch.',
-  PROCESSED_QUANTITY_INVALID: 'Processed quantity must be a valid number, greater than 0, and not greater than current units.',
-  PROCESS_METHOD_REQUIRED: 'Processing method is required.',
-  NEW_PRODUCT_TYPE_REQUIRED: 'New product type is required.',
-  EXTERNAL_BATCH_CREATED: 'External batch successfully registered.',
-  EXTERNAL_BATCH_ERROR: 'Error registering external batch:',
-  LOSS_THEFT_QUANTITY_REQUIRED: 'Loss/theft quantity is required.',
-  LOSS_THEFT_UNIT_REQUIRED: 'Loss/theft unit is required.',
-  LOSS_THEFT_REASON_REQUIRED: 'Loss/theft reason is required.',
-  EVENT_TYPE_REQUIRED: "Event type is required.",
-  EVENT_DATE_REQUIRED: "Event date is required.",
-  EVENT_BATCH_REQUIRED: "Batch for event is required.",
-  EVENT_NEW_LOCATION_REQUIRED: "New location is required for movement event.",
-  EVENT_HARVEST_QUANTITY_REQUIRED: "Harvest quantity is required.",
-  EVENT_SAMPLING_QUANTITY_REQUIRED: "Sampling quantity is required.",
-  EVENT_DESTRUCTION_QUANTITY_REQUIRED: "Destruction quantity is required.",
-  BATCH_UNIT_REQUIRED: "Batch unit of measure is required.",
-  // NEW: Mensajes para ajuste de inventario
-  INVENTORY_ADJUSTMENT_SUCCESS: "Inventory adjustment registered successfully.",
-  INVENTORY_ADJUSTMENT_ERROR: "Error registering inventory adjustment.",
-  INVENTORY_ADJUSTMENT_REQUIRED: "All adjustment fields are required.",
-};
+// Import security utilities
+import {
+  sanitizeInput,
+  validateNumericInput,
+  validateStringInput,
+  validateBatchData,
+  createRateLimiter,
+  createAuditLog
+} from './batch-management/batchManagement.utils';
 
-const DIALOG_TITLES = {
-  ADD_BATCH: 'Add New Batch',
-  EDIT_BATCH: 'Edit Batch',
-  BATCH_DETAIL: 'Batch Details:',
-  REGISTER_EVENT: 'Register Traceability Event',
-  CONFIRM_BATCH_DELETION: 'Confirm Batch Deletion',
-  SPLIT_BATCH: 'Split Batch',
-  PROCESS_BATCH: 'Process Batch',
-  REGISTER_EXTERNAL_BATCH: 'Register External Batch',
-  // NEW: Título para ajuste de inventario
-  INVENTORY_ADJUSTMENT: 'Inventory Adjustment',
-};
-const BUTTON_LABELS = {
-  CANCEL: 'Cancel',
-  CONFIRM: 'Confirm',
-  SAVE_CHANGES: 'Save Changes',
-  CREATE_BATCH: 'Create Batch',
-  ADD_NEW_BATCH: 'Add New Batch',
-  CLOSE: 'Close',
-  REGISTER_MOVEMENT: 'Register Movement',
-  REGISTER_CULTIVATION_EVENT: 'Register Cultivation Event',
-  REGISTER_HARVEST: 'Register Harvest',
-  REGISTER_SAMPLING: 'Register Sampling',
-  REGISTER_DESTRUCTION: 'Register Destruction',
-  REGISTER_LOSS_THEFT: 'Register Loss/Theft',
-  REGISTER: 'Register',
-  VIEW_DETAILS: 'View Details',
-  DELETE: 'Delete',
-  EDIT: 'Edit',
-  SPLIT_BATCH: 'Split Batch',
-  CREATE_NEW_BATCH: 'Create New Batch',
-  PROCESS: 'Process',
-  REGISTER_EXTERNAL_BATCH: 'Register External Batch',
-  // NEW: Etiqueta para ajuste de inventario
-  REGISTER_ADJUSTMENT: 'Register Adjustment',
-};
+// Import constants including security rules
+import {
+  SNACK_MESSAGES,
+  DIALOG_TITLES,
+  BUTTON_LABELS,
+  HEALTH_CANADA_PRODUCT_TYPES,
+  UNIT_OPTIONS,
+  EVENT_TYPES,
+  SECURITY_RULES,
+  AUDIT_ACTIONS
+} from './batch-management/batchManagement.constants';
 
-// Health Canada Product Types (simplified for initial implementation)
-const HEALTH_CANADA_PRODUCT_TYPES = [
-  { value: 'Vegetative cannabis plants', label: 'Vegetative Cannabis Plants' },
-  { value: 'Fresh cannabis', label: 'Fresh Cannabis' },
-  { value: 'Dried cannabis', label: 'Dried Cannabis' },
-  { value: 'Seeds', label: 'Seeds' },
-  { value: 'Pure Intermediates', label: 'Pure Intermediates' },
-  { value: 'Edibles - Solids', label: 'Edibles - Solids' },
-  { value: 'Edibles - Non-solids', label: 'Edibles - Non-solids' },
-  { value: 'Extracts - Inhaled', label: 'Extracts - Inhaled' },
-  { value: 'Extracts - Ingested', label: 'Extracts - Ingested' },
-  { value: 'Extracts - Other', label: 'Extracts - Other' },
-  { value: 'Topicals', label: 'Topicals' },
-  { value: 'Other', label: 'Other' },
-];
-const UNIT_OPTIONS = ['g', 'kg', 'units', 'ml', 'L']; // Define unit options
-const EVENT_TYPES = [
-  { value: 'movement', label: 'Movement', icon: TrendingUpIcon },
-  { value: 'cultivation', label: 'Cultivation', icon: EcoIcon },
-  { value: 'harvest', label: 'Harvest', icon: HarvestIcon },
-  { value: 'sampling', label: 'Sampling', icon: ScienceIcon },
-  { value: 'destruction', label: 'Destruction', icon: DeleteForeverIcon },
-  { value: 'loss_theft', label: 'Loss/Theft', icon: RemoveCircleOutlineIcon },
-  { value: 'processing', label: 'Processing', icon: TransformIcon },
-  // NEW: Tipo de evento para ajuste de inventario
-  { value: 'inventory_adjustment', label: 'Inventory Adjustment', icon: AddBoxIcon },
-];
+
 // Helper to format date to YYYY-MM-DD
 const formatDate = (dateString) => {
   if (!dateString) return '';
@@ -279,7 +188,7 @@ function CustomDataGridToolbar() {
   );
 }
 
-const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, setParentSnack, hasPermission }) => {
+const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, isGlobalAdmin, setParentSnack, hasPermission }) => {
   const [batches, setBatches] = useState([]);
   const [facilities, setFacilities] = useState([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
@@ -287,10 +196,86 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
   const [stages, setStages] = useState([]);
   const [users, setUsers] = useState([]); // For event registration (e.g., responsible user)
   const [loading, setLoading] = useState(true);
-  // Snackbar state (using parent snack for consistency)
+  
+  // Performance optimization: Use refs to prevent unnecessary re-renders
+  const batchesRef = useRef([]);
+  const facilitiesRef = useRef([]);
+  const cultivationAreasRef = useRef([]);
+  const stagesRef = useRef([]);
+  const usersRef = useRef([]);
+  
+  // Cache for API responses to reduce unnecessary requests
+  const apiCacheRef = useRef(new Map());
+  
+  // Security: Rate limiting for API calls
+  const rateLimiterRef = useRef(createRateLimiter(SECURITY_RULES.RATE_LIMIT_REQUESTS, SECURITY_RULES.RATE_LIMIT_WINDOW_MS));
+  
+  // Security: Track user actions for audit logging
+  const auditLogRef = useRef([]);
+  
+  // Security: Input validation state
+  const [validationErrors, setValidationErrors] = useState({});
+  // Snackbar state (using parent snack for consistency) - Optimized with useMemo
   const showSnack = useCallback((message, severity = 'success') => {
-    setParentSnack(message, severity);
+    if (typeof setParentSnack === 'function') {
+      setParentSnack(message, severity);
+    }
   }, [setParentSnack]);
+  
+  // Security: Enhanced API call wrapper with rate limiting and audit logging
+  const secureApiCall = useCallback(async (apiCall, action, entityType, entityId = null) => {
+    // Rate limiting check
+    const rateLimitResult = rateLimiterRef.current();
+    if (!rateLimitResult.allowed) {
+      const waitTime = Math.ceil(rateLimitResult.retryAfter / 1000);
+      showSnack(`${SNACK_MESSAGES.SECURITY_RATE_LIMIT_EXCEEDED} Wait ${waitTime} seconds.`, 'warning');
+      
+      // Log rate limit violation
+      const auditLog = createAuditLog(
+        AUDIT_ACTIONS.RATE_LIMIT_EXCEEDED,
+        entityType,
+        entityId,
+        users.find(u => u.current)?.id || null,
+        { action, rateLimitWindow: SECURITY_RULES.RATE_LIMIT_WINDOW_MS }
+      );
+      auditLogRef.current.push(auditLog);
+      console.warn('Rate limit exceeded:', auditLog);
+      
+      throw new Error('Rate limit exceeded');
+    }
+    
+    try {
+      const result = await apiCall();
+      
+      // Log successful action
+      const auditLog = createAuditLog(
+        action,
+        entityType,
+        entityId,
+        users.find(u => u.current)?.id || null,
+        { success: true }
+      );
+      auditLogRef.current.push(auditLog);
+      
+      return result;
+    } catch (error) {
+      // Log failed action
+      const auditLog = createAuditLog(
+        action,
+        entityType,
+        entityId,
+        users.find(u => u.current)?.id || null,
+        { 
+          success: false, 
+          error: error.message,
+          statusCode: error.response?.status
+        }
+      );
+      auditLogRef.current.push(auditLog);
+      
+      throw error;
+    }
+  }, [showSnack, users]);
   // Add/Edit Batch Dialog States
   const [openBatchDialog, setOpenBatchDialog] = useState(false);
   const [editingBatch, setEditingBatch] = useState(null);
@@ -370,15 +355,25 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
   const [adjustmentDialogLoading, setAdjustmentDialogLoading] = useState(false);
   // ------------------------------------------------------------------------
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterProductType, setFilterProductType] = useState("");
-  const [filterCultivationAreaId, setFilterCultivationAreaId] = useState("");
+  // Filters - Currently managed by DataGrid's built-in filtering
+  const [searchTerm] = useState("");
+  const [filterProductType] = useState("");
+  const [filterCultivationAreaId] = useState("");
   
   const isFacilityOperator = useFacilityOperator(hasPermission);
 
   // --- Data Fetching Functions ---
   const fetchFacilities = useCallback(async () => {
+    const cacheKey = `facilities_${isFacilityOperator}_${userFacilityId}`;
+    
+    // Check cache first
+    if (apiCacheRef.current.has(cacheKey)) {
+      const cachedData = apiCacheRef.current.get(cacheKey);
+      if (Date.now() - cachedData.timestamp < 300000) { // 5-minute cache
+        return cachedData.data;
+      }
+    }
+    
     try {
       const response = await api.get('/facilities');
       let fetchedFacilities = Array.isArray(response.data)
@@ -386,9 +381,18 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         : Array.isArray(response.data?.data)
         ? response.data.data
         : [];
+      
       if (isFacilityOperator && userFacilityId) {
         fetchedFacilities = fetchedFacilities.filter(f => f.id === userFacilityId);
       }
+      
+      // Cache the result
+      apiCacheRef.current.set(cacheKey, {
+        data: fetchedFacilities,
+        timestamp: Date.now()
+      });
+      
+      facilitiesRef.current = fetchedFacilities;
       console.log('BatchManagementPage: Fetched Facilities:', fetchedFacilities);
       return fetchedFacilities;
     } catch (error) {
@@ -402,10 +406,23 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       return [];
     }
     if (!currentSelectedFacilityId && !isFacilityOperator && isGlobalAdmin) {
-        console.log('BatchManagementPage: Global Admin, no facility selected. Skipping area fetch.');
-        setCultivationAreas([]);
-        return [];
+      console.log('BatchManagementPage: Global Admin, no facility selected. Skipping area fetch.');
+      setCultivationAreas([]);
+      cultivationAreasRef.current = [];
+      return [];
     }
+    
+    const cacheKey = `cultivation_areas_${currentSelectedFacilityId}`;
+    
+    // Check cache first
+    if (apiCacheRef.current.has(cacheKey)) {
+      const cachedData = apiCacheRef.current.get(cacheKey);
+      if (Date.now() - cachedData.timestamp < 300000) { // 5-minute cache
+        setCultivationAreas(cachedData.data);
+        return cachedData.data;
+      }
+    }
+    
     try {
       let url = '/cultivation-areas';
       if (currentSelectedFacilityId) {
@@ -417,7 +434,15 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         : Array.isArray(response.data?.data)
         ? response.data.data
         : [];
+      
+      // Cache the result
+      apiCacheRef.current.set(cacheKey, {
+        data: fetchedAreas,
+        timestamp: Date.now()
+      });
+      
       setCultivationAreas(fetchedAreas);
+      cultivationAreasRef.current = fetchedAreas;
       return fetchedAreas;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching cultivation areas:', error);
@@ -426,6 +451,17 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     }
   }, [tenantId, isAppReady, showSnack, isGlobalAdmin, isFacilityOperator]);
   const fetchStages = useCallback(async () => {
+    const cacheKey = 'stages';
+    
+    // Check cache first
+    if (apiCacheRef.current.has(cacheKey)) {
+      const cachedData = apiCacheRef.current.get(cacheKey);
+      if (Date.now() - cachedData.timestamp < 600000) { // 10-minute cache for stages (less likely to change)
+        setStages(cachedData.data);
+        return cachedData.data;
+      }
+    }
+    
     try {
       const response = await api.get('/stages');
       const fetchedStages = Array.isArray(response.data)
@@ -433,7 +469,15 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         : Array.isArray(response.data?.data)
         ? response.data.data
         : [];
+      
+      // Cache the result
+      apiCacheRef.current.set(cacheKey, {
+        data: fetchedStages,
+        timestamp: Date.now()
+      });
+      
       setStages(fetchedStages);
+      stagesRef.current = fetchedStages;
       return fetchedStages;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching stages:', error);
@@ -443,11 +487,24 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
   }, [showSnack]);
   const fetchUsers = useCallback(async (currentSelectedFacilityId) => {
     if (!isAppReady || (!tenantId && !isGlobalAdmin)) return;
+    
+    const cacheKey = `users_${currentSelectedFacilityId || 'none'}`;
+    
+    // Check cache first
+    if (apiCacheRef.current.has(cacheKey)) {
+      const cachedData = apiCacheRef.current.get(cacheKey);
+      if (Date.now() - cachedData.timestamp < 300000) { // 5-minute cache
+        setUsers(cachedData.data);
+        return;
+      }
+    }
+    
     const headers = {};
     let effectiveTenantId = null;
+    
     if (isGlobalAdmin) {
         if (currentSelectedFacilityId) {
-            const selectedFac = facilities.find(f => f.id === currentSelectedFacilityId);
+            const selectedFac = facilitiesRef.current.find(f => f.id === currentSelectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
             } else {
@@ -467,18 +524,29 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         setUsers([]);
         return;
     }
+    
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
+    
     try {
       const response = await api.get('/tenant-members', { headers });
-      setUsers(Array.isArray(response.data) ? response.data : response.data.data || []);
+      const fetchedUsers = Array.isArray(response.data) ? response.data : response.data.data || [];
+      
+      // Cache the result
+      apiCacheRef.current.set(cacheKey, {
+        data: fetchedUsers,
+        timestamp: Date.now()
+      });
+      
+      setUsers(fetchedUsers);
+      usersRef.current = fetchedUsers;
     } catch (error) {
       console.error("Error fetching users:", error.response?.data || error.message);
       showSnack("Error fetching users: " + (error.response?.data?.message || error.message), "error");
       setUsers([]);
     }
-  }, [isAppReady, tenantId, isGlobalAdmin, showSnack, facilities]);
+  }, [isAppReady, tenantId, isGlobalAdmin, showSnack]);
 
   const fetchBatches = useCallback(async (currentSelectedFacilityId) => {
     if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
@@ -488,15 +556,30 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     if (!currentSelectedFacilityId && !isFacilityOperator && isGlobalAdmin) {
       console.log('BatchManagementPage: Global Admin, no facility selected. Skipping batch fetch.');
       setBatches([]);
+      batchesRef.current = [];
       setLoading(false);
       return;
     }
+    
+    const cacheKey = `batches_${currentSelectedFacilityId || 'none'}`;
+    
+    // Check cache first for non-critical updates
+    if (apiCacheRef.current.has(cacheKey)) {
+      const cachedData = apiCacheRef.current.get(cacheKey);
+      if (Date.now() - cachedData.timestamp < 30000) { // 30-second cache for batches
+        setBatches(cachedData.data);
+        setLoading(false);
+        return;
+      }
+    }
+    
     setLoading(true);
     const headers = {};
     let effectiveTenantId = null;
+    
     if (isGlobalAdmin) {
         if (currentSelectedFacilityId) {
-            const selectedFac = facilities.find(f => f.id === currentSelectedFacilityId);
+            const selectedFac = facilitiesRef.current.find(f => f.id === currentSelectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
                 console.log('fetchBatches: Global Admin, using effectiveTenantId from selected facility:', effectiveTenantId);
@@ -521,12 +604,23 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         setBatches([]);
         return;
     }
+    
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
+    
     try {
       const response = await api.get('/batches', { headers });
-      setBatches(response.data);
+      const fetchedBatches = response.data || [];
+      
+      // Cache the result
+      apiCacheRef.current.set(cacheKey, {
+        data: fetchedBatches,
+        timestamp: Date.now()
+      });
+      
+      setBatches(fetchedBatches);
+      batchesRef.current = fetchedBatches;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching batches:', error.response?.data || error.message);
       showSnack(SNACK_MESSAGES.BATCHES_ERROR, 'error');
@@ -534,18 +628,30 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     } finally {
       setLoading(false);
     }
-  }, [isAppReady, tenantId, isGlobalAdmin, showSnack, isFacilityOperator, facilities]);
+  }, [isAppReady, tenantId, isGlobalAdmin, showSnack, isFacilityOperator]);
   // --- ACTUALIZACIÓN: FETCH DE EVENTOS DE TRAZABILIDAD DESDE LA API ---
   const fetchTraceabilityEvents = useCallback(async (batchId) => {
     if (!selectedFacilityId) {
       console.warn('fetchTraceabilityEvents: No facility selected. Cannot fetch traceability events.');
       return [];
     }
+    
+    const cacheKey = `traceability_events_${batchId}_${selectedFacilityId}`;
+    
+    // Check cache first
+    if (apiCacheRef.current.has(cacheKey)) {
+      const cachedData = apiCacheRef.current.get(cacheKey);
+      if (Date.now() - cachedData.timestamp < 60000) { // 1-minute cache for traceability events
+        return cachedData.data;
+      }
+    }
+    
     const headers = {};
     let effectiveTenantId = null;
+    
     if (isGlobalAdmin) {
         if (selectedFacilityId) {
-            const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+            const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
             if (selectedFac && selectedFac.tenant_id) {
                 effectiveTenantId = String(selectedFac.tenant_id);
             } else {
@@ -562,9 +668,11 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
         return [];
     }
+    
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
+    
     try {
       const response = await api.get('/traceability-events', {
         headers,
@@ -573,15 +681,24 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
           facility_id: selectedFacilityId,
         }
       });
-      return Array.isArray(response.data) ? response.data : [];
+      
+      const events = Array.isArray(response.data) ? response.data : [];
+      
+      // Cache the result
+      apiCacheRef.current.set(cacheKey, {
+        data: events,
+        timestamp: Date.now()
+      });
+      
+      return events;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching traceability events:', error.response?.data || error.message);
       showSnack('Error loading traceability events: ' + (error.response?.data?.message || error.message), 'error');
       return [];
     }
-  }, [selectedFacilityId, isGlobalAdmin, tenantId, showSnack, facilities]);
+  }, [selectedFacilityId, isGlobalAdmin, tenantId, showSnack]);
 
-  // --- Initial Load and Re-load Effects ---
+  // --- Initial Load and Re-load Effects --- Optimized for performance
   useEffect(() => {
     const loadInitialData = async () => {
       if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
@@ -590,9 +707,14 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       }
       setLoading(true);
       try {
-        const fetchedFacs = await fetchFacilities();
+        // Fetch facilities and stages in parallel
+        const [fetchedFacs] = await Promise.all([
+          fetchFacilities(),
+          fetchStages()
+        ]);
+        
         setFacilities(fetchedFacs);
-        await fetchStages();
+        
         let initialFacilityId = '';
         if (isFacilityOperator && userFacilityId) {
           initialFacilityId = userFacilityId;
@@ -620,9 +742,22 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
   useEffect(() => {
     if (isAppReady && (tenantId || isGlobalAdmin)) {
       if (selectedFacilityId) {
-        fetchBatches(selectedFacilityId);
-        fetchCultivationAreas(selectedFacilityId);
-        fetchUsers(selectedFacilityId);
+        // Invalidate cache when facility changes
+        const cacheKeysToInvalidate = [
+          `batches_${selectedFacilityId}`,
+          `cultivation_areas_${selectedFacilityId}`,
+          `users_${selectedFacilityId}`
+        ];
+        cacheKeysToInvalidate.forEach(key => apiCacheRef.current.delete(key));
+        
+        // Fetch data in parallel for better performance
+        Promise.all([
+          fetchBatches(selectedFacilityId),
+          fetchCultivationAreas(selectedFacilityId),
+          fetchUsers(selectedFacilityId)
+        ]).catch(error => {
+          console.error('Error fetching facility data:', error);
+        });
       } else if (isGlobalAdmin) {
         setBatches([]);
         setCultivationAreas([]);
@@ -677,48 +812,68 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     setBatchSubLocation(''); // NEW: Reset sub_location
     setBatchDialogLoading(false);
   }, []);
-  const handleSaveBatch = async (e) => {
+  // Optimized form validation function with enhanced security
+  const validateBatchForm = useCallback(() => {
+    const errors = [];
+    setValidationErrors({});
+    
+    // Enhanced validation using security utilities
+    const nameValidation = validateStringInput(batchName, 1, SECURITY_RULES.BATCH_NAME_MAX_LENGTH, SECURITY_RULES.BATCH_NAME_PATTERN);
+    if (!nameValidation.isValid) {
+      errors.push(`Batch name: ${nameValidation.error}`);
+      setValidationErrors(prev => ({ ...prev, batchName: nameValidation.error }));
+    }
+    
+    const unitsValidation = validateNumericInput(batchCurrentUnits, SECURITY_RULES.MIN_QUANTITY, SECURITY_RULES.MAX_QUANTITY);
+    if (!unitsValidation.isValid) {
+      errors.push(`Current units: ${unitsValidation.error}`);
+      setValidationErrors(prev => ({ ...prev, batchCurrentUnits: unitsValidation.error }));
+    }
+    
+    if (!batchUnit.trim()) {
+      errors.push(SNACK_MESSAGES.BATCH_UNIT_REQUIRED);
+      setValidationErrors(prev => ({ ...prev, batchUnit: 'Unit is required' }));
+    }
+    
+    const varietyValidation = validateStringInput(batchVariety, 1, SECURITY_RULES.VARIETY_MAX_LENGTH, SECURITY_RULES.VARIETY_PATTERN);
+    if (!varietyValidation.isValid) {
+      errors.push(`Variety: ${varietyValidation.error}`);
+      setValidationErrors(prev => ({ ...prev, batchVariety: varietyValidation.error }));
+    }
+    
+    if (!batchEndType.trim()) errors.push(SNACK_MESSAGES.BATCH_END_TYPE_REQUIRED);
+    if (!batchProductType.trim()) errors.push(SNACK_MESSAGES.BATCH_PRODUCT_TYPE_REQUIRED);
+    if (!batchCultivationAreaId) errors.push(SNACK_MESSAGES.BATCH_AREA_REQUIRED);
+    if (!batchOriginType.trim()) errors.push(SNACK_MESSAGES.BATCH_ORIGIN_TYPE_REQUIRED);
+    
+    if (batchOriginType === 'external' && batchOriginDetails) {
+      const originValidation = validateStringInput(batchOriginDetails, 1, SECURITY_RULES.ORIGIN_DETAILS_MAX_LENGTH);
+      if (!originValidation.isValid) {
+        errors.push(`Origin details: ${originValidation.error}`);
+        setValidationErrors(prev => ({ ...prev, batchOriginDetails: originValidation.error }));
+      }
+    } else if (batchOriginType === 'external' && !batchOriginDetails.trim()) {
+      errors.push("External origin details are required.");
+    }
+    
+    return errors;
+  }, [batchName, batchCurrentUnits, batchUnit, batchEndType, batchVariety, batchProductType, batchCultivationAreaId, batchOriginType, batchOriginDetails]);
+  
+  const handleSaveBatch = useCallback(async (e) => {
     e.preventDefault();
-    if (!batchName.trim()) { showSnack(SNACK_MESSAGES.BATCH_NAME_REQUIRED, 'warning'); return; }
-    if (batchCurrentUnits === '' || isNaN(parseFloat(batchCurrentUnits))) { showSnack(SNACK_MESSAGES.BATCH_UNITS_REQUIRED, 'warning'); return; }
-    if (!batchUnit.trim()) { showSnack(SNACK_MESSAGES.BATCH_UNIT_REQUIRED, 'warning'); return; }
-    if (!batchEndType.trim()) { showSnack(SNACK_MESSAGES.BATCH_END_TYPE_REQUIRED, 'warning'); return; }
-    if (!batchVariety.trim()) { showSnack(SNACK_MESSAGES.BATCH_VARIETY_REQUIRED, 'warning'); return; }
-    if (!batchProductType.trim()) { showSnack(SNACK_MESSAGES.BATCH_PRODUCT_TYPE_REQUIRED, 'warning'); return; }
-    if (!batchCultivationAreaId) { showSnack(SNACK_MESSAGES.BATCH_AREA_REQUIRED, 'warning'); return; }
-    if (!batchOriginType.trim()) { showSnack(SNACK_MESSAGES.BATCH_ORIGIN_TYPE_REQUIRED, 'warning'); return; }
-    if (batchOriginType === 'external' && !batchOriginDetails.trim()) { showSnack("External origin details are required.", "warning"); return; }
+    
+    // Enhanced validation with security checks
+    const validationErrors = validateBatchForm();
+    if (validationErrors.length > 0) {
+      showSnack(validationErrors[0], 'warning');
+      return;
+    }
 
     setBatchDialogLoading(true);
-    const headers = {};
-    let effectiveTenantId = null;
-    if (isGlobalAdmin) {
-        if (selectedFacilityId) {
-            const selectedFac = facilities.find(f => f.id === selectedFacilityId);
-            if (selectedFac && selectedFac.tenant_id) {
-                effectiveTenantId = String(selectedFac.tenant_id);
-            } else {
-                showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to create/edit batches.', 'error');
-                setBatchDialogLoading(false);
-                return;
-            }
-        } else {
-            showSnack('Error: As Super Admin, you must select a facility to create/edit batches.', 'error');
-            setBatchDialogLoading(false);
-            return;
-        }
-    } else if (tenantId) {
-        effectiveTenantId = String(tenantId);
-    } else {
-        showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
-        setBatchDialogLoading(false);
-        return;
-    }
-    if (effectiveTenantId) {
-      headers['X-Tenant-ID'] = effectiveTenantId;
-    }
+    
     try {
-      const batchData = {
+      // Security: Validate and sanitize batch data
+      const batchDataToValidate = {
         name: batchName,
         current_units: parseFloat(batchCurrentUnits),
         units: batchUnit,
@@ -732,20 +887,76 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         origin_details: batchOriginDetails || null,
         is_packaged: isPackaged,
         facility_id: selectedFacilityId,
-        sub_location: batchSubLocation || null, // NEW: Include sub_location
+        sub_location: batchSubLocation || null,
       };
-      if (editingBatch) {
-        await api.put(`/batches/${editingBatch.id}`, batchData, { headers });
-        showSnack(SNACK_MESSAGES.BATCH_UPDATED, 'success');
-      } else {
-        await api.post('/batches', batchData, { headers });
-        showSnack(SNACK_MESSAGES.BATCH_CREATED, 'success');
+      
+      const validation = validateBatchData(batchDataToValidate);
+      if (!validation.isValid) {
+        showSnack(`Data validation failed: ${validation.errors.join(', ')}`, 'error');
+        setBatchDialogLoading(false);
+        return;
       }
+      
+      // Use sanitized data
+      const batchData = validation.sanitizedData;
+      
+      const headers = {};
+      let effectiveTenantId = null;
+      
+      if (isGlobalAdmin) {
+          if (selectedFacilityId) {
+              const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
+              if (selectedFac && selectedFac.tenant_id) {
+                  effectiveTenantId = String(selectedFac.tenant_id);
+              } else {
+                  showSnack('Error: As Super Admin, the selected facility does not have a valid Tenant ID to create/edit batches.', 'error');
+                  setBatchDialogLoading(false);
+                  return;
+              }
+          } else {
+              showSnack('Error: As Super Admin, you must select a facility to create/edit batches.', 'error');
+              setBatchDialogLoading(false);
+              return;
+          }
+      } else if (tenantId) {
+          effectiveTenantId = String(tenantId);
+      } else {
+          showSnack(SNACK_MESSAGES.TENANT_ID_MISSING, 'error');
+          setBatchDialogLoading(false);
+          return;
+      }
+      
+      if (effectiveTenantId) {
+        headers['X-Tenant-ID'] = effectiveTenantId;
+      }
+      
+      // Secure API call with audit logging
+      const apiCall = async () => {
+        if (editingBatch) {
+          return await api.put(`/batches/${editingBatch.id}`, batchData, { headers });
+        } else {
+          return await api.post('/batches', batchData, { headers });
+        }
+      };
+      
+      await secureApiCall(
+        apiCall,
+        editingBatch ? AUDIT_ACTIONS.BATCH_UPDATED : AUDIT_ACTIONS.BATCH_CREATED,
+        'batch',
+        editingBatch?.id || null
+      );
+      
+      showSnack(editingBatch ? SNACK_MESSAGES.BATCH_UPDATED : SNACK_MESSAGES.BATCH_CREATED, 'success');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
       await fetchBatches(selectedFacilityId);
       handleCloseBatchDialog();
     } catch (err) {
       console.error('Error saving batch:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
+      
+      // Enhanced error handling with security logging
       if (err.response?.status === 422) {
         const errors = err.response?.data?.details;
         const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
@@ -754,20 +965,32 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
       } else if (err.response?.status === 403) {
         showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+        // Log unauthorized access attempt
+        const auditLog = createAuditLog(
+          AUDIT_ACTIONS.UNAUTHORIZED_ACCESS,
+          'batch',
+          editingBatch?.id || null,
+          users.find(u => u.current)?.id || null,
+          { action: editingBatch ? 'update' : 'create', error: errorMessage }
+        );
+        auditLogRef.current.push(auditLog);
+      } else if (err.message === 'Rate limit exceeded') {
+        // Rate limit error already handled by secureApiCall
       } else {
         showSnack(`Error saving batch: ${errorMessage}`, 'error');
       }
     } finally {
       setBatchDialogLoading(false);
     }
-  };
+  }, [validateBatchForm, showSnack, isGlobalAdmin, selectedFacilityId, tenantId, editingBatch, batchName, batchCurrentUnits, batchUnit, batchEndType, batchVariety, batchProductType, batchProjectedYield, batchAdvanceToHarvestingOn, batchCultivationAreaId, batchOriginType, batchOriginDetails, isPackaged, batchSubLocation, fetchBatches, handleCloseBatchDialog, secureApiCall, users]);
   const handleDeleteBatchConfirm = useCallback(async (batchToDelete) => {
     setLoading(true);
     const headers = {};
     let effectiveTenantId = null;
+    
     if (isGlobalAdmin) {
       if (selectedFacilityId) {
-          const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+          const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
           if (selectedFac && selectedFac.tenant_id) {
               effectiveTenantId = String(selectedFac.tenant_id);
           } else {
@@ -790,12 +1013,17 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         setConfirmDialogOpen(false);
         return;
     }
+    
     if (effectiveTenantId) {
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
+    
     try {
       await api.delete(`/batches/${batchToDelete.id}`, { headers });
       showSnack(SNACK_MESSAGES.BATCH_DELETED, 'info');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
       await fetchBatches(selectedFacilityId);
     } catch (err) {
       console.error('Error deleting batch:', err.response?.data || err.message);
@@ -811,7 +1039,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       setLoading(false);
       setConfirmDialogOpen(false);
     }
-  }, [fetchBatches, showSnack, isGlobalAdmin, selectedFacilityId, facilities, tenantId]);
+  }, [fetchBatches, showSnack, isGlobalAdmin, selectedFacilityId, tenantId]);
   const handleDeleteBatchClick = useCallback((batchToDelete) => {
     setConfirmDialogData({
       title: DIALOG_TITLES.CONFIRM_BATCH_DELETION,
@@ -867,13 +1095,24 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     if (!eventResponsibleUserId) { showSnack("Responsible user is required.", 'warning'); return; }
     if (!selectedFacilityId) { showSnack("Facility ID is missing. Cannot register event.", 'error'); return; }
     
+    // Get the selected batch to extract area_id
+    const selectedBatch = batches.find(b => b.id === eventBatchId);
+    if (!selectedBatch) {
+      showSnack("Could not find the selected batch.", "error");
+      return;
+    }
+    
+    if (!selectedBatch.cultivation_area_id) {
+      showSnack("Selected batch does not have a cultivation area assigned.", "warning");
+      return;
+    }
 
     let eventData = {
       batch_id: eventBatchId,
       event_type: currentEventType,
       user_id: eventResponsibleUserId,
       facility_id: selectedFacilityId,
-      area_id: batchCultivationAreaId,
+      area_id: selectedBatch.cultivation_area_id,
       description: eventDescription,
     };
     switch (currentEventType) {
@@ -970,30 +1209,71 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
     try {
-      const selectedBatch = batches.find(b => b.id === eventBatchId);
-      if (selectedBatch) {
-        eventData.area_id = selectedBatch.cultivation_area_id;
-      } else {
-        showSnack("Could not find cultivation area for the selected batch.", "error");
-        setEventDialogLoading(false);
-        return;
-      }
-      console.log('Sending traceability event payload:', eventData);
-      await api.post('/traceability-events', eventData, { headers });
+      // Validate and sanitize event data before sending
+      const sanitizedEventData = {
+        ...eventData,
+        facility_id: parseInt(eventData.facility_id),
+        area_id: parseInt(eventData.area_id),
+        user_id: parseInt(eventData.user_id),
+        batch_id: eventData.batch_id ? parseInt(eventData.batch_id) : null,
+        quantity: eventData.quantity !== null && eventData.quantity !== undefined ? parseFloat(eventData.quantity) : null
+      };
+
+      // Remove empty strings and convert to null
+      Object.keys(sanitizedEventData).forEach(key => {
+        if (sanitizedEventData[key] === '') {
+          sanitizedEventData[key] = null;
+        }
+      });
+
+      console.log('Original event data:', eventData);
+      console.log('Sanitized traceability event payload:', sanitizedEventData);
+      
+      await api.post('/traceability-events', sanitizedEventData, { headers });
       showSnack(SNACK_MESSAGES.EVENT_REGISTERED_SUCCESS, "success");
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
       await fetchBatches(selectedFacilityId);
+      
       if (currentBatchDetail) {
         const updatedEvents = await fetchTraceabilityEvents(currentBatchDetail.id);
         setTraceabilityEvents(updatedEvents);
       }
       handleCloseRegisterEventDialog();
     } catch (error) {
-      console.error('Error registering event:', error.response?.data || error.message);
+      console.group('🚨 Traceability Event Error');
+      console.error('Full error object:', error);
+      console.error('HTTP Status:', error.response?.status);
+      console.error('Response data:', error.response?.data);
+      console.error('Original event data sent:', eventData);
+      console.groupEnd();
+      
       const errorMessage = error.response?.data?.message || error.message;
+      
       if (error.response?.status === 422) {
-        const errors = error.response?.data?.details;
-        const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
-        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
+        // Enhanced error handling for validation errors
+        let detailedError = errorMessage;
+        const details = error.response?.data?.details;
+        
+        if (details) {
+          if (Array.isArray(details)) {
+            const messages = details.map(err => err.msg || err.message || JSON.stringify(err));
+            detailedError = `Validation errors: ${messages.join(', ')}`;
+          } else if (typeof details === 'object') {
+            const messages = Object.entries(details).map(([field, errors]) => 
+              `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`
+            );
+            detailedError = `Validation errors: ${messages.join('; ')}`;
+          } else {
+            detailedError = `Validation error: ${details}`;
+          }
+        } else if (error.response?.data?.message) {
+          detailedError = `Validation error: ${error.response.data.message}`;
+        }
+        
+        showSnack(detailedError, 'error');
+        console.error('Detailed validation error:', detailedError);
       } else if (error.response?.status === 400) {
         showSnack(`${SNACK_MESSAGES.INVALID_DATA} ${errorMessage}`, 'error');
       } else if (error.response?.status === 403) {
@@ -1074,7 +1354,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       headers['X-Tenant-ID'] = effectiveTenantId;
     }
     try {
-      const response = await api.post(`/batches/${batchToSplit.id}/split`, {
+      await api.post(`/batches/${batchToSplit.id}/split`, {
         splitQuantity: quantity,
         newBatchName: newSplitBatchName,
         newCultivationAreaId: splitBatchCultivationAreaId,
@@ -1173,7 +1453,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         facility_id: selectedFacilityId,
       };
       console.log('Sending process batch payload:', processData);
-      const response = await api.post(`/batches/${batchToProcess.id}/process`, processData, { headers });
+      await api.post(`/batches/${batchToProcess.id}/process`, processData, { headers });
       showSnack(SNACK_MESSAGES.BATCH_PROCESSED_SUCCESS, 'success');
       await fetchBatches(selectedFacilityId);
       handleCloseProcessBatchDialog();
@@ -1264,7 +1544,7 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
         product_type: externalBatchProductType,
         variety: externalBatchVariety,
         cultivation_area_id: externalBatchCultivationAreaId,
-        origin_type: 'external',
+        origin_type: 'external_purchase',
         end_type: 'N/A',
         projected_yield: null,
         advance_to_harvesting_on: null,
@@ -1358,24 +1638,48 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
     }
 
     try {
-      await api.post('/traceability-events', {
-        batch_id: selectedBatchForAdjustment.id,
+      // Sanitize the payload data to ensure correct data types
+      const adjustmentPayload = {
+        batch_id: parseInt(selectedBatchForAdjustment.id),
         event_type: 'inventory_adjustment',
-        facility_id: selectedFacilityId,
-        area_id: selectedBatchForAdjustment.cultivation_area_id,
+        facility_id: parseInt(selectedFacilityId),
+        area_id: parseInt(selectedBatchForAdjustment.cultivation_area_id),
         quantity: parseFloat(adjustmentQuantity),
         unit: adjustmentUnit,
         reason: adjustmentReason,
         sub_location: selectedBatchForAdjustment.sub_location || null,
-        user_id: eventResponsibleUserId,
-      }, { headers });
+        user_id: parseInt(eventResponsibleUserId || 1),
+      };
+      
+      console.log('Sending sanitized inventory adjustment payload:', adjustmentPayload);
+      await api.post('/traceability-events', adjustmentPayload, { headers });
       
       showSnack(SNACK_MESSAGES.INVENTORY_ADJUSTMENT_SUCCESS, 'success');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
       await fetchBatches(selectedFacilityId);
       handleCloseAdjustmentDialog();
     } catch (err) {
       console.error('Error registering inventory adjustment:', err.response?.data || err.message);
-      const errorMessage = err.response?.data?.message || err.message;
+      
+      let errorMessage = err.response?.data?.message || err.message;
+      
+      if (err.response?.status === 422) {
+        // Enhanced error handling for validation errors
+        if (err.response?.data?.details) {
+          const errors = err.response.data.details;
+          if (Array.isArray(errors)) {
+            errorMessage = errors.map(error => error.msg || error.message || JSON.stringify(error)).join(', ');
+          } else if (typeof errors === 'object') {
+            errorMessage = Object.values(errors).flat().join(', ');
+          } else {
+            errorMessage = JSON.stringify(errors);
+          }
+        }
+        console.error('Validation error details:', err.response.data);
+      }
+      
       showSnack(`${SNACK_MESSAGES.INVENTORY_ADJUSTMENT_ERROR} ${errorMessage}`, 'error');
     } finally {
       setAdjustmentDialogLoading(false);
@@ -1760,210 +2064,240 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       </Box>
     );
   }, [currentEventType, eventBatchId, eventQuantity, eventUnit, eventDescription, eventFromLocation, eventToLocation, eventMethod, eventReason, eventNewBatchId, handleRegisterEvent, handleCloseRegisterEventDialog, batches, users, eventDialogLoading, isFacilityOperator, showSnack, selectedFacilityId, batchCultivationAreaId]);
-  // Filter and clean batch data for DataGrid
+  // Optimized filtering with memoization and performance improvements
   const filteredAndCleanedBatches = useMemo(() => {
-    let currentBatches = batches;
-    if (filterProductType) {
-      currentBatches = currentBatches.filter(batch => batch.product_type === filterProductType);
-    }
-    if (filterCultivationAreaId) {
-      currentBatches = currentBatches.filter(batch => batch.cultivation_area_id === parseInt(filterCultivationAreaId));
-    }
-    if (searchTerm) {
-      const lowerCaseSearchTerm = searchTerm.toLowerCase();
-      currentBatches = currentBatches.filter(
-        batch =>
-          batch.name.toLowerCase().includes(lowerCaseSearchTerm) ||
-          (batch.variety && batch.variety.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (batch.product_type && batch.product_type.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (batch.origin_details && batch.origin_details.toLowerCase().includes(lowerCaseSearchTerm))
+    // Use cached data if available
+    const currentBatches = batchesRef.current.length > 0 ? batchesRef.current : batches;
+    
+    let result = currentBatches;
+    
+    // Apply filters efficiently
+    if (filterProductType || filterCultivationAreaId || searchTerm) {
+      result = currentBatches.filter(batch => {
+        if (!batch || typeof batch.id === 'undefined' || batch.id === null) {
+          return false;
+        }
+        
+        // Product type filter
+        if (filterProductType && batch.product_type !== filterProductType) {
+          return false;
+        }
+        
+        // Cultivation area filter
+        if (filterCultivationAreaId && batch.cultivation_area_id !== parseInt(filterCultivationAreaId)) {
+          return false;
+        }
+        
+        // Search term filter
+        if (searchTerm) {
+          const lowerCaseSearchTerm = searchTerm.toLowerCase();
+          const searchableFields = [
+            batch.name,
+            batch.variety,
+            batch.product_type,
+            batch.origin_details
+          ].filter(Boolean); // Remove null/undefined values
+          
+          const matchesSearch = searchableFields.some(field => 
+            field.toLowerCase().includes(lowerCaseSearchTerm)
+          );
+          
+          if (!matchesSearch) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+    } else {
+      // If no filters, just clean the data
+      result = currentBatches.filter(batch => 
+        batch && typeof batch.id !== 'undefined' && batch.id !== null
       );
     }
-    const cleaned = currentBatches.filter(batch => batch && (typeof batch.id !== 'undefined' && batch.id !== null));
-    console.log("Cleaned batches for DataGrid:", cleaned);
-    return cleaned;
+    
+    console.log("Cleaned batches for DataGrid:", result);
+    return result;
   }, [batches, filterProductType, filterCultivationAreaId, searchTerm]);
-  const handleClearFilters = () => {
-    setSearchTerm("");
-    setFilterProductType("");
-    setFilterCultivationAreaId("");
-  };
-  // Definition of columns for DataGrid
-  const columns = useMemo(() => [
-    { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 150, renderCell: (params) => (
-      <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
-    )},
-    { field: 'variety', headerName: 'Variety', width: 100, renderCell: (params) => (
-      <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
-    )},
-    { field: 'product_type', headerName: 'Product Type', width: 150, renderCell: (params) => (
-      <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value || 'N/A'}</Typography>
-    )},
-    { field: 'current_units', headerName: 'Units', type: 'number', width: 95, renderCell: (params) => (
-      <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value} {params.row?.units}</Typography>
-    )},
-    { field: 'end_type', headerName: 'End Type', width: 95, renderCell: (params) => (
-      <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
-    )},
-    {
-      field: 'projected_yield',
-      headerName: 'Projected Yield',
-      type: 'number',
-      width: 140,
-      renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
-          {params.value !== null && params.value !== undefined ? `${params.value} kg` : 'N/A'}
-        </Typography>
-      )
-    },
-    {
-      field: 'advance_to_harvesting_on',
-      headerName: 'Harvest Date',
-      width: 120,
-      renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
-          {params.value ? new Date(params.value).toLocaleDateString() : 'N/A'}
-        </Typography>
-      )
-    },
-    {
-      field: 'cultivation_area_name',
-      headerName: 'Cultivation Area',
-      flex: 1, minWidth: 150,
-      valueGetter: (params) => {
-        if (!params || !params.row) {
-            return '';
-        }
-        if (!Array.isArray(cultivationAreas) || cultivationAreas.length === 0) {
-            return '';
-        }
-        const cultivationAreaId = params.row.cultivation_area_id;
-        if (cultivationAreaId === undefined || cultivationAreaId === null) {
-            return '';
-        }
-        const area = cultivationAreas.find(ca => ca.id === cultivationAreaId);
-        return area ? area.name : '';
-      },
-      renderCell: (params) => (
+  // Currently unused but kept for potential future use
+  // const handleClearFilters = useCallback(() => {
+  //   setSearchTerm("");
+  //   setFilterProductType("");
+  //   setFilterCultivationAreaId("");
+  // }, []);
+  // Definition of columns for DataGrid - Optimized with memoization
+  const columns = useMemo(() => {
+    // Cache the cultivation areas and stages maps for better performance
+    const cultivationAreasMap = new Map(
+      (cultivationAreasRef.current.length > 0 ? cultivationAreasRef.current : cultivationAreas)
+        .map(area => [area.id, area])
+    );
+    const stagesMap = new Map(
+      (stagesRef.current.length > 0 ? stagesRef.current : stages)
+        .map(stage => [stage.id, stage])
+    );
+    
+    return [
+      { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 150, renderCell: (params) => (
         <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
-      )
-    },
-    {
-      field: 'current_stage_name',
-      headerName: 'Current Stage',
-      width: 120,
-      valueGetter: (params) => {
-        if (!params || !params.row) {
-            return '';
-        }
-        if (!Array.isArray(cultivationAreas) || cultivationAreas.length === 0 || !Array.isArray(stages) || stages.length === 0) {
-            return '';
-        }
-        const cultivationAreaId = params.row.cultivation_area_id;
-        if (cultivationAreaId === undefined || cultivationAreaId === null) {
-            return '';
-        }
-        const area = cultivationAreas.find(ca => ca.id === cultivationAreaId);
-        if (area && area.current_stage_id !== undefined && area.current_stage_id !== null) {
-            const stage = stages.find(s => s.id === area.current_stage_id);
-            return stage ? stage.name : 'N/A';
-        }
-        return 'N/A';
-      },
-      renderCell: (params) => (
+      )},
+      { field: 'variety', headerName: 'Variety', width: 100, renderCell: (params) => (
         <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
-      )
-    },
-    {
-      field: 'is_packaged',
-      headerName: 'Packaged',
-      width: 100,
-      type: 'boolean',
-      renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value ? 'Yes' : 'No'}</Typography>
-      )
-    },
-    // NEW: Columna para sub_location
-    {
-      field: 'sub_location',
-      headerName: 'Sub-location',
-      width: 140,
-      renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
-          {params.value || '—'}
-        </Typography>
-      )
-    },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 250,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => (
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <IconButton
-            size="small"
-            color="info"
-            onClick={() => handleOpenBatchDetail(params.row)}
-            aria-label={`View details of ${params.row.name}`}
-          >
-            <VisibilityIcon sx={{ fontSize: 20, color: '#90caf9' }} />
-          </IconButton>
-          <IconButton
-            size="small"
-            color="primary"
-            onClick={() => handleOpenBatchDialog(params.row)}
-            aria-label={`Edit ${params.row.name}`}
-            disabled={isFacilityOperator}
-            title="Edit Batch"
-          >
-            <EditIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#fff' }} />
-          </IconButton>
-          <IconButton
-            size="small"
-            color="secondary"
-            onClick={() => handleOpenSplitBatchDialog(params.row)}
-            aria-label={`Split ${params.row.name}`}
-            disabled={isFacilityOperator || params.row.current_units <= 1}
-            title="Split Batch"
-          >
-            <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 ? '#666' : '#ffa726' }} />
-          </IconButton>
-          <IconButton
-            size="small"
-            color="success"
-            onClick={() => handleOpenProcessBatchDialog(params.row)}
-            aria-label={`Process ${params.row.name}`}
-            disabled={isFacilityOperator || params.row.current_units <= 0}
-            title="Process Batch"
-          >
-            <TransformIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 ? '#666' : '#4CAF50' }} />
-          </IconButton>
-          
-          <IconButton
-            size="small"
-            color="primary"
-            onClick={() => handleOpenAdjustmentDialog(params.row)}
-            aria-label={`Inventory Adjustment for ${params.row.name}`}
-            disabled={isFacilityOperator}
-            title="Inventory Adjustment"
-          >
-            <AddBoxIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#4CAF50' }} />
-          </IconButton>
-          <IconButton
-            size="small"
-            color="error"
-            onClick={() => handleDeleteBatchClick(params.row)}
-            aria-label={`Delete ${params.row.name}`}
-            disabled={isFacilityOperator}
-          >
-            <DeleteIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#f44336' }} />
-          </IconButton>
-        </Box>
-      ),
-    },
-  ], [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages, handleOpenAdjustmentDialog]);
+      )},
+      { field: 'product_type', headerName: 'Product Type', width: 150, renderCell: (params) => (
+        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value || 'N/A'}</Typography>
+      )},
+      { field: 'current_units', headerName: 'Units', type: 'number', width: 95, renderCell: (params) => (
+        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value} {params.row?.units}</Typography>
+      )},
+      { field: 'end_type', headerName: 'End Type', width: 95, renderCell: (params) => (
+        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+      )},
+      {
+        field: 'projected_yield',
+        headerName: 'Projected Yield',
+        type: 'number',
+        width: 140,
+        renderCell: (params) => (
+          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
+            {params.value !== null && params.value !== undefined ? `${params.value} kg` : 'N/A'}
+          </Typography>
+        )
+      },
+      {
+        field: 'advance_to_harvesting_on',
+        headerName: 'Harvest Date',
+        width: 120,
+        renderCell: (params) => (
+          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
+            {params.value ? new Date(params.value).toLocaleDateString() : 'N/A'}
+          </Typography>
+        )
+      },
+      {
+        field: 'cultivation_area_name',
+        headerName: 'Cultivation Area',
+        flex: 1, minWidth: 150,
+        valueGetter: (params) => {
+          if (!params || !params.row || params.row.cultivation_area_id == null) {
+              return '';
+          }
+          const area = cultivationAreasMap.get(params.row.cultivation_area_id);
+          return area ? area.name : '';
+        },
+        renderCell: (params) => (
+          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+        )
+      },
+      {
+        field: 'current_stage_name',
+        headerName: 'Current Stage',
+        width: 120,
+        valueGetter: (params) => {
+          if (!params || !params.row || params.row.cultivation_area_id == null) {
+              return '';
+          }
+          const area = cultivationAreasMap.get(params.row.cultivation_area_id);
+          if (area && area.current_stage_id != null) {
+              const stage = stagesMap.get(area.current_stage_id);
+              return stage ? stage.name : 'N/A';
+          }
+          return 'N/A';
+        },
+        renderCell: (params) => (
+          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+        )
+      },
+      {
+        field: 'is_packaged',
+        headerName: 'Packaged',
+        width: 100,
+        type: 'boolean',
+        renderCell: (params) => (
+          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value ? 'Yes' : 'No'}</Typography>
+        )
+      },
+      {
+        field: 'sub_location',
+        headerName: 'Sub-location',
+        width: 140,
+        renderCell: (params) => (
+          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
+            {params.value || '—'}
+          </Typography>
+        )
+      },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 250,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <IconButton
+              size="small"
+              color="info"
+              onClick={() => handleOpenBatchDetail(params.row)}
+              aria-label={`View details of ${params.row.name}`}
+            >
+              <VisibilityIcon sx={{ fontSize: 20, color: '#90caf9' }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => handleOpenBatchDialog(params.row)}
+              aria-label={`Edit ${params.row.name}`}
+              disabled={isFacilityOperator}
+              title="Edit Batch"
+            >
+              <EditIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#fff' }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              color="secondary"
+              onClick={() => handleOpenSplitBatchDialog(params.row)}
+              aria-label={`Split ${params.row.name}`}
+              disabled={isFacilityOperator || params.row.current_units <= 1}
+              title="Split Batch"
+            >
+              <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 ? '#666' : '#ffa726' }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              color="success"
+              onClick={() => handleOpenProcessBatchDialog(params.row)}
+              aria-label={`Process ${params.row.name}`}
+              disabled={isFacilityOperator || params.row.current_units <= 0}
+              title="Process Batch"
+            >
+              <TransformIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 ? '#666' : '#4CAF50' }} />
+            </IconButton>
+            
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => handleOpenAdjustmentDialog(params.row)}
+              aria-label={`Inventory Adjustment for ${params.row.name}`}
+              disabled={isFacilityOperator}
+              title="Inventory Adjustment"
+            >
+              <AddBoxIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#4CAF50' }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => handleDeleteBatchClick(params.row)}
+              aria-label={`Delete ${params.row.name}`}
+              disabled={isFacilityOperator}
+            >
+              <DeleteIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#f44336' }} />
+            </IconButton>
+          </Box>
+        ),
+      },
+    ];
+  }, [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages, handleOpenAdjustmentDialog]);
   
   // Function to get dynamic label and placeholder for origin_details
   const getOriginDetailsLabel = useCallback(() => {
@@ -2185,8 +2519,17 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
               type="text"
               fullWidth
               value={batchName}
-              onChange={e => setBatchName(e.target.value)}
+              onChange={e => {
+                const sanitized = sanitizeInput(e.target.value);
+                setBatchName(sanitized);
+                if (sanitized !== e.target.value) {
+                  showSnack(SNACK_MESSAGES.SECURITY_INPUT_SANITIZED, 'info');
+                }
+              }}
               required
+              error={!!validationErrors.batchName}
+              helperText={validationErrors.batchName}
+              inputProps={{ maxLength: SECURITY_RULES.BATCH_NAME_MAX_LENGTH }}
               InputLabelProps={{ shrink: true }}
               sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
@@ -2198,9 +2541,23 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
                 type="number"
                 fullWidth
                 value={batchCurrentUnits}
-                onChange={e => setBatchCurrentUnits(e.target.value)}
+                onChange={e => {
+                  const validation = validateNumericInput(e.target.value, SECURITY_RULES.MIN_QUANTITY, SECURITY_RULES.MAX_QUANTITY);
+                  setBatchCurrentUnits(e.target.value);
+                  if (!validation.isValid) {
+                    setValidationErrors(prev => ({ ...prev, batchCurrentUnits: validation.error }));
+                  } else {
+                    setValidationErrors(prev => ({ ...prev, batchCurrentUnits: undefined }));
+                  }
+                }}
                 required
-                inputProps={{ step: "any" }}
+                error={!!validationErrors.batchCurrentUnits}
+                helperText={validationErrors.batchCurrentUnits}
+                inputProps={{ 
+                  step: "any",
+                  min: SECURITY_RULES.MIN_QUANTITY,
+                  max: SECURITY_RULES.MAX_QUANTITY
+                }}
                 InputLabelProps={{ shrink: true }}
                 sx={{ '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
                 disabled={batchDialogLoading || isFacilityOperator}
@@ -2246,9 +2603,18 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
             <TextField
               label="Variety"
               value={batchVariety}
-              onChange={e => setBatchVariety(e.target.value)}
+              onChange={e => {
+                const sanitized = sanitizeInput(e.target.value);
+                setBatchVariety(sanitized);
+                if (sanitized !== e.target.value) {
+                  showSnack(SNACK_MESSAGES.SECURITY_INPUT_SANITIZED, 'info');
+                }
+              }}
               fullWidth
               required
+              error={!!validationErrors.batchVariety}
+              helperText={validationErrors.batchVariety}
+              inputProps={{ maxLength: SECURITY_RULES.VARIETY_MAX_LENGTH }}
               InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
@@ -3098,7 +3464,9 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
       />
     </Box>
   );
-};
+});
+
+// Define prop types
 BatchManagementPage.propTypes = {
   tenantId: PropTypes.number,
   isAppReady: PropTypes.bool.isRequired,
@@ -3107,4 +3475,8 @@ BatchManagementPage.propTypes = {
   setParentSnack: PropTypes.func.isRequired,
   hasPermission: PropTypes.func.isRequired,
 };
+
+// Display name for debugging
+BatchManagementPage.displayName = 'BatchManagementPage';
+
 export default BatchManagementPage;
