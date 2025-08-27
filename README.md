@@ -1,3 +1,7 @@
+# ERP
+
+Este repositorio contiene tanto el **backend (API en Laravel)** como el **frontend (Web en React/Vite)** del sistema ERP.
+
 ---
 
 ````markdown
