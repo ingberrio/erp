@@ -1,6 +1,3 @@
-Perfecto 🙌.
-Aquí tienes un **README.md completo** para tu monorepo `erp`. Lo puedes copiar/pegar directamente en la raíz de tu repo en GitHub:
-
 ---
 
 ````markdown
