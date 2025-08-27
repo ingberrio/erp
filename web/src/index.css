@@ -1,0 +1,48 @@
+
+
+@import "tailwindcss";
+
+/* CSS Reset Básico para asegurar consistencia */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif; /* Asegúrate de que el font-family se aplique globalmente */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Asegúrate de que las imágenes no desborden */
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Elimina estilos de lista por defecto */
+ul, ol {
+  list-style: none;
+}
+
+/* Asegura que los formularios hereden estilos de fuente */
+input, button, textarea, select {
+  font: inherit;
+}
+
+/* Evita que el texto desborde contenedores */
+p, h1, h2, h3, h4, h5, h6 {
+  overflow-wrap: break-word;
+}
+
+/* Crea un contexto de apilamiento para el elemento raíz */
+#root, #__next { /* Si usas Next.js, ajusta aquí */
+  isolation: isolate;
+  min-height: 100vh; /* Asegura que el root ocupe toda la altura */
+  display: flex; /* Permite que el contenido dentro de root se flexione */
+  flex-direction: column;
+}
