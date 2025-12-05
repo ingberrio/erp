@@ -51,7 +51,7 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
       console.log("EmpresasCrud: Empresas cargadas:", fetchedCompanies.length);
     } catch (error) {
       console.error('EmpresasCrud: Error fetching companies:', error);
-      setParentSnack('Error al cargar empresas.', 'error');
+      setParentSnack('Error loading companies.', 'error');
     } finally {
       setLoading(false);
     }
@@ -80,15 +80,15 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
   const handleSaveCompany = async (e) => {
     e.preventDefault();
     if (!companyName.trim()) {
-      setParentSnack('El nombre de la empresa es obligatorio.', 'warning');
+      setParentSnack('Company name is required.', 'warning');
       return;
     }
     if (companyName.length > 255) {
-      setParentSnack('El nombre de la empresa no puede exceder los 255 caracteres.', 'warning');
+      setParentSnack('Company name cannot exceed 255 characters.', 'warning');
       return;
     }
     if (companyContactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyContactEmail)) {
-      setParentSnack('El email de contacto no es válido.', 'warning');
+      setParentSnack('Contact email is not valid.', 'warning');
       return;
     }
 
@@ -101,10 +101,10 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
 
       if (editingCompany) {
         await api.put(`/tenants/${editingCompany.id}`, companyData);
-        setParentSnack('Empresa actualizada.', 'success');
+        setParentSnack('Company updated.', 'success');
       } else {
         await api.post('/tenants', companyData);
-        setParentSnack('Empresa creada.', 'success');
+        setParentSnack('Company created.', 'success');
       }
       await fetchCompanies();
       handleCloseDialog();
@@ -115,14 +115,14 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
         const errors = err.response?.data?.details;
         if (errors) {
           const firstError = Object.values(errors)[0][0];
-          setParentSnack(`Error de validación: ${firstError}`, 'error');
+          setParentSnack(`Validation error: ${firstError}`, 'error');
         } else {
-          setParentSnack(`Datos inválidos: ${errorMessage}`, 'error');
+          setParentSnack(`Invalid data: ${errorMessage}`, 'error');
         }
       } else if (err.response?.status === 403) {
         setParentSnack('No tienes permisos para realizar esta acción.', 'error');
       } else {
-        setParentSnack(`Error al guardar empresa: ${errorMessage}`, 'error');
+        setParentSnack(`Error saving company: ${errorMessage}`, 'error');
       }
     } finally {
       setDialogLoading(false);
@@ -133,15 +133,15 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
     setDialogLoading(true);
     try {
       await api.delete(`/tenants/${companyToDelete.id}`);
-      setParentSnack('Empresa eliminada.', 'info');
+      setParentSnack('Company deleted.', 'info');
       await fetchCompanies();
     } catch (err) {
       console.error('Error al eliminar empresa:', err);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 403) {
-        setParentSnack('No tienes permisos para realizar esta acción.', 'error');
+        setParentSnack('You do not have permission to perform this action.', 'error');
       } else {
-        setParentSnack(`Error al eliminar empresa: ${errorMessage}`, 'error');
+        setParentSnack(`Error deleting company: ${errorMessage}`, 'error');
       }
     } finally {
       setDialogLoading(false);
@@ -168,7 +168,7 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}>
-          Gestión de Empresas
+          Company Management
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
         <Button
@@ -182,21 +182,21 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
             '&:hover': { bgcolor: '#43A047' },
           }}
         >
-          Nueva Empresa
+          New Company
         </Button>
       </Box>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#fff' }}>
           <CircularProgress color="inherit" />
-          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Cargando empresas...</Typography>
+          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Loading companies...</Typography>
         </Box>
       ) : (
         <Grid container spacing={2}>
           {companies.length === 0 ? (
             <Grid item xs={12}>
               <Typography variant="h6" sx={{ color: '#aaa', textAlign: 'center', mt: 5 }}>
-                No hay empresas registradas. ¡Añade una para empezar!
+                No companies registered. Add one to get started!
               </Typography>
             </Grid>
           ) : (
@@ -208,10 +208,10 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
                       {company.name}
                     </Typography>
                     <Box>
-                      <IconButton size="small" onClick={() => handleOpenDialog(company)} aria-label={`Editar ${company.name}`}>
+                      <IconButton size="small" onClick={() => handleOpenDialog(company)} aria-label={`Edit ${company.name}`}>
                         <EditIcon sx={{ fontSize: 18, color: '#b0c4de' }} />
                       </IconButton>
-                      <IconButton size="small" onClick={() => handleDeleteCompany(company)} aria-label={`Eliminar ${company.name}`}>
+                      <IconButton size="small" onClick={() => handleDeleteCompany(company)} aria-label={`Delete ${company.name}`}>
                         <DeleteIcon sx={{ fontSize: 18, color: '#fc8181' }} />
                       </IconButton>
                     </Box>
@@ -226,7 +226,7 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
                     </Typography>
                   )}
                   <Typography variant="body2" color="text.secondary" sx={{ color: '#a0aec0' }}>
-                    Creada: {new Date(company.created_at).toLocaleDateString()}
+                    Created: {new Date(company.created_at).toLocaleDateString()}
                   </Typography>
                   {/* --- Nuevo botón para gestionar instalaciones --- */}
                   <Button
@@ -245,7 +245,7 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
                       width: '100%', // Ocupa todo el ancho de la tarjeta
                     }}
                   >
-                    Gestionar Instalaciones
+                    Manage Facilities
                   </Button>
                 </Paper>
               </Grid>
@@ -257,11 +257,11 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="xs" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingCompany ? 'Editar Empresa' : 'Crear Nueva Empresa'}</DialogTitle>
+        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingCompany ? 'Edit Company' : 'Create New Company'}</DialogTitle>
         <form onSubmit={handleSaveCompany}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField
-              label="Nombre de la Empresa"
+              label="Company Name"
               value={companyName}
               onChange={e => setCompanyName(e.target.value)}
               fullWidth
@@ -277,7 +277,7 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
               inputProps={{ maxLength: 255 }}
             />
             <TextField
-              label="Email de Contacto (Opcional)"
+              label="Contact Email (Optional)"
               type="email"
               value={companyContactEmail}
               onChange={e => setCompanyContactEmail(e.target.value)}
@@ -294,7 +294,7 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
             />
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseDialog} disabled={dialogLoading} sx={{ color: '#a0aec0' }}>Cancelar</Button>
+            <Button onClick={handleCloseDialog} disabled={dialogLoading} sx={{ color: '#a0aec0' }}>Cancel</Button>
             <Button
               type="submit"
               variant="contained"
@@ -304,7 +304,7 @@ const EmpresasCrud = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin }) =
                 '&:hover': { bgcolor: '#43A047' }
               }}
             >
-              {dialogLoading ? <CircularProgress size={24} /> : (editingCompany ? 'Guardar Cambios' : 'Crear Empresa')}
+              {dialogLoading ? <CircularProgress size={24} /> : (editingCompany ? 'Save Changes' : 'Create Company')}
             </Button>
           </DialogActions>
         </form>

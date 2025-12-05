@@ -63,7 +63,7 @@ const InventoryReconciliationPage = ({
   const fetchReconciliationData = useCallback(async () => {
     if (!isAppReady || !hasPermission(RECONCILIATION_PERMISSIONS.view)) return;
     if (!selectedFacilityId || !asOfDate) {
-      setParentSnack('Selecciona una Instalación y Fecha de Corte.', 'warning');
+      setParentSnack('Select a Facility and Cut-off Date.', 'warning');
       setLoading(false);
       return;
     }
@@ -77,10 +77,10 @@ const InventoryReconciliationPage = ({
 
       const response = await api.get('/inventory/reconciliation', { params });
       setReconciliationData(response.data.data);
-      setParentSnack('Datos de reconciliación actualizados.', 'success');
+      setParentSnack('Reconciliation data updated.', 'success');
     } catch (error) {
       setParentSnack(
-        `Error al cargar datos de reconciliación: ${error.response?.data?.message || error.message}`,
+        `Error loading reconciliation data: ${error.response?.data?.message || error.message}`,
         'error'
       );
       setReconciliationData([]);
@@ -100,7 +100,7 @@ const InventoryReconciliationPage = ({
       else if (facilitiesData.length > 0) setSelectedFacilityId(facilitiesData[0].id);
       else setSelectedFacilityId('');
     } catch (error) {
-      setParentSnack('Error al cargar instalaciones.', 'error');
+      setParentSnack('Error loading facilities.', 'error');
       setFacilities([]);
       setSelectedFacilityId('');
     }
@@ -112,7 +112,7 @@ const InventoryReconciliationPage = ({
         const response = await api.get(`/facilities/${selectedFacilityId}/sub-locations`);
         setSubLocations(Array.isArray(response.data.data) ? response.data.data : []);
       } catch {
-        setParentSnack('Error al cargar sub-ubicaciones.', 'error');
+        setParentSnack('Error loading sub-locations.', 'error');
         setSubLocations([]);
       }
     } else {
@@ -125,7 +125,7 @@ const InventoryReconciliationPage = ({
       const response = await api.get('/discrepancy-reasons');
       setDiscrepancyReasons(Array.isArray(response.data.data) ? response.data.data : []);
     } catch {
-      setParentSnack('Error al cargar motivos de discrepancia.', 'error');
+      setParentSnack('Error loading discrepancy reasons.', 'error');
       setDiscrepancyReasons([]);
     }
   }, [setParentSnack]);
@@ -168,7 +168,7 @@ const InventoryReconciliationPage = ({
     setCountError('');
     try {
       if (!currentBatchForCount || countQuantity === null || countQuantity === '' || !countDate) {
-        setCountError('Completa todos los campos requeridos.');
+        setCountError('Complete all required fields.');
         setCountDialogLoading(false);
         return;
       }
@@ -180,12 +180,12 @@ const InventoryReconciliationPage = ({
         sub_location_id: currentBatchForCount.sub_location_id,
         notes: countNotes,
       };
-      await api.post('/physical-counts', payload);
-      setParentSnack('Conteo físico registrado exitosamente.', 'success');
+      await api.post('/inventory/reconciliation/physical-count', payload);
+      setParentSnack('Physical count registered successfully.', 'success');
       handleCloseCountDialog();
       fetchReconciliationData();
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Error al registrar conteo físico.';
+      const errorMessage = error.response?.data?.message || 'Error registering physical count.';
       setCountError(errorMessage);
       setParentSnack(errorMessage, 'error');
     } finally {
@@ -219,12 +219,12 @@ const InventoryReconciliationPage = ({
         reason_id,
         notes
       });
-      setParentSnack('Discrepancia justificada exitosamente.', 'success');
+      setParentSnack('Discrepancy justified successfully.', 'success');
       setOpenJustifyModal(false);
       setSelectedDiscrepancy(null);
       fetchReconciliationData();
     } catch (err) {
-      const msg = err.response?.data?.message || 'Error al justificar discrepancia';
+      const msg = err.response?.data?.message || 'Error justifying discrepancy';
       setParentSnack(msg, 'error');
     }
     setLoadingJustify(false);
@@ -232,20 +232,20 @@ const InventoryReconciliationPage = ({
   
 
 const columns = [
-  { field: 'batch_name', headerName: 'Lote', width: 200 },
-  { field: 'product_type', headerName: 'Tipo de Producto', width: 150 },
-  { field: 'facility_name', headerName: 'Instalación', width: 180 },
-  { field: 'sub_location_name', headerName: 'Sub-Ubicación', width: 150 },
-  { field: 'logical_quantity', headerName: 'Inv. Lógico', type: 'number', width: 130,
+  { field: 'batch_name', headerName: 'Batch', width: 200 },
+  { field: 'product_type', headerName: 'Product Type', width: 150 },
+  { field: 'facility_name', headerName: 'Facility', width: 180 },
+  { field: 'sub_location_name', headerName: 'Sub-Location', width: 150 },
+  { field: 'logical_quantity', headerName: 'Logical Inv.', type: 'number', width: 130,
     },
-  { field: 'logical_unit', headerName: 'Unidad Lógica', width: 120 },
+  { field: 'logical_unit', headerName: 'Logical Unit', width: 120 },
   {
-    field: 'physical_quantity', headerName: 'Inv. Físico', type: 'number', width: 130,
+    field: 'physical_quantity', headerName: 'Physical Inv.', type: 'number', width: 130,
    
   },
-  { field: 'physical_unit', headerName: 'Unidad Física', width: 120 },
+  { field: 'physical_unit', headerName: 'Physical Unit', width: 120 },
   {
-    field: 'discrepancy', headerName: 'Discrepancia', type: 'number', width: 140,
+    field: 'discrepancy', headerName: 'Discrepancy', type: 'number', width: 140,
    
     renderCell: (params) => (
       <Typography color={
@@ -283,7 +283,7 @@ const columns = [
       </Typography>
     )
   },
-  { field: 'status', headerName: 'Estado', width: 130,
+  { field: 'status', headerName: 'Status', width: 130,
     renderCell: (params) => (
       <Typography color={
         params.value === 'Discrepancia' ? 'error.main' :
@@ -296,18 +296,18 @@ const columns = [
     )
   },
   
-  { field: 'count_date', headerName: 'Fecha Conteo', width: 150 },
+  { field: 'count_date', headerName: 'Count Date', width: 150 },
   {
     field: 'actions',
-    headerName: 'Acciones',
+    headerName: 'Actions',
     width: 150,
     renderCell: (params) => (
       <Box sx={{ display: 'flex', gap: 1 }}>
         {hasPermission(RECONCILIATION_PERMISSIONS.registerCount) && (
           <IconButton
             color="primary"
-            aria-label="Registrar Conteo"
-            title="Registrar Conteo Físico"
+            aria-label="Register Count"
+            title="Register Physical Count"
             onClick={() => handleOpenCountDialog(params.row)}
           >
             <AddCircleOutlineIcon />
@@ -316,8 +316,8 @@ const columns = [
         {hasPermission(RECONCILIATION_PERMISSIONS.justifyDiscrepancy) && params.row.status === 'Discrepancy' && (
           <IconButton
             color="secondary"
-            aria-label="Justificar"
-            title="Justificar Discrepancia"
+            aria-label="Justify"
+            title="Justify Discrepancy"
             onClick={(event) => handleOpenRowMenu(event, params.row)}
           >
             <MoreVertIcon />
@@ -333,7 +333,7 @@ const columns = [
         >
           {hasPermission(RECONCILIATION_PERMISSIONS.justifyDiscrepancy) && selectedRowData?.status === 'Discrepancy' && (
             <MenuItem onClick={handleJustifyDiscrepancy} sx={{ '&:hover': { bgcolor: '#3a506b' } }}>
-              <CheckCircleOutlineIcon sx={{ mr: 1 }} /> Justificar Discrepancia
+              <CheckCircleOutlineIcon sx={{ mr: 1 }} /> Justify Discrepancy
             </MenuItem>
           )}
           {/* Aquí puedes agregar otros MenuItems como Ajustar Inventario */}
@@ -348,17 +348,17 @@ const columns = [
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box sx={{ p: 3, backgroundColor: '#1a202c', minHeight: '100vh', color: '#e2e8f0' }}>
         <Typography variant="h4" gutterBottom component="h1" sx={{ color: '#e2e8f0', mb: 3 }}>
-          Reconciliación de Inventario
+          Inventory Reconciliation
         </Typography>
         <AppBar position="static" sx={{ bgcolor: '#2d3748', borderRadius: 1, mb: 3, boxShadow: 3 }}>
           <Toolbar sx={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
             <FormControl sx={{ minWidth: 200, flexGrow: 1 }}>
-              <InputLabel id="facility-select-label" sx={{ color: '#a0aec0' }}>Instalación</InputLabel>
+              <InputLabel id="facility-select-label" sx={{ color: '#a0aec0' }}>Facility</InputLabel>
               <Select
                 labelId="facility-select-label"
                 id="facility-select"
                 value={selectedFacilityId}
-                label="Instalación"
+                label="Facility"
                 onChange={(e) => {
                   setSelectedFacilityId(e.target.value);
                   setSelectedSubLocationId('');
@@ -388,12 +388,12 @@ const columns = [
               </Select>
             </FormControl>
             <FormControl sx={{ minWidth: 200, flexGrow: 1 }}>
-              <InputLabel id="sub-location-select-label" sx={{ color: '#a0aec0' }}>Sub-Ubicación</InputLabel>
+              <InputLabel id="sub-location-select-label" sx={{ color: '#a0aec0' }}>Sub-Location</InputLabel>
               <Select
                 labelId="sub-location-select-label"
                 id="sub-location-select"
                 value={selectedSubLocationId}
-                label="Sub-Ubicación"
+                label="Sub-Location"
                 onChange={(e) => setSelectedSubLocationId(e.target.value)}
                 sx={{
                   color: '#e2e8f0',
@@ -404,14 +404,14 @@ const columns = [
                 }}
                 disabled={!selectedFacilityId}
               >
-                <MenuItem value=""><em>Todas</em></MenuItem>
+                <MenuItem value=""><em>All</em></MenuItem>
                 {subLocations.map((subLoc) => (
                   <MenuItem key={subLoc.id} value={subLoc.id}>{subLoc.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>
             <DatePicker
-              label="Fecha de Corte (Lógico)"
+              label="Cut-off Date (Logical)"
               value={asOfDate}
               onChange={(newValue) => setAsOfDate(newValue)}
               slotProps={{
@@ -436,7 +436,7 @@ const columns = [
               disabled={loading || !selectedFacilityId}
               sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' }, color: '#fff', height: '56px' }}
             >
-              Actualizar
+              Update
             </Button>
           </Toolbar>
         </AppBar>
@@ -472,12 +472,12 @@ const columns = [
         {/* Diálogo para Registrar Conteo Físico */}
         <Dialog open={openCountDialog} onClose={handleCloseCountDialog} maxWidth="sm" fullWidth PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}>
           <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', textAlign: 'center' }}>
-            Registrar Conteo Físico para {currentBatchForCount?.batch_name}
+            Register Physical Count for {currentBatchForCount?.batch_name}
           </DialogTitle>
           <DialogContent sx={{ pt: 2 }}>
             <TextField
               margin="dense"
-              label="Cantidad Contada"
+              label="Counted Quantity"
               type="number"
               fullWidth
               value={countQuantity}
@@ -493,7 +493,7 @@ const columns = [
             />
             <TextField
               margin="dense"
-              label="Unidad de Medida"
+              label="Unit of Measure"
               value={currentBatchForCount?.logical_unit || ''}
               fullWidth
               InputProps={{ readOnly: true }}
@@ -503,7 +503,7 @@ const columns = [
               }}
             />
             <DatePicker
-              label="Fecha del Conteo"
+              label="Count Date"
               value={countDate}
               onChange={(newValue) => setCountDate(newValue)}
               slotProps={{
@@ -521,7 +521,7 @@ const columns = [
             />
             <TextField
               margin="dense"
-              label="Notas (Opcional)"
+              label="Notes (Optional)"
               type="text"
               fullWidth
               multiline
@@ -537,7 +537,7 @@ const columns = [
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b' }}>
             <Button onClick={handleCloseCountDialog} disabled={countDialogLoading} sx={{ color: '#a0aec0' }}>
-              Cancelar
+              Cancel
             </Button>
             <Button
               onClick={handleSubmitPhysicalCount}
@@ -545,7 +545,7 @@ const columns = [
               variant="contained"
               sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
             >
-              {countDialogLoading ? <CircularProgress size={24} /> : 'Registrar Conteo'}
+              {countDialogLoading ? <CircularProgress size={24} /> : 'Register Count'}
             </Button>
           </DialogActions>
         </Dialog>

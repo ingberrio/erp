@@ -37,7 +37,7 @@ export default function JustifyDiscrepancyModal({
 
   const handleJustify = () => {
     if (!reasonId) {
-      setError("Por favor seleccione un motivo.");
+      setError("Please select a reason.");
       return;
     }
     onSubmit({
@@ -49,21 +49,21 @@ export default function JustifyDiscrepancyModal({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Justificar Discrepancia</DialogTitle>
+      <DialogTitle>Justify Discrepancy</DialogTitle>
       <DialogContent>
         <Typography variant="subtitle1" sx={{ mb: 2 }}>
-          <b>Lote:</b> {discrepancy?.batch_name || "-"}<br />
-          <b>Diferencia:</b>{" "}
-          {discrepancy?.logical_quantity} {discrepancy?.unit} (lógico) &rarr;{" "}
-          {discrepancy?.physical_quantity} {discrepancy?.unit} (físico)
+          <b>Batch:</b> {discrepancy?.batch_name || "-"}<br />
+          <b>Difference:</b>{" "}
+          {discrepancy?.logical_quantity} {discrepancy?.unit} (logical) &rarr;{" "}
+          {discrepancy?.physical_quantity} {discrepancy?.unit} (physical)
         </Typography>
 
         <FormControl fullWidth sx={{ mt: 2 }}>
-          <InputLabel id="reason-label">Motivo*</InputLabel>
+          <InputLabel id="reason-label">Reason*</InputLabel>
           <Select
             labelId="reason-label"
             value={reasonId}
-            label="Motivo*"
+            label="Reason*"
             onChange={(e) => setReasonId(e.target.value)}
             required
           >
@@ -77,7 +77,7 @@ export default function JustifyDiscrepancyModal({
 
         <TextField
           sx={{ mt: 2 }}
-          label="Notas (opcional)"
+          label="Notes (optional)"
           fullWidth
           multiline
           minRows={2}
@@ -93,14 +93,14 @@ export default function JustifyDiscrepancyModal({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="outlined">
-          Cancelar
+          Cancel
         </Button>
         <Button
           onClick={handleJustify}
           variant="contained"
           disabled={!reasonId || loading}
         >
-          {loading ? <CircularProgress size={24} /> : "Justificar"}
+          {loading ? <CircularProgress size={24} /> : "Justify"}
         </Button>
       </DialogActions>
     </Dialog>

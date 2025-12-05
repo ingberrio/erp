@@ -8,7 +8,10 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use App\Scopes\TenantScope; // Importar el TenantScope (aunque no se usa directamente aquí, es buena práctica)
-use Illuminate\Support\Facades\Schema; // Para Schema::hasColumn en TenantScope si aplica
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
 
 class FacilityController extends Controller
 {
@@ -105,19 +108,93 @@ class FacilityController extends Controller
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'address' => 'nullable|string|max:1000',
-                'tenant_id' => 'required|exists:tenants,id', // Ahora tenant_id es requerido y validado
-                'licence_number' => 'nullable|string|max:255', // AÑADIDO: Validación para licence_number
+                'tenant_id' => 'required|exists:tenants,id',
+                'licence_number' => 'nullable|string|max:255',
+                'admin_email' => 'required|email|max:255', // NEW: Admin email validation
             ]);
 
-            $facility = Facility::create([
-                'name' => $validated['name'],
-                'address' => $validated['address'] ?? null,
-                'tenant_id' => $validated['tenant_id'],
-                'licence_number' => $validated['licence_number'] ?? null, // AÑADIDO: Asignación de licence_number
-            ]);
+            // Use transaction to ensure both facility and user are created together
+            $result = DB::transaction(function () use ($validated) {
+                // Create the facility
+                $facility = Facility::create([
+                    'name' => $validated['name'],
+                    'address' => $validated['address'] ?? null,
+                    'tenant_id' => $validated['tenant_id'],
+                    'licence_number' => $validated['licence_number'] ?? null,
+                ]);
 
-            Log::info('Facility created successfully.', ['facility_id' => $facility->id, 'tenant_id' => $validated['tenant_id']]);
-            return response()->json($facility, 201);
+                // Check if user with this email already exists for this tenant
+                $existingUser = User::withoutGlobalScopes()
+                    ->where('email', $validated['admin_email'])
+                    ->where('tenant_id', $validated['tenant_id'])
+                    ->first();
+
+                if ($existingUser) {
+                    // User already exists, just return facility
+                    Log::info('Admin user already exists for this tenant.', [
+                        'email' => $validated['admin_email'],
+                        'tenant_id' => $validated['tenant_id'],
+                        'facility_id' => $facility->id
+                    ]);
+                    return [
+                        'facility' => $facility,
+                        'admin_user' => $existingUser,
+                        'user_created' => false
+                    ];
+                }
+
+                // Create admin user with default password
+                $defaultPassword = 'Facility@123';
+                $adminUser = User::create([
+                    'name' => 'Facility Admin - ' . $validated['name'],
+                    'email' => $validated['admin_email'],
+                    'password' => Hash::make($defaultPassword),
+                    'tenant_id' => $validated['tenant_id'],
+                    'is_global_admin' => false,
+                ]);
+
+                // Set the team context for Spatie Permission before assigning role
+                setPermissionsTeamId($validated['tenant_id']);
+
+                // Assign tenant_admin role (has all permissions except company management)
+                $tenantAdminRole = Role::where('name', 'tenant_admin')
+                    ->where('guard_name', 'sanctum')
+                    ->first();
+                
+                if ($tenantAdminRole) {
+                    $adminUser->assignRole($tenantAdminRole);
+                    Log::info('Assigned tenant_admin role to facility admin user.', [
+                        'user_id' => $adminUser->id,
+                        'role_id' => $tenantAdminRole->id,
+                        'tenant_id' => $validated['tenant_id']
+                    ]);
+                } else {
+                    Log::warning('tenant_admin role not found. User created without role.', [
+                        'user_id' => $adminUser->id
+                    ]);
+                }
+
+                Log::info('Facility admin user created successfully.', [
+                    'user_id' => $adminUser->id,
+                    'email' => $validated['admin_email'],
+                    'facility_id' => $facility->id,
+                    'tenant_id' => $validated['tenant_id']
+                ]);
+
+                return [
+                    'facility' => $facility,
+                    'admin_user' => $adminUser,
+                    'user_created' => true
+                ];
+            });
+
+            Log::info('Facility created successfully.', ['facility_id' => $result['facility']->id, 'tenant_id' => $validated['tenant_id']]);
+            
+            $response = $result['facility']->toArray();
+            $response['admin_user_created'] = $result['user_created'];
+            $response['admin_email'] = $validated['admin_email'];
+            
+            return response()->json($response, 201);
         } catch (ValidationException $e) {
             Log::error('Validation failed during facility store', ['errors' => $e->errors()]);
             return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);

@@ -69,10 +69,10 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
       </DialogContent>
       <DialogActions sx={{ bgcolor: '#3a506b' }}> {/* Estilo oscuro */}
         <Button onClick={onCancel} sx={{ color: '#a0aec0' }}> {/* Color de botón para contraste */}
-          Cancelar
+          Cancel
         </Button>
         <Button onClick={onConfirm} color="error" autoFocus sx={{ color: '#fc8181' }}> {/* Color de botón para contraste */}
-          Confirmar
+          Confirm
         </Button>
       </DialogActions>
     </Dialog>
@@ -172,7 +172,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
 
     } catch (error) {
       console.error("CalendarPage: Error fetching boards:", error.response?.data || error.message);
-      showSnack("Error al cargar los tableros. Asegúrate de que el inquilino seleccionado tenga tableros o permisos.", "error"); // Mensaje más descriptivo
+      showSnack("Error loading boards. Make sure the selected tenant has boards or permissions.", "error"); // Mensaje más descriptivo
     } finally {
       setLoading(false);
       console.log("CalendarPage: fetchBoards END.");
@@ -202,7 +202,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
       }
     } catch (error) {
       console.error('CalendarPage: Error fetching tenants:', error.response?.data || error.message);
-      showSnack('Error al cargar inquilinos para la asignación de tableros.', 'error');
+      showSnack('Error loading tenants for board assignment.', 'error');
     }
   }, [isGlobalAdmin, showSnack, selectedTenantForViewing]);
 
@@ -266,13 +266,13 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
     e.preventDefault();
 
     if (!boardName.trim()) {
-      showSnack("El nombre del tablero es obligatorio.", "warning");
+      showSnack("Board name is required.", "warning");
       return;
     }
 
     // Validación para Super Admin: debe seleccionar un tenant
     if (isGlobalAdmin && !selectedTenantForBoard) {
-      showSnack("Como Super Admin, debes seleccionar un inquilino para el tablero.", "error");
+      showSnack("As Super Admin, you must select a tenant for the board.", "error");
       return;
     }
 
@@ -290,7 +290,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
       } else if (tenantId) {
         boardData.tenant_id = parseInt(tenantId, 10);
       } else {
-        showSnack("No se pudo determinar el Tenant ID para el tablero.", "error");
+        showSnack("Could not determine Tenant ID for the board.", "error");
         setLoading(false);
         return;
       }
@@ -299,10 +299,10 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
       let res;
       if (editingBoard) {
         res = await api.put(`/boards/${editingBoard.id}`, boardData);
-        showSnack("Tablero actualizado.", "success");
+        showSnack("Board updated.", "success");
       } else {
         res = await api.post("/boards", boardData);
-        showSnack("Tablero creado.", "success");
+        showSnack("Board created.", "success");
         setViewingBoardId(res.data.id);
       }
       console.log("CalendarPage: Board saved. Response:", res.data);
@@ -311,7 +311,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
     } catch (err) {
       console.error("CalendarPage: Error al guardar tablero:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setSnack("Error al guardar tablero: " + errorMessage, "error");
+      setSnack("Error saving board: " + errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -321,14 +321,14 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
     setLoading(true);
     try {
       await api.delete(`/boards/${boardToDelete.id}`);
-      showSnack("Tablero eliminado.", "info");
+      showSnack("Board deleted.", "info");
       setViewingBoardId(null);
       await fetchBoards();
     }
     catch (err) {
       console.error("CalendarPage: Error al eliminar tablero:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      showSnack("Error al eliminar tablero: " + errorMessage, "error");
+      showSnack("Error deleting board: " + errorMessage, "error");
     } finally {
       setLoading(false);
       setConfirmDialogOpen(false);
@@ -337,8 +337,8 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
 
   const handleDeleteBoardClick = (boardToDelete) => {
     setConfirmDialogData({
-      title: "Confirmar Eliminación",
-      message: `¿Estás seguro de eliminar el tablero "${boardToDelete.name}"? Esto también eliminará todas sus listas y tarjetas.`,
+      title: "Confirm Deletion",
+      message: `Are you sure you want to delete the board "${boardToDelete.name}"? This will also delete all its lists and cards.`,
       onConfirm: () => handleDeleteBoardConfirm(boardToDelete),
     });
     setConfirmDialogOpen(true);
@@ -366,7 +366,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
             {selectedBoard.name}
           </Typography>
           <Typography variant="body1" sx={{ ml: { sm: 2 }, color: '#a0aec0' }}> {/* Color de texto para contraste */}
-            {selectedBoard.description || "Sin descripción."}
+            {selectedBoard.description || "No description."}
           </Typography>
           <Box sx={{ flexGrow: 1 }} />
           <Button
@@ -375,7 +375,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
             onClick={() => handleOpenBoardDialog(selectedBoard)}
             sx={{ borderRadius: 2, borderColor: '#b0c4de', color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', borderColor: '#fff' } }}
           >
-            Editar Tablero
+            Edit Board
           </Button>
           <Button
             variant="outlined"
@@ -384,7 +384,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
             onClick={() => handleDeleteBoardClick(selectedBoard)}
             sx={{ borderRadius: 2, borderColor: '#fc8181', color: '#fc8181', '&:hover': { bgcolor: 'rgba(252,129,129,0.1)', borderColor: '#ff0000' } }}
           >
-            Eliminar Tablero
+            Delete Board
           </Button>
         </Box>
         <BoardView
@@ -409,16 +409,16 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}> {/* Añadir flexWrap y gap para responsive */}
         <GroupIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} /> {/* Color blanco para el icono */}
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}> {/* Color blanco para el título */}
-          Tus tableros
+          Your Boards
         </Typography>
         <Box sx={{ flexGrow: 1 }} /> {/* Espaciador */}
         {isGlobalAdmin && ( // Selector de tenant para Super Admin en la vista principal
           <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel id="tenant-view-select-label" sx={{ color: '#fff' }}>Ver Inquilino</InputLabel>
+            <InputLabel id="tenant-view-select-label" sx={{ color: '#fff' }}>View Tenant</InputLabel>
             <Select
               labelId="tenant-view-select-label"
               value={selectedTenantForViewing}
-              label="Ver Inquilino"
+              label="View Tenant"
               onChange={(e) => setSelectedTenantForViewing(e.target.value)}
               disabled={loading || tenants.length === 0}
               sx={{
@@ -436,7 +436,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
             >
               {tenants.length === 0 ? (
                 <MenuItem value="" sx={{ color: '#aaa' }}>
-                  <em>No hay inquilinos disponibles</em>
+                  <em>No tenants available</em>
                 </MenuItem>
               ) : (
                 tenants.map((tenant) => (
@@ -453,7 +453,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#fff' }}> {/* Color blanco para el spinner */}
           <CircularProgress color="inherit" />
-          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Cargando tableros...</Typography>
+          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Loading boards...</Typography>
         </Box>
       ) : (
         <Grid container spacing={3}>
@@ -461,7 +461,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
           {isGlobalAdmin && !selectedTenantForViewing && tenants.length > 0 ? (
             <Grid item xs={12}>
               <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', mt: 5 }}>
-                Por favor, selecciona un inquilino para ver sus tableros.
+                Please select a tenant to view their boards.
               </Typography>
             </Grid>
           ) : (
@@ -480,7 +480,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
           {!loading && boards.length === 0 && (!isGlobalAdmin || (isGlobalAdmin && selectedTenantForViewing && tenants.length > 0)) && (
              <Grid item xs={12}>
                 <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', width: '100%', mt: 5 }}>
-                  No hay tableros disponibles. ¡Crea uno para empezar!
+                  No boards available. Create one to get started!
                 </Typography>
             </Grid>
           )}
@@ -500,13 +500,13 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
       </Snackbar>
 
       <Dialog open={openBoardDialog} onClose={handleCloseBoardDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }} // Estilo oscuro
+        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingBoard ? "Editar Tablero" : "Crear Nuevo Tablero"}</DialogTitle> {/* Estilo oscuro */}
+        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingBoard ? "Edit Board" : "Create New Board"}</DialogTitle>
         <form onSubmit={handleSaveBoard}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField
-              label="Nombre del Tablero"
+              label="Board Name"
               value={boardName}
               onChange={e => setBoardName(e.target.value)}
               fullWidth
@@ -519,11 +519,11 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
               }}
               disabled={loading}
-              helperText={!boardName.trim() && openBoardDialog ? "El nombre del tablero es obligatorio." : ""}
+              helperText={!boardName.trim() && openBoardDialog ? "Board name is required." : ""}
               error={!boardName.trim() && openBoardDialog}
             />
             <TextField
-              label="Descripción del Tablero"
+              label="Board Description"
               value={boardDescription}
               onChange={e => setBoardDescription(e.target.value)}
               fullWidth
@@ -540,11 +540,11 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
             />
             {isGlobalAdmin && ( // Mostrar selector de tenant solo si es Super Admin
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel id="tenant-select-label" sx={{ color: '#fff' }}>Asignar a Inquilino</InputLabel>
+                <InputLabel id="tenant-select-label" sx={{ color: '#fff' }}>Assign to Tenant</InputLabel>
                 <Select
                   labelId="tenant-select-label"
                   value={selectedTenantForBoard}
-                  label="Asignar a Inquilino"
+                  label="Assign to Tenant"
                   onChange={(e) => setSelectedTenantForBoard(e.target.value)}
                   required
                   disabled={loading || tenants.length === 0}
@@ -563,7 +563,7 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
                 >
                   {tenants.length === 0 ? (
                     <MenuItem value="" sx={{ color: '#aaa' }}>
-                      <em>No hay inquilinos disponibles</em>
+                      <em>No tenants available</em>
                     </MenuItem>
                   ) : (
                     tenants.map((tenant) => (
@@ -577,11 +577,11 @@ const CalendarPage = ({ tenantId, isAppReady, setParentSnack, isGlobalAdmin, use
             )}
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b' }}> {/* Estilo oscuro */}
-            <Button onClick={handleCloseBoardDialog} disabled={loading} sx={{ color: '#a0aec0' }}>Cancelar</Button>
+            <Button onClick={handleCloseBoardDialog} disabled={loading} sx={{ color: '#a0aec0' }}>Cancel</Button>
             <Button type="submit" variant="contained" disabled={loading || !boardName.trim() || (isGlobalAdmin && !selectedTenantForBoard)}
               sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
             >
-              {loading ? <CircularProgress size={24} /> : (editingBoard ? "Guardar Cambios" : "Crear Tablero")}
+              {loading ? <CircularProgress size={24} /> : (editingBoard ? "Save Changes" : "Create Board")}
             </Button>
           </DialogActions>
         </form>
@@ -673,7 +673,7 @@ const CreateBoardCard = ({ onClick }) => {
     >
       <AddIcon sx={{ fontSize: 40, mb: 1, color: '#e2e8f0' }} /> {/* Icono claro */}
       <Typography variant="subtitle1" sx={{ color: '#e2e8f0' }}> {/* Texto claro */}
-        Crear un tablero nuevo
+        Create a new board
       </Typography>
     </Paper>
   );
@@ -765,7 +765,7 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
           return { ...list, cards: fetchedCards.sort((a, b) => a.order - b.order) };
         } catch (cardError) {
           console.error(`Error al buscar tarjetas para la lista ${list.id} (name: ${list.name}):`, cardError.response?.data || cardError.message); // NUEVO LOG
-          setParentSnack("Error al cargar tarjetas de la lista \"" + list.name + "\".", "error"); // Usar setParentSnack
+          setParentSnack("Error loading cards from list \"" + list.name + "\".", "error"); // Usar setParentSnack
           return { ...list, cards: [] };
         }
       });
@@ -776,7 +776,7 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
       console.log("BoardView: Lists with cards fetched successfully and state updated.");
     } catch (error) {
       console.error(`BoardView: Error al buscar listas para el ID de tablero: ${board.id}`, error.response?.data || error.message); // NUEVO LOG
-      setParentSnack("Error al cargar las listas del tablero.", "error"); // Usar setParentSnack
+      setParentSnack("Error loading board lists.", "error"); // Usar setParentSnack
     } finally {
       setLoadingLists(false);
       console.log("BoardView: fetchListsWithCards END"); // NUEVO LOG
@@ -801,7 +801,7 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
   const handleAddList = async (e) => {
     e.preventDefault();
     if (!listName.trim()) {
-      setParentSnack("El nombre de la lista es obligatorio.", "warning");
+      setParentSnack("List name is required.", "warning");
       return;
     }
 
@@ -810,14 +810,14 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
       console.log(`BoardView: Intentando crear la lista '${listName}' para el ID de tablero: ${board.id}`);
       const response = await api.post(`/boards/${board.id}/lists`, { name: listName });
       console.log("BoardView: Respuesta de la API de creación de lista:", response.data);
-      setParentSnack("Lista creada.", "success");
+      setParentSnack("List created.", "success");
       handleCloseAddListDialog();
       await fetchListsWithCards(); // Volver a buscar listas después de la creación exitosa
       console.log("BoardView: Listas buscadas de nuevo después de la creación.");
     } catch (err) {
       console.error("BoardView: Error al crear lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setParentSnack("Error al crear lista: " + errorMessage, "error");
+      setParentSnack("Error creating list: " + errorMessage, "error");
     } finally {
       setLoadingLists(false);
     }
@@ -828,12 +828,12 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
     try {
       console.log(`BoardView: Intentando eliminar la lista '${listToDelete.name}' (ID: ${listToDelete.id})`);
       await api.delete(`/lists/${listToDelete.id}`);
-      setParentSnack("Lista eliminada.", "info");
+      setParentSnack("List deleted.", "info");
       await fetchListsWithCards();
     } catch (err) {
       console.error("BoardView: Error al eliminar lista:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setParentSnack("Error al eliminar lista: " + errorMessage, "error");
+      setParentSnack("Error deleting list: " + errorMessage, "error");
     } finally {
       setLoadingLists(false);
       setParentConfirmDialogOpen(false); // Corregido: usar setParentConfirmDialogOpen
@@ -842,8 +842,8 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
 
   const handleDeleteListClick = (listToDelete) => {
     setParentConfirmDialog({
-      title: "Confirmar Eliminación de Lista",
-      message: `¿Eliminar la lista "${listToDelete.name}" y todas sus tarjetas?`,
+      title: "Confirm List Deletion",
+      message: `Delete list "${listToDelete.name}" and all its cards?`,
       onConfirm: () => handleDeleteListConfirm(listToDelete),
     });
     setParentConfirmDialogOpen(true);
@@ -928,10 +928,10 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
           await api.put(`/lists/${sourceList.id}/cards/reorder`, {
             card_ids: updatedCards.map(card => card.id),
           });
-          setParentSnack("Tarjeta reordenada.", "success"); // Usar setParentSnack
+          setParentSnack("Card reordered.", "success"); // Usar setParentSnack
         } catch (error) {
           console.error("Error al reordenar tarjeta:", error.response?.data || error.message);
-          setParentSnack("Error al reordenar la tarjeta. Recargando datos...", "error"); // Usar setParentSnack
+          setParentSnack("Error reordering card. Reloading data...", "error"); // Usar setParentSnack
           await fetchListsWithCards(); // Vuelve a cargar los datos si hay un error
         }
       }
@@ -981,10 +981,10 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
           card_ids: destinationList.cards.map(card => card.id),
         });
 
-        setParentSnack("Tarjeta movida de lista.", "success"); // Usar setParentSnack
+        setParentSnack("Card moved to another list.", "success"); // Usar setParentSnack
       } catch (error) {
         console.error("Error al mover tarjeta entre listas:", error.response?.data || error.message);
-        setParentSnack("Error al mover la tarjeta. Recargando datos...", "error"); // Usar setParentSnack
+        setParentSnack("Error moving card. Reloading data...", "error"); // Usar setParentSnack
         await fetchListsWithCards(); // Vuelve a cargar los datos si hay un error
       }
     }
@@ -1022,7 +1022,7 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
         {loadingLists ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', py: 2, color: '#fff' }}> {/* Color blanco para el spinner */}
             <CircularProgress color="inherit" size={24} />
-            <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Cargando listas...</Typography>
+            <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Loading lists...</Typography>
           </Box>
         ) : (
           <Box sx={{ display: 'flex', gap: 2, height: '100%', alignItems: 'flex-start' }}>
@@ -1057,7 +1057,7 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
             borderRadius: 2
           }}
         >
-          Añadir otra lista
+                    Add another list
         </Button>
       </Box>
 
@@ -1083,11 +1083,11 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
       <Dialog open={openAddListDialog} onClose={handleCloseAddListDialog} maxWidth="xs" fullWidth
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }} // Estilo oscuro
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>Añadir Nueva Lista</DialogTitle> {/* Estilo oscuro */}
+                <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>Add New List</DialogTitle> {/* Estilo oscuro */}
         <form onSubmit={handleAddList}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField
-              label="Nombre de la Lista"
+                            label="List Name"
               value={listName}
               onChange={e => setListName(e.target.value)}
               fullWidth
@@ -1103,11 +1103,11 @@ const BoardView = ({ board, tenantId, isGlobalAdmin, selectedTenantForViewing, s
             />
           </DialogContent>
           <DialogActions sx={{ bgcolor: '#3a506b' }}> {/* Estilo oscuro */}
-            <Button onClick={handleCloseAddListDialog} disabled={loadingLists} sx={{ color: '#a0aec0' }}>Cancelar</Button>
+                        <Button onClick={handleCloseAddListDialog} disabled={loadingLists} sx={{ color: '#a0aec0' }}>Cancel</Button>
             <Button type="submit" variant="contained" disabled={loadingLists || !listName.trim()}
               sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
             >
-              {loadingLists ? <CircularProgress size={24} /> : "Crear Lista"}
+                            {loadingLists ? <CircularProgress size={24} /> : "Create List"}
             </Button>
           </DialogActions>
         </form>
@@ -1362,7 +1362,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
 
     // This block is only for CREATING a NEW card
     if (!cardTitle.trim()) {
-      setParentSnack("El título de la tarjeta es obligatorio.", "warning");
+      setParentSnack("Card title is required.", "warning");
       return;
     }
 
@@ -1381,7 +1381,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
       const effectiveTenantId = isGlobalAdmin ? selectedTenantForViewing : tenantId;
       if (!effectiveTenantId) {
         console.error("ListView: No se puede crear una nueva tarjeta. No hay ID de inquilino efectivo establecido para la llamada a la API.");
-        setParentSnack("Error: No se pudo determinar el inquilino para crear la tarjeta.", "error");
+        setParentSnack("Error: Could not determine the tenant to create the card.", "error");
         setIsSaving(false);
         return;
       }
@@ -1391,7 +1391,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
 
       console.log("ListView: Calling API to create new card with data:", cardData); // LOG DE DEPURACIÓN
       const res = await api.post(`/lists/${list.id}/cards`, cardData);
-      setParentSnack("Tarjeta creada.", "success");
+      setParentSnack("Card created.", "success");
       
       // CRITICAL: Update editingCard state with the newly created card's data
       // This will trigger a re-render and change the dialog's state to "editing"
@@ -1714,7 +1714,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <CheckCircleOutlineIcon sx={{ mr: 1, color: '#a0aec0' }} /> {/* Icono de círculo */}
                 <TextField
-                  label="Título de la Tarjeta"
+                                    label="Card Title"
                   value={cardTitle}
                   onChange={e => setCardTitle(e.target.value)}
                   fullWidth
@@ -1744,15 +1744,15 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
 
               {/* Sección de "Añadir" (ahora en la columna principal izquierda) */}
               <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 1 }}>
-                Añadir a la tarjeta
+                                Add to card
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
                 <Button variant="contained" startIcon={<LabelIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '8px', px: '12px' }}>
-                  Etiquetas
+                  Labels
                 </Button>
                 <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
                   <DatePicker
-                    label="Fechas"
+                                        label="Dates"
                     value={cardDueDate}
                     onChange={(newValue) => setCardDueDate(newValue)}
                     slotProps={{
@@ -1773,7 +1773,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                           py: '8px', // Ajustar padding vertical
                           px: '12px', // Ajustar padding horizontal
                         },
-                        placeholder: "Fechas", // Para que no muestre la fecha si está vacío
+                                                placeholder: "Dates", // Para que no muestre la fecha si está vacío
                         InputProps: {
                           startAdornment: <DateRangeIcon sx={{ mr: 1, color: '#e2e8f0' }} />, // Icono al inicio
                         },
@@ -1782,16 +1782,16 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                   />
                 </LocalizationProvider>
                 <Button variant="contained" startIcon={<ChecklistIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '8px', px: '12px' }}
-                  onClick={hasPermission('manage-card-checklist') ? handleAddChecklist : () => setParentSnack("No tienes permiso para añadir un checklist.", "error")} // Control de permiso
+                                    onClick={hasPermission('manage-card-checklist') ? handleAddChecklist : () => setParentSnack("You don't have permission to add a checklist.", "error")} // Control de permiso
                   disabled={!editingCard || !hasPermission('manage-card-checklist')} // Deshabilitar si no hay tarjeta o no tiene permiso
                 >
                   Checklist
                 </Button>
                 <Button variant="contained" startIcon={<PersonIcon />} sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '8px', px: '12px' }}
-                  onClick={hasPermission('assign-card-members') ? handleOpenMembersDialog : () => setParentSnack("No tienes permiso para asignar miembros.", "error")} // Control de permiso
+                                    onClick={hasPermission('assign-card-members') ? handleOpenMembersDialog : () => setParentSnack("You don't have permission to assign members.", "error")} // Control de permiso
                   disabled={!editingCard || !hasPermission('assign-card-members')} // Deshabilitar si no hay tarjeta o no tiene permiso
                 >
-                  Miembros
+                  Members
                 </Button>
               </Box>
 
@@ -1799,10 +1799,10 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
               <Box sx={{ mb: 3 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 1 }}>
                   <DescriptionIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#a0aec0' }} />
-                  Descripción
+                  Description
                 </Typography>
                 <TextField
-                  placeholder="Añadir una descripción más detallada..."
+                                    placeholder="Add a more detailed description..."
                   value={cardDescription}
                   onChange={e => setCardDescription(e.target.value)}
                   fullWidth
@@ -1832,17 +1832,17 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                       <Button
                         size="small"
                         sx={{ borderRadius: 1, color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }, textTransform: 'none' }}
-                        onClick={() => setParentSnack("Funcionalidad 'Ocultar/Mostrar elementos marcados' pendiente.", "info")}
+                        onClick={() => setParentSnack("'Hide/Show checked items' functionality pending.", "info")}
                       >
-                        Ocultar elementos marcados
+                        Hide checked items
                       </Button>
                       <Button
                         size="small"
                         color="error"
-                        onClick={hasPermission('manage-card-checklist') ? handleDeleteChecklist : () => setParentSnack("No tienes permiso para eliminar el checklist.", "error")} // Control de permiso
+                        onClick={hasPermission('manage-card-checklist') ? handleDeleteChecklist : () => setParentSnack("You don't have permission to delete the checklist.", "error")} // Control de permiso
                         sx={{ borderRadius: 1, color: '#fc8181', '&:hover': { bgcolor: 'rgba(252,129,129,0.1)' }, textTransform: 'none' }}
                       >
-                        Eliminar
+                        Delete
                       </Button>
                     </Box>
                   </Box>
@@ -1860,7 +1860,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                     }}
                   />
                   <Typography variant="body2" sx={{ color: '#a0aec0', mb: 1 }}>
-                    {Math.round(calculateChecklistProgress)}% completado
+                    {Math.round(calculateChecklistProgress)}% completed
                   </Typography>
 
                   {/* Lista de elementos del checklist */}
@@ -1900,7 +1900,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                   {/* Campo para añadir nuevo elemento */}
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
-                      placeholder="Añade un elemento"
+                      placeholder="Add an item"
                       value={newChecklistItemText}
                       onChange={(e) => setNewChecklistItemText(e.target.value)}
                       fullWidth
@@ -1920,7 +1920,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                           if (hasPermission('manage-card-checklist')) { // Control de permiso
                             handleAddChecklistItem();
                           } else {
-                            setParentSnack("No tienes permiso para añadir elementos al checklist.", "error");
+                            setParentSnack("You don't have permission to add items to the checklist.", "error");
                           }
                         }
                       }}
@@ -1928,11 +1928,11 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                     />
                     <Button
                       variant="contained"
-                      onClick={hasPermission('manage-card-checklist') ? handleAddChecklistItem : () => setParentSnack("No tienes permiso para añadir elementos al checklist.", "error")} // Control de permiso
+                      onClick={hasPermission('manage-card-checklist') ? handleAddChecklistItem : () => setParentSnack("You don't have permission to add items to the checklist.", "error")} // Control de permiso
                       disabled={!newChecklistItemText.trim() || !hasPermission('manage-card-checklist')} // Deshabilitar si no tiene permiso
                       sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' }, borderRadius: 1, textTransform: 'none' }}
                     >
-                      Añadir
+                      Add
                     </Button>
                   </Box>
                 </Box>
@@ -1947,14 +1947,14 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e2e8f0' }}>
                     <CommentIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#a0aec0' }} />
-                    Comentarios y Actividad
+                    Comments and Activity
                   </Typography>
                   <Button size="small" sx={{ color: '#b0c4de', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
-                    Mostrar detalles
+                    Show details
                   </Button>
                 </Box>
                 <TextField
-                  placeholder="Escribe un comentario..."
+                                    placeholder="Write a comment..."
                   fullWidth
                   multiline
                   rows={2}
@@ -1971,8 +1971,8 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                 {/* Placeholder para actividad */}
                 <Box sx={{ bgcolor: '#3a506b', p: 2, borderRadius: 1 }}>
                   <Typography variant="body2" sx={{ color: '#a0aec0' }}>
-                    <Box component="span" sx={{ fontWeight: 600, color: '#e2e8f0' }}>Eduard Berrio</Box> ha añadido esta tarjeta a Pendmndiente <br />
-                    <Typography variant="caption" component="span" sx={{ color: '#a0aec0' }}>17 de dic de 2024, 12:37</Typography>
+                    <Box component="span" sx={{ fontWeight: 600, color: '#e2e8f0' }}>Eduard Berrio</Box> added this card to Pending <br />
+                    <Typography variant="caption" component="span" sx={{ color: '#a0aec0' }}>Dec 17, 2024, 12:37 PM</Typography>
                   </Typography>
                 </Box>
               </Box>
@@ -1982,24 +1982,24 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
             {isSaving ? (
               <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
                 <CircularProgress size={20} sx={{ color: '#a0aec0' }} />
-                <Typography variant="body2" sx={{ ml: 1, color: '#a0aec0' }}>Guardando...</Typography>
+                <Typography variant="body2" sx={{ ml: 1, color: '#a0aec0' }}>Saving...</Typography>
               </Box>
             ) : (
               <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
                 <CheckCircleOutlineIcon sx={{ color: '#90ee90', fontSize: 20 }} />
                 <Typography variant="body2" sx={{ ml: 1, color: '#a0aec0', opacity: 0.8 }}>
-                  Todos los cambios guardados
+                  All changes saved
                 </Typography>
               </Box>
             )}
             <Button onClick={handleCloseCardDialog} sx={{ color: '#a0aec0' }}>
-              {editingCard ? "Cerrar" : "Cancelar"} {/* Cambiar texto del botón si es edición */}
+              {editingCard ? "Close" : "Cancel"} {/* Cambiar texto del botón si es edición */}
             </Button>
             {!editingCard && ( // Mostrar botón "Crear Tarjeta" solo para nuevas tarjetas
               <Button type="submit" variant="contained" disabled={isSaving || !cardTitle.trim()}
                 sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
               >
-                {isSaving ? <CircularProgress size={24} /> : "Crear Tarjeta"}
+                                {isSaving ? <CircularProgress size={24} /> : "Create Card"}
               </Button>
             )}
           </DialogActions>
@@ -2011,14 +2011,14 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
         PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
       >
         <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          Miembros
+          Members
           <IconButton onClick={handleCloseMembersDialog} sx={{ color: '#e2e8f0' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: '20px !important' }}>
           <TextField
-            placeholder="Buscar miembros"
+                        placeholder="Search members"
             fullWidth
             variant="outlined"
             size="small"
@@ -2033,11 +2033,11 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
             }}
           />
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#a0aec0', mb: 1 }}>
-            Miembros del tablero
+            Board members
           </Typography>
           <Box>
             {availableMembers.length === 0 ? (
-              <Typography variant="body2" sx={{ color: '#a0aec0' }}>No hay miembros disponibles.</Typography>
+                            <Typography variant="body2" sx={{ color: '#a0aec0' }}>No members available.</Typography>
             ) : (
               availableMembers.map((member) => (
                 <Box
@@ -2051,7 +2051,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
                     '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
                     cursor: 'pointer',
                   }}
-                  onClick={() => hasPermission('assign-card-members') ? handleMemberToggle(member.id) : setParentSnack("No tienes permiso para asignar miembros.", "error")} // Control de permiso
+                  onClick={() => hasPermission('assign-card-members') ? handleMemberToggle(member.id) : setParentSnack("You don't have permission to assign members.", "error")} // Control de permiso
                 >
                   <Avatar sx={{ bgcolor: '#4CAF50', width: 32, height: 32, fontSize: 14, mr: 1 }}>
                     {member.name ? member.name.charAt(0).toUpperCase() : ''}
@@ -2070,7 +2070,7 @@ const ListView = ({ list, tenantId, isGlobalAdmin, selectedTenantForViewing, ref
           </Box>
         </DialogContent>
         <DialogActions sx={{ bgcolor: '#3a506b' }}>
-          <Button onClick={handleCloseMembersDialog} sx={{ color: '#a0aec0' }}>Cerrar</Button>
+                    <Button onClick={handleCloseMembersDialog} sx={{ color: '#a0aec0' }}>Close</Button>
         </DialogActions>
       </Dialog>
     </Paper>

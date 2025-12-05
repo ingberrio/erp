@@ -8,7 +8,7 @@ import {
   AppBar, Toolbar, IconButton, Typography, Box, Drawer, List, ListItem,
   ListItemIcon, ListItemText, CssBaseline, Snackbar, Alert, Menu, MenuItem,
   CircularProgress, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Collapse, Divider, Avatar
+  TextField, Collapse, Divider, Avatar, ThemeProvider, createTheme
 } from '@mui/material';
 
 // Iconos de Material-UI
@@ -29,6 +29,7 @@ import CloudDownloadIcon from '@mui/icons-material/CloudDownload'; // Icono para
 import GrassIcon from '@mui/icons-material/Grass'; // Para Áreas de Cultivo
 import InventoryIcon from '@mui/icons-material/Inventory'; // Para Lotes
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'; // NUEVO: Para Reconciliación de Inventario
+import ContactsIcon from '@mui/icons-material/Contacts'; // CRM Module icon
 
 // Componentes de tu aplicación
 import EmpresasCrud from './components/EmpresasCrud';
@@ -39,6 +40,9 @@ import LandingPage from './components/LandingPage';
 import BatchManagementPage from './components/BatchManagementPage';
 import RegulatoryReportsPage from './components/RegulatoryReportsPage';
 import InventoryReconciliationPage from './components/InventoryReconciliationPage'; // NUEVO: Importar el componente de reconciliación
+import { CrmModuleWrapper } from './components/crm'; // CRM Module
+import VarietiesPage from './components/production/VarietiesPage'; // Production Module
+import SkuPage from './components/production/SkuPage'; // SKU Module
 
 // Configuración de Axios
 export const api = axios.create({
@@ -61,6 +65,37 @@ api.interceptors.request.use(config => {
 });
 
 
+// Crear tema MUI con modo claro
+const lightTheme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#1976d2',
+    },
+    secondary: {
+      main: '#dc004e',
+    },
+    background: {
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#212121',
+      secondary: '#757575',
+    },
+  },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundColor: '#f5f5f5',
+          color: '#212121',
+        },
+      },
+    },
+  },
+});
+
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,6 +117,8 @@ function App() {
 
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [cultivationMenuOpen, setCultivationMenuOpen] = useState(false); // NUEVO: Estado para el submenú de Cultivo
+  const [crmMenuOpen, setCrmMenuOpen] = useState(false); // Estado para el submenú de CRM
+  const [productionMenuOpen, setProductionMenuOpen] = useState(false); // Estado para el submenú de Production
 
   const [userPermissions, setUserPermissions] = useState([]);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
@@ -148,7 +185,7 @@ function App() {
       setIsGlobalAdmin(false);
       setUserPermissions([]);
       setUserFacilityId(null);
-      showSnack('Sesión expirada o no autorizada. Por favor, inicie sesión de nuevo.', 'error');
+      showSnack('Session expired or unauthorized. Please log in again.', 'error');
       return null;
     } finally {
       setLoading(false);
@@ -176,8 +213,8 @@ function App() {
       setFacilities(fetchedFacilities);
       console.log('App.jsx: Facilities fetched for Global Admin:', fetchedFacilities);
     } catch (error) {
-      console.error('App.jsx: Error cargando instalaciones para permisos:', error);
-      showSnack('Error cargando instalaciones para permisos.', 'error');
+      console.error('App.jsx: Error loading facilities for permissions:', error);
+      showSnack('Error loading facilities for permissions.', 'error');
     }
   }, [isGlobalAdmin, appReady, showSnack]); // appReady añadido como dependencia
 
@@ -254,18 +291,18 @@ function App() {
         }
         else {
           navigate('/');
-          showSnack('Inicio de sesión exitoso, pero no tienes permisos para ver ningún módulo. Contacta al administrador.', 'warning');
+          showSnack('Login successful, but you do not have permissions to view any module. Contact the administrator.', 'warning');
         }
-        showSnack('Inicio de sesión exitoso.', 'success');
+        showSnack('Login successful.', 'success');
       } else {
-        showSnack('Inicio de sesión exitoso, pero no se pudieron cargar los datos del usuario. Intente de nuevo.', 'warning');
+        showSnack('Login successful, but user data could not be loaded. Please try again.', 'warning');
         navigate('/');
       }
 
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
-      setLoginError(error.response?.data?.message || 'Error al iniciar sesión. Verifique sus credenciales.');
-      showSnack('Error al iniciar sesión.', 'error');
+      setLoginError(error.response?.data?.message || 'Login error. Please check your credentials.');
+      showSnack('Login error.', 'error');
     } finally {
       setLoadingLogin(false);
     }
@@ -280,10 +317,10 @@ function App() {
       setUserPermissions([]);
       setUserFacilityId(null);
       navigate('/');
-      showSnack('Sesión cerrada exitosamente.', 'info');
+      showSnack('Session closed successfully.', 'info');
     } catch (error) {
       console.error('Logout error:', error);
-      showSnack('Error al cerrar sesión.', 'error');
+      showSnack('Error closing session.', 'error');
     } finally {
       handleClose();
     }
@@ -305,11 +342,15 @@ function App() {
     setCultivationMenuOpen(!cultivationMenuOpen);
   };
 
+  const handleCrmMenuToggle = () => { // Handler para el submenú de CRM
+    setCrmMenuOpen(!crmMenuOpen);
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#1a202c', color: '#fff' }}>
         <CircularProgress color="inherit" />
-        <Typography variant="h6" sx={{ ml: 2 }}>Cargando aplicación...</Typography>
+        <Typography variant="h6" sx={{ ml: 2 }}>Loading application...</Typography>
       </Box>
     );
   }
@@ -333,7 +374,7 @@ function App() {
         <LandingPage setLoginDialogOpen={setLoginDialogOpen} />
 
         <Dialog open={loginDialogOpen} onClose={() => setLoginDialogOpen(false)} maxWidth="xs" fullWidth disableEscapeKeyDown PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}>
-          <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', textAlign: 'center' }}>Iniciar Sesión</DialogTitle>
+          <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', textAlign: 'center' }}>Sign In</DialogTitle>
           <form onSubmit={handleLogin}>
             <DialogContent sx={{ pt: '20px !important' }}>
               <TextField
@@ -356,7 +397,7 @@ function App() {
               />
               <TextField
                 margin="dense"
-                label="Contraseña"
+                label="Password"
                 type="password"
                 fullWidth
                 value={loginPassword}
@@ -369,7 +410,7 @@ function App() {
                   '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
                   '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
                 }}
-                helperText={user ? "Dejar vacío para no cambiar la contraseña." : "Requerido para nuevos usuarios."}
+                helperText={user ? "Leave empty to not change the password." : "Required for new users."}
                 autoComplete="new-password"
                 required={!user && loginPassword.trim() === ""}
                 disabled={loginLoading}
@@ -379,7 +420,7 @@ function App() {
               )}
             </DialogContent>
             <DialogActions sx={{ bgcolor: '#3a506b' }}>
-              <Button onClick={() => setLoginDialogOpen(false)} disabled={loginLoading} sx={{ color: '#a0aec0' }}>Cancelar</Button>
+              <Button onClick={() => setLoginDialogOpen(false)} disabled={loginLoading} sx={{ color: '#a0aec0' }}>Cancel</Button>
               <Button
                 type="submit"
                 variant="contained"
@@ -389,7 +430,7 @@ function App() {
                   '&:hover': { bgcolor: '#43A047' }
                 }}
               >
-                {loginLoading ? <CircularProgress size={24} /> : "Iniciar Sesión"}
+                {loginLoading ? <CircularProgress size={24} /> : "Sign In"}
               </Button>
             </DialogActions>
           </form>
@@ -409,7 +450,8 @@ function App() {
   }
 
   return (
-    <Box sx={{ display: 'flex', bgcolor: '#1a202c', minHeight: '100vh' }}>
+    <ThemeProvider theme={lightTheme}>
+    <Box sx={{ display: 'flex', bgcolor: 'background.default', minHeight: '100vh' }}>
       <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: appBarBgColor }}>
         <Toolbar>
@@ -477,7 +519,7 @@ function App() {
                   {/* CORRECCIÓN: Envolver los elementos hijos en un fragmento o Box */}
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon fontSize="small" /></ListItemIcon>
-                    <ListItemText primary="Cerrar Sesión" />
+                    <ListItemText primary="Sign Out" />
                   </Box>
                 </MenuItem>
               </Menu>
@@ -510,7 +552,7 @@ function App() {
               <>
                 <ListItem button onClick={handleCultivationMenuToggle}>
                   <ListItemIcon sx={{ color: '#e2e8f0' }}><LocalFloristIcon /></ListItemIcon>
-                  <ListItemText primary="Cultivo" />
+                  <ListItemText primary="Cultivation" />
                   {cultivationMenuOpen ? <ExpandLess sx={{ color: '#e2e8f0' }} /> : <ExpandMoreIcon sx={{ color: '#e2e8f0' }} />}
                 </ListItem>
                 <Collapse in={cultivationMenuOpen} timeout="auto" unmountOnExit>
@@ -518,20 +560,20 @@ function App() {
                     {hasPermission('view-cultivation-areas') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/cultivation/areas'); setDrawerOpen(false); }} selected={location.pathname === '/cultivation/areas'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><GrassIcon /></ListItemIcon>
-                        <ListItemText primary="Áreas de Cultivo" />
+                        <ListItemText primary="Cultivation Areas" />
                       </ListItem>
                     )}
                     {hasPermission('view-batches') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/cultivation/batches'); setDrawerOpen(false); }} selected={location.pathname === '/cultivation/batches'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><InventoryIcon /></ListItemIcon>
-                        <ListItemText primary="Lotes" />
+                        <ListItemText primary="Batches" />
                       </ListItem>
                     )}
                     {/* NUEVO: Elemento de menú para Reconciliación de Inventario */}
                     {hasPermission('view-inventory-reconciliation') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/inventory-reconciliation'); setDrawerOpen(false); }} selected={location.pathname === '/inventory-reconciliation'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><CheckCircleOutlineIcon /></ListItemIcon>
-                        <ListItemText primary="Reconciliación Inv." />
+                        <ListItemText primary="Inventory Reconciliation" />
                       </ListItem>
                     )}
                   </List>
@@ -542,7 +584,15 @@ function App() {
             {hasPermission('manage-calendar-events') && (
               <ListItem button onClick={() => { navigate('/calendario'); setDrawerOpen(false); }} selected={location.pathname === '/calendario'}>
                 <ListItemIcon sx={{ color: '#e2e8f0' }}><CalendarTodayIcon /></ListItemIcon>
-                <ListItemText primary="Calendario" />
+                <ListItemText primary="Calendar" />
+              </ListItem>
+            )}
+
+            {/* CRM Section */}
+            {hasPermission('view-crm-accounts') && (
+              <ListItem button onClick={() => { navigate('/crm'); setDrawerOpen(false); }} selected={location.pathname.startsWith('/crm')}>
+                <ListItemIcon sx={{ color: '#e2e8f0' }}><ContactsIcon /></ListItemIcon>
+                <ListItemText primary="CRM" />
               </ListItem>
             )}
 
@@ -551,27 +601,66 @@ function App() {
               <>
                 <ListItem button onClick={handleAdminMenuToggle}>
                   <ListItemIcon sx={{ color: '#e2e8f0' }}><LockIcon /></ListItemIcon>
-                  <ListItemText primary="Administración" />
+                  <ListItemText primary="Administration" />
                   {adminMenuOpen ? <ExpandLess sx={{ color: '#e2e8f0' }} /> : <ExpandMoreIcon sx={{ color: '#e2e8f0' }} />}
                 </ListItem>
                 <Collapse in={adminMenuOpen} timeout="auto" unmountOnExit>
                   <List component="div" disablePadding>
+                    
+                    {/* Production Submenu */}
+                    <ListItem button sx={{ pl: 4 }} onClick={() => setProductionMenuOpen(!productionMenuOpen)}>
+                      <ListItemIcon sx={{ color: '#e2e8f0' }}><LocalFloristIcon /></ListItemIcon>
+                      <ListItemText primary="Production" sx={{ '& .MuiTypography-root': { fontWeight: 500, textTransform: 'uppercase', fontSize: '0.75rem', color: '#94a3b8' } }} />
+                      {productionMenuOpen ? <ExpandLess sx={{ color: '#e2e8f0' }} /> : <ExpandMoreIcon sx={{ color: '#e2e8f0' }} />}
+                    </ListItem>
+                    <Collapse in={productionMenuOpen} timeout="auto" unmountOnExit>
+                      <List component="div" disablePadding>
+                        <ListItem button sx={{ pl: 6 }} onClick={() => { navigate('/production/varieties'); setDrawerOpen(false); }} selected={location.pathname === '/production/varieties'}>
+                          <ListItemText primary="Varieties" />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} onClick={() => { navigate('/production/skus'); setDrawerOpen(false); }} selected={location.pathname === '/production/skus'}>
+                          <ListItemText primary="SKUs" />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} disabled>
+                          <ListItemText primary="Rooms" sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} disabled>
+                          <ListItemText primary="Destruction Methods" sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} disabled>
+                          <ListItemText primary="Waste Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} disabled>
+                          <ListItemText primary="Compost Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} disabled>
+                          <ListItemText primary="Pest Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} disabled>
+                          <ListItemText primary="End Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                        </ListItem>
+                        <ListItem button sx={{ pl: 6 }} disabled>
+                          <ListItemText primary="Destruction Reasons" sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                        </ListItem>
+                      </List>
+                    </Collapse>
+
                     {hasPermission('view-companies') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/empresas'); setDrawerOpen(false); }} selected={location.pathname === '/empresas'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><BusinessIcon /></ListItemIcon>
-                        <ListItemText primary="Empresas" />
+                        <ListItemText primary="Companies" />
                       </ListItem>
                     )}
                     {hasPermission('view-users') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/users'); setDrawerOpen(false); }} selected={location.pathname === '/users'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><PeopleIcon /></ListItemIcon>
-                        <ListItemText primary="Usuarios y Roles" />
+                        <ListItemText primary="Users & Roles" />
                       </ListItem>
                     )}
                     {hasPermission('generate-regulatory-reports') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/regulatory-reports'); setDrawerOpen(false); }} selected={location.pathname === '/regulatory-reports'}>
                         <ListItemIcon sx={{ color: '#e2e8f0' }}><CloudDownloadIcon /></ListItemIcon>
-                        <ListItemText primary="Informes Regulatorios" />
+                        <ListItemText primary="Regulatory Reports" />
                       </ListItem>
                     )}
                   </List>
@@ -583,7 +672,7 @@ function App() {
               {/* CORRECCIÓN: Envolver los elementos hijos en un fragmento o Box */}
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <ListItemIcon sx={{ color: '#e2e8f0' }}><ExitToAppIcon fontSize="small" /></ListItemIcon>
-                <ListItemText primary="Cerrar Sesión" />
+                <ListItemText primary="Sign Out" />
               </Box>
             </ListItem>
           </List>
@@ -598,6 +687,7 @@ function App() {
           mt: 8, // Ajuste para el AppBar fijo
           width: '100%',
           boxSizing: 'border-box',
+          bgcolor: 'background.default',
         }}
       >
         <Routes>
@@ -695,6 +785,45 @@ function App() {
               }
             />
           )}
+          {/* CRM Module Route */}
+          {hasPermission('view-crm-accounts') && (
+            <Route
+              path="/crm/*"
+              element={
+                <CrmModuleWrapper
+                  tenantId={user?.tenant_id}
+                  isAppReady={appReady}
+                  isGlobalAdmin={isGlobalAdmin}
+                  setParentSnack={showSnack}
+                  hasPermission={hasPermission}
+                  user={user}
+                />
+              }
+            />
+          )}
+          {/* Production Module Routes */}
+          <Route
+            path="/production/varieties"
+            element={
+              <VarietiesPage
+                tenantId={user?.tenant_id}
+                isAppReady={appReady}
+                isGlobalAdmin={isGlobalAdmin}
+                setParentSnack={showSnack}
+              />
+            }
+          />
+          <Route
+            path="/production/skus"
+            element={
+              <SkuPage
+                tenantId={user?.tenant_id}
+                isAppReady={appReady}
+                isGlobalAdmin={isGlobalAdmin}
+                setParentSnack={showSnack}
+              />
+            }
+          />
           {/* Ruta por defecto o de fallback */}
           <Route path="*" element={
             user && hasPermission('view-cultivation-areas') ? (
@@ -768,6 +897,7 @@ function App() {
         </Alert>
       </Snackbar>
     </Box>
+    </ThemeProvider>
   );
 }
 

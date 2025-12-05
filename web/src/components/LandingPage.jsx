@@ -33,31 +33,31 @@ const LandingPage = ({ setLoginDialogOpen }) => {
         }}
       >
         <Typography variant="h4" component="h1" sx={{ fontWeight: 700, color: '#e2e8f0' }}>
-        Boostez votre entreprise de cannabis <br />
-          <Box component="span" sx={{ color: '#4CAF50' }}>au maximum</Box> {/* Texto "al máximo" en verde */}
+        Boost your cannabis business <br />
+          <Box component="span" sx={{ color: '#4CAF50' }}>to the maximum</Box> {/* Text "to the maximum" in green */}
         </Typography>
         <Typography variant="body1" sx={{ color: '#a0aec0', lineHeight: 1.6 }}>
-        Contrôlez toutes vos opérations commerciales. Réduisez vos coûts de main-d'œuvre et optimisez vos opérations.
+        Control all your business operations. Reduce your labor costs and optimize your operations.
         </Typography>
         <Button
           variant="contained"
           size="large"
           sx={{
             mt: 2,
-            bgcolor: '#4CAF50', // Color verde para el botón
+            bgcolor: '#4CAF50', // Green color for the button
             color: '#fff',
             fontWeight: 600,
             borderRadius: 2,
             px: 4,
             py: 1.5,
             '&:hover': {
-              bgcolor: '#43A047', // Un verde un poco más oscuro al pasar el ratón
+              bgcolor: '#43A047', // Slightly darker green on hover
               boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
             },
           }}
-          onClick={() => alert('¡Agendar una llamada! (Funcionalidad por implementar)')} // Puedes cambiar esto por una acción real
+          onClick={() => alert('Schedule a call! (Feature to be implemented)')} // You can change this to a real action
         >
-          planifier un appel
+          Schedule a Call
         </Button>
       </Paper>
     </Box>

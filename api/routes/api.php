@@ -18,6 +18,11 @@ use App\Http\Controllers\TraceabilityEventController;
 use App\Http\Controllers\RegulatoryReportController;
 use App\Http\Controllers\InventoryReconciliationController; // ¡IMPORTANTE: Añadir esta línea!
 use App\Http\Controllers\DiscrepancyReasonController; // ¡IMPORTANTE: Añadir esta línea!
+use App\Http\Controllers\LossTheftReportController; // ¡NUEVO: Para reportes de pérdidas/robos!
+use App\Http\Controllers\CrmAccountController; // CRM Module
+use App\Http\Controllers\CrmOrderController; // CRM Orders
+use App\Http\Controllers\VarietyController; // Production Module
+use App\Http\Controllers\SkuController; // SKUs
 
 /*
 |--------------------------------------------------------------------------
@@ -128,14 +133,52 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     Route::apiResource('traceability-events', TraceabilityEventController::class); // <--- DESPUÉS DE LA ESPECÍFICA
     Route::post('/reports/generate-ctls', [RegulatoryReportController::class, 'generateCtls']);
     
-    // --- RUTAS DE RECONCILIACIÓN DE INVENTARIO (NUEVAS) ---
-    // Agrega estas líneas
-    Route::post('/physical-counts', [InventoryReconciliationController::class, 'storePhysicalCount']);
-    Route::get('/inventory/reconciliation', [InventoryReconciliationController::class, 'index']); 
-    Route::get('/discrepancy-reasons', [DiscrepancyReasonController::class, 'index']);
+    // --- RUTAS DE RECONCILIACIÓN DE INVENTARIO (MEJORADAS) ---
+    Route::prefix('inventory/reconciliation')->group(function () {
+        Route::get('/', [InventoryReconciliationController::class, 'index']);
+        Route::post('/physical-count', [InventoryReconciliationController::class, 'storePhysicalCount']);
+        Route::post('/justify-discrepancy/{batch_id}', [InventoryReconciliationController::class, 'justifyDiscrepancy']);
+    });
     
-    Route::put('/inventory/discrepancies/{id}/justify', [InventoryReconciliationController::class, 'justifyDiscrepancy']);
-    // Route::post('/inventory/discrepancies/{id}/adjust', [InventoryReconciliationController::class, 'adjustDiscrepancy']);
+    // --- RUTAS DE REPORTES DE PÉRDIDAS/ROBOS (NUEVAS) ---
+    Route::prefix('loss-theft-reports')->group(function () {
+        Route::get('/', [LossTheftReportController::class, 'index']);
+        Route::post('/', [LossTheftReportController::class, 'store']);
+        Route::get('/{id}', [LossTheftReportController::class, 'show']);
+        Route::put('/{id}', [LossTheftReportController::class, 'update']);
+        Route::get('/{id}/health-canada-form', [LossTheftReportController::class, 'generateHealthCanadaForm']);
+        Route::post('/{id}/mark-submitted', [LossTheftReportController::class, 'markSubmittedToHealthCanada']);
+    });
+    
+    // Rutas para razones de discrepancia
+    Route::get('/discrepancy-reasons', [DiscrepancyReasonController::class, 'index']);
+
+    // --- CRM MODULE ---
+    Route::prefix('crm')->group(function () {
+        // Accounts
+        Route::get('/accounts/statistics', [CrmAccountController::class, 'statistics']);
+        Route::post('/accounts/bulk-status', [CrmAccountController::class, 'bulkUpdateStatus']);
+        Route::apiResource('accounts', CrmAccountController::class);
+        
+        // Orders
+        Route::get('/orders/summary', [CrmOrderController::class, 'summary']);
+        Route::post('/orders/{order}/approve', [CrmOrderController::class, 'approve']);
+        Route::patch('/orders/{order}/shipping-status', [CrmOrderController::class, 'updateShippingStatus']);
+        Route::apiResource('orders', CrmOrderController::class);
+    });
+
+    // --- PRODUCTION MODULE ---
+    Route::prefix('production')->group(function () {
+        // Varieties
+        Route::get('/varieties/strains', [VarietyController::class, 'strains']);
+        Route::patch('/varieties/{variety}/toggle-active', [VarietyController::class, 'toggleActive']);
+        Route::apiResource('varieties', VarietyController::class);
+        
+        // SKUs
+        Route::get('/skus/varieties', [SkuController::class, 'getVarieties']);
+        Route::patch('/skus/{sku}/toggle-status', [SkuController::class, 'toggleStatus']);
+        Route::apiResource('skus', SkuController::class);
+    });
 
 
     Route::get('/test-cors', function () {

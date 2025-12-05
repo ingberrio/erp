@@ -128,26 +128,42 @@ class AuthController extends Controller
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        // --- ¡CAMBIOS CLAVE AQUÍ TAMBIÉN! ---
-        $originalTeamsConfig = Config::get('permission.teams');
-        $originalCurrentTeamId = Config::get('permission.current_team_id');
+        // Get roles and permissions directly from database to bypass Spatie team filtering
+        $roleIds = \DB::table('model_has_roles')
+            ->where('model_id', $user->id)
+            ->where('model_type', get_class($user))
+            ->pluck('role_id');
+        
+        Log::info('User method: Found role IDs for user.', ['user_id' => $user->id, 'role_ids' => $roleIds->toArray()]);
 
-        if (!$user->is_global_admin) {
-            Config::set('permission.teams', false);
-            Config::set('permission.current_team_id', null);
-            Log::info('User method: Temporarily disabling Spatie teams for role/permission loading for tenant user.', ['user_id' => $user->id]);
+        // Get permission names from these roles
+        $permissions = [];
+        if ($roleIds->isNotEmpty()) {
+            $permissionIds = \DB::table('role_has_permissions')
+                ->whereIn('role_id', $roleIds)
+                ->pluck('permission_id');
+            
+            $permissions = \DB::table('permissions')
+                ->whereIn('id', $permissionIds)
+                ->pluck('name')
+                ->toArray();
         }
 
-        $user->load('roles.permissions');
+        // Also get direct permissions if any
+        $directPermissionIds = \DB::table('model_has_permissions')
+            ->where('model_id', $user->id)
+            ->where('model_type', get_class($user))
+            ->pluck('permission_id');
+        
+        if ($directPermissionIds->isNotEmpty()) {
+            $directPerms = \DB::table('permissions')
+                ->whereIn('id', $directPermissionIds)
+                ->pluck('name')
+                ->toArray();
+            $permissions = array_unique(array_merge($permissions, $directPerms));
+        }
 
-        Config::set('permission.teams', $originalTeamsConfig);
-        Config::set('permission.current_team_id', $originalCurrentTeamId);
-        Log::info('User method: Restored original Spatie teams configuration.');
-        // --- FIN DE CAMBIOS CLAVE ---
-
-        // Obtener los nombres de los permisos
-        $permissions = $user->getAllPermissions()->pluck('name')->toArray();
-        Log::info('User method: User permissions collected.', ['permissions' => $permissions]); // Nuevo log
+        Log::info('User method: User permissions collected.', ['permissions' => $permissions]);
 
         // Devolver el usuario y sus permisos de forma explícita
         return response()->json([
@@ -155,10 +171,9 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'tenant_id' => $user->tenant_id,
-            'is_global_admin' => (bool) $user->is_global_admin, // Asegúrate de que sea booleano
-            'facility_id' => $user->facility_id, // Asegúrate de incluirlo si existe
-            'permissions' => $permissions, // ¡Aquí se añade el array de permisos!
-            // Puedes añadir otras propiedades del usuario que necesites
+            'is_global_admin' => (bool) $user->is_global_admin,
+            'facility_id' => $user->facility_id ?? null,
+            'permissions' => $permissions,
         ]);
     }
 

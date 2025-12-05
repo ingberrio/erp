@@ -14,7 +14,7 @@ const LoginComponent = ({ onLogin, loading, error, setParentSnack }) => {
     event.preventDefault();
     setInternalError(null); // Limpiar errores internos
     if (!email || !password) {
-      setInternalError("Por favor, introduce tu correo y contraseña.");
+      setInternalError("Please enter your email and password.");
       return;
     }
     
@@ -27,7 +27,7 @@ const LoginComponent = ({ onLogin, loading, error, setParentSnack }) => {
       // pero si por alguna razón un error no se propaga bien,
       // puedes manejarlo aquí también.
       console.error("Error al llamar a onLogin:", e);
-      setInternalError("Ocurrió un error inesperado al intentar iniciar sesión.");
+      setInternalError("An unexpected error occurred while trying to sign in.");
     }
   };
 
@@ -58,11 +58,11 @@ const LoginComponent = ({ onLogin, loading, error, setParentSnack }) => {
         }}
       >
         <Typography variant="h5" component="h1" align="center" sx={{ mb: 2, color: '#e2e8f0' }}>
-          Iniciar Sesión
+          Sign In
         </Typography>
         <form onSubmit={handleSubmit}>
           <TextField
-            label="Correo Electrónico"
+            label="Email"
             type="email"
             fullWidth
             margin="normal"
@@ -87,7 +87,7 @@ const LoginComponent = ({ onLogin, loading, error, setParentSnack }) => {
             }}
           />
           <TextField
-            label="Contraseña"
+            label="Password"
             type="password"
             fullWidth
             margin="normal"
@@ -131,7 +131,7 @@ const LoginComponent = ({ onLogin, loading, error, setParentSnack }) => {
             }}
             disabled={loading}
           >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'ENTRAR'}
+            {loading ? <CircularProgress size={24} color="inherit" /> : 'SIGN IN'}
           </Button>
         </form>
       </Paper>

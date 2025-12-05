@@ -63,7 +63,7 @@ const CalendarioModuleWrapper = ({ tenantId, isAppReady }) => {
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <CalendarMonthIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} /> {/* Icono blanco */}
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}> {/* Título blanco */}
-          Gestión de Calendario
+          Calendar Management
         </Typography>
       </Box>
 
@@ -100,9 +100,9 @@ const CalendarioModuleWrapper = ({ tenantId, isAppReady }) => {
             },
           }}
         >
-          <Tab label="Tableros" {...a11yProps(0)} />
-          <Tab label="Listas" {...a11yProps(1)} />
-          <Tab label="Tarjetas" {...a11yProps(2)} />
+          <Tab label="Boards" {...a11yProps(0)} />
+          <Tab label="Lists" {...a11yProps(1)} />
+          <Tab label="Cards" {...a11yProps(2)} />
         </Tabs>
       </Paper>
 

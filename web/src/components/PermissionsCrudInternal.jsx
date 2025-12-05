@@ -95,20 +95,20 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
       let res;
       if (editingPerm) {
         res = await api.put(`/permissions/${editingPerm.id}`, permData);
-        setSnack({ open: true, message: "Permiso actualizado", severity: "success" });
+        setSnack({ open: true, message: "Permission updated", severity: "success" });
         // Optimización: Actualiza el permiso en el estado directamente
         setPermissions(prevPerms => prevPerms.map(p => p.id === res.data.id ? res.data : p)); // Asume que la API devuelve el permiso actualizado
       } else {
         res = await api.post("/permissions", permData);
-        setSnack({ open: true, message: "Permiso creado", severity: "success" });
+        setSnack({ open: true, message: "Permission created", severity: "success" });
         // Optimización: Añade el nuevo permiso al estado directamente
         setPermissions(prevPerms => [...prevPerms, res.data]); // Asume que la API devuelve el nuevo permiso
       }
       handleClosePermDialog();
     } catch (err) {
-      console.error("Error al guardar permiso:", err.response?.data || err.message);
+      console.error("Error saving permission:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
-      setSnack({ open: true, message: "Error al guardar permiso: " + errorMessage, severity: "error" });
+      setSnack({ open: true, message: "Error saving permission: " + errorMessage, severity: "error" });
     }
     setLoading(false);
   };
@@ -128,14 +128,14 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
     setLoading(true);
     try {
       await api.delete(`/permissions/${permToDelete.id}`);
-      setSnack({ open: true, message: "Permiso eliminado", severity: "info" });
+      setSnack({ open: true, message: "Permission deleted", severity: "info" });
       // Optimización: Elimina el permiso del estado directamente
       setPermissions(prevPerms => prevPerms.filter(p => p.id !== permToDelete.id));
       setPermToDelete(null); // Limpia el permiso a eliminar
     } catch (err) {
-      console.error("No se pudo eliminar el permiso:", err);
+      console.error("Could not delete permission:", err);
       const errorMessage = err.response?.data?.message || err.message;
-      setSnack({ open: true, message: "No se pudo eliminar el permiso: " + errorMessage, severity: "error" });
+      setSnack({ open: true, message: "Could not delete permission: " + errorMessage, severity: "error" });
     }
     setLoading(false);
   };
@@ -150,7 +150,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
       <Box sx={{ display: "flex", mb: 2, gap: 2, alignItems: "center", flexWrap: "wrap" }}>
         <TextField
           size="small"
-          placeholder="Buscar permisos..."
+                    placeholder="Search permissions..."
           value={permSearch}
           onChange={e => setPermSearch(e.target.value)}
           sx={{ width: { xs: "100%", sm: 250 }, bgcolor: "#f9f9f9" }}
@@ -169,7 +169,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
           sx={{ minWidth: 160, borderRadius: 2, width: { xs: "100%", sm: "auto" } }}
           onClick={() => handleOpenPermDialog(null)}
         >
-          + NUEVO PERMISO
+                    + NEW PERMISSION
         </Button>
       </Box>
 
@@ -177,9 +177,9 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: "#fafbfc" }}>
-              <TableCell sx={{ fontWeight: 600 }}>Nombre</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Descripción</TableCell>
-              <TableCell sx={{ fontWeight: 600 }} align="right">Acciones</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -192,7 +192,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
             ) : filteredPerms.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={3} align="center" sx={{ color: "#aaa", py: 5 }}>
-                  No hay permisos encontrados.
+                                    No permissions found.
                 </TableCell>
               </TableRow>
             ) : (
@@ -201,7 +201,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
                   <TableCell>
                     <Typography fontWeight={500}>{perm.name}</Typography>
                   </TableCell>
-                  <TableCell>{perm.description || <span style={{ color: "#bbb" }}>Sin descripción</span>}</TableCell>
+                  <TableCell>{perm.description || <span style={{ color: "#bbb" }}>No description</span>}</TableCell>
                   <TableCell align="right">
                     <IconButton
                       onClick={() => handleOpenPermDialog(perm)}
@@ -225,11 +225,11 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
 
       {/* Permission Dialog (Create/Edit) */}
       <Dialog open={openPermissionDialog} onClose={handleClosePermDialog} maxWidth="xs" fullWidth>
-        <DialogTitle>{editingPerm ? "Editar Permiso" : "Nuevo Permiso"}</DialogTitle>
+        <DialogTitle>{editingPerm ? "Edit Permission" : "New Permission"}</DialogTitle>
         <form onSubmit={handleSavePermission}>
           <DialogContent>
             <TextField
-              label="Nombre del Permiso"
+                            label="Permission Name"
               value={permissionName}
               onChange={e => setPermissionName(e.target.value)}
               fullWidth
@@ -238,7 +238,7 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
               disabled={loading}
             />
             <TextField
-              label="Descripción del Permiso"
+                            label="Permission Description"
               value={permissionDesc}
               onChange={e => setPermissionDesc(e.target.value)}
               fullWidth
@@ -249,13 +249,13 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleClosePermDialog} disabled={loading}>Cancelar</Button>
+            <Button onClick={handleClosePermDialog} disabled={loading}>Cancel</Button>
             <Button
               type="submit"
               variant="contained"
               disabled={loading || !permissionName}
             >
-              {loading ? <CircularProgress size={24} /> : (editingPerm ? "Guardar Cambios" : "Crear Permiso")}
+              {loading ? <CircularProgress size={24} /> : (editingPerm ? "Save Changes" : "Create Permission")}
             </Button>
           </DialogActions>
         </form>
@@ -270,17 +270,17 @@ const PermissionsCrudInternal = ({ tenantId, isAppReady }) => {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle id="alert-dialog-title">{"Confirmar Eliminación"}</DialogTitle>
+        <DialogTitle id="alert-dialog-title">{"Confirm Deletion"}</DialogTitle>
         <DialogContent>
           <Typography id="alert-dialog-description">
-            ¿Estás seguro de que quieres eliminar el permiso "
-            {permToDelete ? permToDelete.name : ''}"? Esta acción es irreversible.
+            Are you sure you want to delete the permission "
+            {permToDelete ? permToDelete.name : ''}"? This action is irreversible.
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelDelete} disabled={loading}>Cancelar</Button>
+          <Button onClick={handleCancelDelete} disabled={loading}>Cancel</Button>
           <Button onClick={handleDeleteConfirmed} color="error" variant="contained" disabled={loading} autoFocus>
-            Eliminar
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

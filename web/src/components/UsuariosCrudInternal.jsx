@@ -104,80 +104,80 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
   const [permissionTemplate, setPermissionTemplate] = useState('');
   const [selectedFacilityForPermission, setSelectedFacilityForPermission] = useState('');
   const permissionTemplates = useMemo(() => [
-    // Permisos Generales de la Aplicación
-    { label: 'Administrador General', value: 'admin' },
-    { label: 'Ver Dashboard', value: 'view-dashboard' },
+    // General Application Permissions
+    { label: 'General Administrator', value: 'admin' },
+    { label: 'View Dashboard', value: 'view-dashboard' },
 
-    // Permisos de Empresas
-    { label: 'Ver Empresas', value: 'view-companies' },
-    { label: 'Gestionar Empresas', value: 'manage-companies' },
-    { label: 'Crear Empresa', value: 'create-company' },
-    { label: 'Actualizar Empresa', value: 'update-company' },
-    { label: 'Eliminar Empresa', value: 'delete-company' },
+    // Company Permissions
+    { label: 'View Companies', value: 'view-companies' },
+    { label: 'Manage Companies', value: 'manage-companies' },
+    { label: 'Create Company', value: 'create-company' },
+    { label: 'Update Company', value: 'update-company' },
+    { label: 'Delete Company', value: 'delete-company' },
 
-    // Permisos de Cultivo (Generales)
-    { label: 'Ver Áreas de Cultivo (general)', value: 'view-cultivation-areas' },
-    { label: 'Gestionar Áreas de Cultivo (general)', value: 'manage-cultivation-areas' },
-    { label: 'Ver Lotes (general)', value: 'view-batches' },
-    { label: 'Gestionar Lotes (general)', value: 'manage-batches' },
-    { label: 'Ver Plantas (general)', value: 'view-plants' },
-    { label: 'Gestionar Plantas (general)', value: 'manage-plants' },
+    // Cultivation Permissions (General)
+    { label: 'View Cultivation Areas (general)', value: 'view-cultivation-areas' },
+    { label: 'Manage Cultivation Areas (general)', value: 'manage-cultivation-areas' },
+    { label: 'View Batches (general)', value: 'view-batches' },
+    { label: 'Manage Batches (general)', value: 'manage-batches' },
+    { label: 'View Plants (general)', value: 'view-plants' },
+    { label: 'Manage Plants (general)', value: 'manage-plants' },
 
-    // Permisos de Cultivo (Específicos por Instalación)
-    { label: 'Ver Instalación (específica)', value: 'view-facility-{id}' },
-    { label: 'Gestionar Instalación (específica)', value: 'manage-facility-{id}' },
-    { label: 'Crear Área de Cultivo (específica)', value: 'create-cultivation-area-facility-{id}' },
-    { label: 'Actualizar Área de Cultivo (específica)', value: 'update-cultivation-area-facility-{id}' },
-    { label: 'Eliminar Área de Cultivo (específica)', value: 'delete-cultivation-area-facility-{id}' },
-    { label: 'Ver Lotes (específico por instalación)', value: 'view-batches-facility-{id}' },
-    { label: 'Gestionar Lotes (específico por instalación)', value: 'manage-batches-facility-{id}' },
-    { label: 'Ver Plantas (específico por instalación)', value: 'view-plants-facility-{id}' },
-    { label: 'Gestionar Plantas (específico por instalación)', value: 'manage-plants-facility-{id}' },
+    // Cultivation Permissions (Specific by Facility)
+    { label: 'View Facility (specific)', value: 'view-facility-{id}' },
+    { label: 'Manage Facility (specific)', value: 'manage-facility-{id}' },
+    { label: 'Create Cultivation Area (specific)', value: 'create-cultivation-area-facility-{id}' },
+    { label: 'Update Cultivation Area (specific)', value: 'update-cultivation-area-facility-{id}' },
+    { label: 'Delete Cultivation Area (specific)', value: 'delete-cultivation-area-facility-{id}' },
+    { label: 'View Batches (specific by facility)', value: 'view-batches-facility-{id}' },
+    { label: 'Manage Batches (specific by facility)', value: 'manage-batches-facility-{id}' },
+    { label: 'View Plants (specific by facility)', value: 'view-plants-facility-{id}' },
+    { label: 'Manage Plants (specific by facility)', value: 'manage-plants-facility-{id}' },
 
-    // Permisos de Calendario
-    { label: 'Ver Eventos de Calendario', value: 'view-calendar-events' },
-    { label: 'Gestionar Eventos de Calendario', value: 'manage-calendar-events' },
-    { label: 'Crear Evento de Calendario', value: 'create-calendar-event' },
-    { label: 'Actualizar Evento de Calendario', value: 'update-calendar-event' },
-    { label: 'Eliminar Evento de Calendario', value: 'delete-calendar-event' },
+    // Calendar Permissions
+    { label: 'View Calendar Events', value: 'view-calendar-events' },
+    { label: 'Manage Calendar Events', value: 'manage-calendar-events' },
+    { label: 'Create Calendar Event', value: 'create-calendar-event' },
+    { label: 'Update Calendar Event', value: 'update-calendar-event' },
+    { label: 'Delete Calendar Event', value: 'delete-calendar-event' },
 
-    // NUEVOS PERMISOS PARA TARJETAS DE CALENDARIO
-    { label: 'Gestionar Checklist de Tarjeta', value: 'manage-card-checklist' },
-    { label: 'Asignar Miembros a Tarjeta', value: 'assign-card-members' },
+    // NEW PERMISSIONS FOR CALENDAR CARDS
+    { label: 'Manage Card Checklist', value: 'manage-card-checklist' },
+    { label: 'Assign Card Members', value: 'assign-card-members' },
 
-    // Permisos de Usuarios (Gestión del módulo de Usuarios)
-    { label: 'Ver Usuarios', value: 'view-users' },
-    { label: 'Gestionar Usuarios', value: 'manage-users' },
-    { label: 'Crear Usuario', value: 'create-user' },
-    { label: 'Actualizar Usuario', value: 'update-user' },
-    { label: 'Eliminar Usuario', value: 'delete-user' },
+    // User Permissions (User Module Management)
+    { label: 'View Users', value: 'view-users' },
+    { label: 'Manage Users', value: 'manage-users' },
+    { label: 'Create User', value: 'create-user' },
+    { label: 'Update User', value: 'update-user' },
+    { label: 'Delete User', value: 'delete-user' },
 
-    // Permisos de Roles
-    { label: 'Ver Roles', value: 'view-roles' },
-    { label: 'Gestionar Roles', value: 'manage-roles' },
-    { label: 'Crear Rol', value: 'create-role' },
-    { label: 'Actualizar Rol', value: 'update-role' },
-    { label: 'Eliminar Rol', value: 'delete-role' },
+    // Role Permissions
+    { label: 'View Roles', value: 'view-roles' },
+    { label: 'Manage Roles', value: 'manage-roles' },
+    { label: 'Create Role', value: 'create-role' },
+    { label: 'Update Role', value: 'update-role' },
+    { label: 'Delete Role', value: 'delete-role' },
 
-    // Permisos de Permisos (gestionar los propios permisos)
-    { label: 'Ver Permisos', value: 'view-permissions' },
-    { label: 'Gestionar Permisos', value: 'manage-permissions' },
-    { label: 'Crear Permiso', value: 'create-permission' },
-    { label: 'Actualizar Permiso', value: 'update-permission' },
-    { label: 'Eliminar Permiso', value: 'delete-permission' },
+    // Permission Permissions (manage permissions themselves)
+    { label: 'View Permissions', value: 'view-permissions' },
+    { label: 'Manage Permissions', value: 'manage-permissions' },
+    { label: 'Create Permission', value: 'create-permission' },
+    { label: 'Update Permission', value: 'update-permission' },
+    { label: 'Delete Permission', value: 'delete-permission' },
 
-    // NUEVOS PERMISOS PARA RECONCILIACIÓN DE INVENTARIO
-    { label: 'Ver Reconciliación de Inventario', value: 'view-inventory-reconciliation' },
-    { label: 'Gestionar Reconciliación de Inventario', value: 'manage-inventory-reconciliation' },
-    { label: 'Crear Reconciliación de Inventario', value: 'create-inventory-reconciliation' },
-    { label: 'Actualizar Reconciliación de Inventario', value: 'update-inventory-reconciliation' },
-    { label: 'Eliminar Reconciliación de Inventario', value: 'delete-inventory-reconciliation' },
+    // NEW PERMISSIONS FOR INVENTORY RECONCILIATION
+    { label: 'View Inventory Reconciliation', value: 'view-inventory-reconciliation' },
+    { label: 'Manage Inventory Reconciliation', value: 'manage-inventory-reconciliation' },
+    { label: 'Create Inventory Reconciliation', value: 'create-inventory-reconciliation' },
+    { label: 'Update Inventory Reconciliation', value: 'update-inventory-reconciliation' },
+    { label: 'Delete Inventory Reconciliation', value: 'delete-inventory-reconciliation' },
 
-    // Si también necesitas permisos específicos por instalación para esto:
-    { label: 'Ver Reconciliación (específica por instalación)', value: 'view-inventory-reconciliation-facility-{id}' },
-    { label: 'Gestionar Reconciliación (específica por instalación)', value: 'manage-inventory-reconciliation-facility-{id}' },
-    { label: 'Justificar Discrepancia de Inventario', value: 'justify-inventory-discrepancy' },
-    { label: 'Aplicar Permisos de Administrador de Tenant', value: 'template-apply-tenant-admin' },
+    // If you also need specific permissions by facility for this:
+    { label: 'View Reconciliation (specific by facility)', value: 'view-inventory-reconciliation-facility-{id}' },
+    { label: 'Manage Reconciliation (specific by facility)', value: 'manage-inventory-reconciliation-facility-{id}' },
+    { label: 'Justify Inventory Discrepancy', value: 'justify-inventory-discrepancy' },
+    { label: 'Apply Tenant Admin Permissions', value: 'template-apply-tenant-admin' },
 
   ], []);
 
@@ -215,11 +215,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     try {
       const res = await api.get("/users?with_roles=true");
       setUsers(Array.isArray(res.data) ? res.data : res.data.data || []);
-      showSnack('Usuarios cargados exitosamente.', 'success');
+      showSnack('Users loaded successfully.', 'success');
     } catch (err) {
       console.error("Error loading users:", err);
       const errorMessage = err.response?.data?.message || err.message;
-      showSnack(`No se pudieron cargar los usuarios: ${errorMessage}`, "error");
+      showSnack(`Could not load users: ${errorMessage}`, "error");
     } finally { setLoadingUsers(false); }
   }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
@@ -235,11 +235,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       const res = await api.get("/roles?with_permissions=true");
       console.log("fetchRoles: Datos de roles recibidos:", res.data); // LOG: Ver la respuesta completa
       setRoles(Array.isArray(res.data) ? res.data : res.data.data || []);
-      showSnack('Roles cargados exitosamente.', 'success');
+      showSnack('Roles loaded successfully.', 'success');
     } catch (err) {
       console.error("Error loading roles:", err);
       const errorMessage = err.response?.data?.message || err.message;
-      showSnack(`No se pudieron cargar los roles: ${errorMessage}`, "error");
+      showSnack(`Could not load roles: ${errorMessage}`, "error");
     } finally { setLoadingRoles(false); }
   }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
@@ -254,11 +254,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     try {
       const res = await api.get("/permissions");
       setPermissions(Array.isArray(res.data) ? res.data : res.data.data || []);
-      showSnack('Permisos cargados exitosamente.', 'success');
+      showSnack('Permissions loaded successfully.', 'success');
     } catch (err) {
       console.error("Error loading permissions:", err);
       const errorMessage = err.response?.data?.message || err.message;
-      showSnack(`No se pudieron cargar los permisos: ${errorMessage}`, "error");
+      showSnack(`Could not load permissions: ${errorMessage}`, "error");
     } finally { setLoadingPermissions(false); }
   }, [tenantId, isAppReady, isGlobalAdmin, showSnack]);
 
@@ -282,7 +282,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       }
     } catch (error) {
       console.error('Error fetching tenants:', error);
-      showSnack('Error al cargar inquilinos para la asignación de tableros.', 'error');
+      showSnack('Error loading tenants for board assignment.', 'error');
     }
   }, [isGlobalAdmin, showSnack, editingUser]);
 
@@ -355,7 +355,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       setRolesForAssignment(Array.isArray(res.data) ? res.data : res.data.data || []);
     } catch (err) {
       console.error("Error loading roles for assignment:", err);
-      showSnack("No se pudieron cargar los roles para asignación.", "error");
+      showSnack("Could not load roles for assignment.", "error");
     }
   }, [isAppReady, isGlobalAdmin, tenantId, showSnack]);
 
@@ -367,12 +367,12 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
     try {
       // Validaciones adicionales para el tenantId
       if (isGlobalAdmin && !selectedTenantId) {
-        showSnack('Como Super Admin, debes seleccionar un inquilino para el usuario.', 'warning');
+        showSnack('As Super Admin, you must select a tenant for the user.', 'warning');
         setUserDialogLoading(false);
         return;
       }
       if (!userName.trim() || !userEmail.trim() || (!editingUser && !userPassword.trim())) {
-        showSnack('Nombre, email y contraseña (para nuevos usuarios) son obligatorios.', 'warning');
+        showSnack('Name, email and password (for new users) are required.', 'warning');
         setUserDialogLoading(false);
         return;
       }
@@ -398,33 +398,33 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       let res;
       if (editingUser) {
         await api.put(`/users/${editingUser.id}`, userData);
-        showSnack("Usuario actualizado", "success");
+        showSnack("User updated", "success");
       } else {
         await api.post("/users", userData);
-        showSnack("Usuario creado", "success");
+        showSnack("User created", "success");
       }
       handleCloseUserDialog();
       await fetchUsers(); // Recargar usuarios
     } catch (err) {
       console.error("Error al guardar usuario:", err.response?.data || err.message);
       // MODIFICACIÓN: Pasar los detalles del error si existen
-      showSnack("Error al guardar usuario: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
+      showSnack("Error saving user: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
     } finally { setUserDialogLoading(false); }
   };
 
   const handleDeleteUser = async (userToDelete) => {
     setConfirmDialogData({
-      title: 'Confirmar Eliminación de Usuario',
-      message: `¿Eliminar usuario "${userToDelete.name}"? Esta acción es irreversible.`,
+      title: 'Confirm User Deletion',
+      message: `Delete user "${userToDelete.name}"? This action is irreversible.`,
       onConfirm: async () => {
         setLoadingUsers(true);
         try {
           await api.delete(`/users/${userToDelete.id}`);
-          showSnack("Usuario eliminado", "info");
+          showSnack("User deleted", "info");
           await fetchUsers();
         } catch (err) {
           console.error("No se pudo eliminar el usuario:", err);
-          showSnack("No se pudo eliminar el usuario: " + (err.response?.data?.message || err.message), "error");
+          showSnack("Could not delete user: " + (err.response?.data?.message || err.message), "error");
         } finally {
           setLoadingUsers(false);
           setConfirmDialogOpen(false);
@@ -479,35 +479,35 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       if (editingRole) {
         const res = await api.put(`/roles/${editingRole.id}`, roleData);
         console.log("handleSaveRole: Respuesta de actualización de rol:", res.data); // LOG: Ver la respuesta del PUT
-        showSnack("Rol actualizado", "success");
+        showSnack("Role updated", "success");
       } else {
         const res = await api.post("/roles", roleData);
         console.log("handleSaveRole: Respuesta de creación de rol:", res.data); // LOG: Ver la respuesta del POST
-        showSnack("Rol creado", "success");
+        showSnack("Role created", "success");
       }
       await fetchRoles(); // Se vuelve a cargar la lista de roles
       handleCloseRoleDialog();
     } catch (err) {
       console.error("Error al guardar rol:", err.response?.data || err.message);
       // MODIFICACIÓN: Pasar los detalles del error si existen
-      showSnack("Error al guardar rol: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
+      showSnack("Error saving role: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
     } finally { setLoadingRoleDialog(false); }
   };
 
   const handleDeleteRole = async (roleToDelete) => {
     setConfirmDialogData({
-      title: 'Confirmar Eliminación de Rol',
-      message: `¿Eliminar rol "${roleToDelete.name}"? Esta acción es irreversible y afectará a los usuarios asignados.`,
+      title: 'Confirm Role Deletion',
+      message: `Delete role "${roleToDelete.name}"? This action is irreversible and will affect assigned users.`,
       onConfirm: async () => {
         setLoadingRoles(true);
         try {
           await api.delete(`/roles/${roleToDelete.id}`);
-          showSnack("Rol eliminado", "info");
+          showSnack("Role deleted", "info");
           await fetchRoles();
           await fetchUsers();
         } catch (err) {
           console.error("No se pudo eliminar el rol:", err);
-          showSnack("No se pudo eliminar el rol: " + (err.response?.data?.message || err.message), "error");
+          showSnack("Could not delete role: " + (err.response?.data?.message || err.message), "error");
         } finally {
           setLoadingRoles(false);
           setConfirmDialogOpen(false);
@@ -569,46 +569,46 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       };
 
       if (!editingPermission && permissionTemplate.includes('{id}') && !selectedFacilityForPermission) {
-        showSnack("Debe seleccionar una instalación para este tipo de permiso.", "warning");
+        showSnack("You must select a facility for this type of permission.", "warning");
         setPermissionDialogLoading(false);
         return;
       }
       if (!permissionName.trim()) {
-        showSnack("El nombre del permiso es obligatorio.", "warning");
+        showSnack("Permission name is required.", "warning");
         setPermissionDialogLoading(false);
         return;
       }
 
       if (editingPermission) {
         await api.put(`/permissions/${editingPermission.id}`, permissionData);
-        showSnack("Permiso actualizado", "success");
+        showSnack("Permission updated", "success");
       } else {
         await api.post("/permissions", permissionData);
-        showSnack("Permiso creado", "success");
+        showSnack("Permission created", "success");
       }
       await fetchPermissions();
       handleClosePermissionDialog();
     } catch (err) {
       console.error("Error al guardar permiso:", err.response?.data || err.message);
       // MODIFICACIÓN: Pasar los detalles del error si existen
-      showSnack("Error al guardar permiso: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
+      showSnack("Error saving permission: " + (err.response?.data?.message || err.message), "error", err.response?.data?.details || err.message);
     } finally { setPermissionDialogLoading(false); }
   };
 
   const handleDeletePermission = async (permissionToDelete) => {
     setConfirmDialogData({
-      title: 'Confirmar Eliminación de Permiso',
-      message: `¿Eliminar permiso "${permissionToDelete.name}"? Esta acción es irreversible.`,
+      title: 'Confirm Permission Deletion',
+      message: `Delete permission "${permissionToDelete.name}"? This action is irreversible.`,
       onConfirm: async () => {
         setLoadingPermissions(true);
         try {
           await api.delete(`/permissions/${permissionToDelete.id}`);
-          showSnack("Permiso eliminado", "info");
+          showSnack("Permission deleted", "info");
           await fetchPermissions();
           await fetchRoles();
         } catch (err) {
           console.error("No se pudo eliminar el permiso:", err);
-          showSnack("No se pudo eliminar el permiso: " + (err.response?.data?.message || err.message), "error");
+          showSnack("Could not delete permission: " + (err.response?.data?.message || err.message), "error");
         } finally {
           setLoadingPermissions(false);
           setConfirmDialogOpen(false);
@@ -631,7 +631,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
             <Box sx={{ display: "flex", mb: 2, gap: 2, alignItems: "center", flexWrap: "wrap" }}>
               <TextField
                 size="small"
-                placeholder="Buscar usuarios..."
+                placeholder="Search users..."
                 value={userSearch}
                 onChange={e => setUserSearch(e.target.value)}
                 sx={{
@@ -665,7 +665,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                 }}
                 onClick={() => handleOpenUserDialog(null)}
               >
-                + NUEVO USUARIO
+                + NEW USER
               </Button>
             </Box>
 
@@ -675,8 +675,8 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   <TableRow sx={{ bgcolor: '#3a506b' }}>
                     <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Nombre</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Email</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Roles Asignados</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }} align="right">Acciones</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Assigned Roles</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }} align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -684,13 +684,13 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     <TableRow>
                       <TableCell colSpan={4} align="center" sx={{ color: '#fff' }}>
                         <CircularProgress size={24} color="inherit" sx={{ my: 3 }} />
-                        <Typography>Cargando usuarios...</Typography>
+                        <Typography>Loading users...</Typography>
                       </TableCell>
                     </TableRow>
                   ) : filteredUsers.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} align="center" sx={{ color: "#aaa", py: 5 }}>
-                        No hay usuarios encontrados.
+                        No users found.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -726,7 +726,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                           ))}
                           {(user.roles || []).length === 0 && (
                             <Typography component="span" sx={{ color: "#bbb", fontSize: 13 }}>
-                              Ninguno
+                              None
                             </Typography>
                           )}
                         </TableCell>
@@ -755,11 +755,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
             <Dialog open={openUserDialog} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth
               PaperProps={{ sx: { bgcolor: '#283e51', color: '#fff', borderRadius: 2 } }}
             >
-              <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingUser ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle>
+              <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingUser ? "Edit User" : "New User"}</DialogTitle>
               <form onSubmit={handleSaveUser}>
                 <DialogContent sx={{ pt: '20px !important' }}>
                   <TextField
-                    label="Nombre del Usuario"
+                    label="User Name"
                     value={userName}
                     onChange={e => setUserName(e.target.value)}
                     fullWidth
@@ -774,7 +774,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     disabled={userDialogLoading}
                   />
                   <TextField
-                    label="Email del Usuario"
+                    label="User Email"
                     value={userEmail}
                     onChange={e => setUserEmail(e.target.value)}
                     type="email"
@@ -790,7 +790,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     disabled={userDialogLoading}
                   />
                   <TextField
-                    label="Contraseña"
+                    label="Password"
                     value={userPassword}
                     onChange={e => setUserPassword(e.target.value)}
                     type="password"
@@ -802,7 +802,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                       '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
                       '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
                     }}
-                    helperText={editingUser ? "Dejar vacío para no cambiar la contraseña." : "Requerido para nuevos usuarios."}
+                    helperText={editingUser ? "Leave empty to not change password." : "Required for new users."}
                     autoComplete="new-password"
                     required={!editingUser && userPassword.trim() === ""}
                     disabled={userDialogLoading}
@@ -811,11 +811,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   {/* NUEVO: Selector de Inquilino (solo para Global Admin) */}
                   {isGlobalAdmin && (
                     <FormControl fullWidth sx={{ mb: 2 }}>
-                      <InputLabel id="tenant-select-label" sx={{ color: '#fff' }}>Inquilino</InputLabel>
+                      <InputLabel id="tenant-select-label" sx={{ color: '#fff' }}>Tenant</InputLabel>
                       <Select
                         labelId="tenant-select-label"
                         value={selectedTenantId}
-                        label="Inquilino"
+                        label="Tenant"
                         onChange={(e) => setSelectedTenantId(e.target.value)}
                         required
                         disabled={userDialogLoading || tenants.length === 0}
@@ -834,7 +834,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                       >
                         {tenants.length === 0 ? (
                           <MenuItem value="" sx={{ color: '#aaa' }}>
-                            <em>No hay inquilinos disponibles</em>
+                            <em>No tenants available</em>
                           </MenuItem>
                         ) : (
                           tenants.map((tenant) => (
@@ -848,10 +848,10 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   )}
 
                   <Divider sx={{ my: 2, bgcolor: 'rgba(255,255,255,0.2)' }} />
-                  <Typography variant="subtitle2" sx={{ color: '#fff' }} mb={1}>Roles Asignados</Typography>
+                  <Typography variant="subtitle2" sx={{ color: '#fff' }} mb={1}>Assigned Roles</Typography>
                   <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid rgba(255,255,255,0.3)", p: 1, borderRadius: 1 }}>
                     {rolesForAssignment.length === 0 ? (
-                      <Typography color="text.secondary" sx={{ color: '#aaa' }}>No hay roles disponibles.</Typography>
+                      <Typography color="text.secondary" sx={{ color: '#aaa' }}>No roles available.</Typography>
                     ) : (
                       rolesForAssignment.map((role) => (
                         <Box key={role.id} sx={{ display: "flex", alignItems: "center", mb: 0.5 }}>
@@ -871,7 +871,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   </Box>
                 </DialogContent>
                 <DialogActions sx={{ bgcolor: '#3a506b' }}>
-                  <Button onClick={handleCloseUserDialog} disabled={userDialogLoading}>Cancelar</Button>
+                  <Button onClick={handleCloseUserDialog} disabled={userDialogLoading}>Cancel</Button>
                   <Button
                     type="submit"
                     variant="contained"
@@ -881,7 +881,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                       '&:hover': { bgcolor: '#43A047' }
                     }}
                   >
-                    {userDialogLoading ? <CircularProgress size={24} /> : (editingUser ? "Guardar Cambios" : "Crear Usuario")}
+                    {userDialogLoading ? <CircularProgress size={24} /> : (editingUser ? "Save Changes" : "Create User")}
                   </Button>
                 </DialogActions>
               </form>
@@ -905,7 +905,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                 }}
                 onClick={() => handleOpenRoleDialog(null)}
               >
-                + NUEVO ROL
+                + NEW ROLE
               </Button>
             </Box>
 
@@ -913,10 +913,10 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#3a506b' }}>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Nombre</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Descripción</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Permisos Asignados</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }} align="right">Acciones</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Description</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Assigned Permissions</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }} align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -924,13 +924,13 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     <TableRow>
                       <TableCell colSpan={4} align="center" sx={{ color: '#fff' }}>
                         <CircularProgress size={24} color="inherit" sx={{ my: 3 }} />
-                        <Typography>Cargando roles...</Typography>
+                        <Typography>Loading roles...</Typography>
                       </TableCell>
                     </TableRow>
                   ) : roles.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} align="center" sx={{ color: "#aaa", py: 5 }}>
-                        No hay roles encontrados.
+                        No roles found.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -963,7 +963,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                           ))}
                           {(role.permissions || []).length === 0 && (
                             <Typography component="span" sx={{ color: "#bbb", fontSize: 13 }}>
-                              Ninguno
+                              None
                             </Typography>
                           )}
                         </TableCell>
@@ -992,11 +992,11 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
             <Dialog open={openRoleDialog} onClose={handleCloseRoleDialog} maxWidth="sm" fullWidth
               PaperProps={{ sx: { bgcolor: '#283e51', color: '#fff', borderRadius: 2 } }}
             >
-              <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingRole ? "Editar Rol" : "Nuevo Rol"}</DialogTitle>
+              <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingRole ? "Edit Role" : "New Role"}</DialogTitle>
               <form onSubmit={handleSaveRole}>
                 <DialogContent sx={{ pt: '20px !important' }}>
                   <TextField
-                    label="Nombre del Rol"
+                    label="Role Name"
                     value={roleName}
                     onChange={e => setRoleName(e.target.value)}
                     fullWidth
@@ -1011,7 +1011,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     disabled={roleDialogLoading}
                   />
                   <TextField
-                    label="Descripción del Rol"
+                    label="Role Description"
                     value={roleDescription}
                     onChange={e => setRoleDescription(e.target.value)}
                     fullWidth
@@ -1027,10 +1027,10 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     disabled={roleDialogLoading}
                   />
                   <Divider sx={{ my: 2, bgcolor: 'rgba(255,255,255,0.2)' }} />
-                  <Typography variant="subtitle2" sx={{ color: '#fff' }} mb={1}>Permisos Asignados</Typography>
+                  <Typography variant="subtitle2" sx={{ color: '#fff' }} mb={1}>Assigned Permissions</Typography>
                   <Box sx={{ maxHeight: 200, overflowY: "auto", border: "1px solid rgba(255,255,255,0.3)", p: 1, borderRadius: 1 }}>
                     {permissions.length === 0 ? (
-                      <Typography color="text.secondary" sx={{ color: '#aaa' }}>No hay permisos disponibles.</Typography>
+                      <Typography color="text.secondary" sx={{ color: '#aaa' }}>No permissions available.</Typography>
                     ) : (
                       permissions.map((permission) => (
                         <Box key={permission.id} sx={{ display: "flex", alignItems: "center", mb: 0.5 }}>
@@ -1050,7 +1050,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   </Box>
                 </DialogContent>
                 <DialogActions sx={{ bgcolor: '#3a506b' }}>
-                  <Button onClick={handleCloseRoleDialog} disabled={roleDialogLoading}>Cancelar</Button>
+                  <Button onClick={handleCloseRoleDialog} disabled={roleDialogLoading}>Cancel</Button>
                   <Button
                     type="submit"
                     variant="contained"
@@ -1060,7 +1060,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                       '&:hover': { bgcolor: '#43A047' }
                     }}
                   >
-                    {roleDialogLoading ? <CircularProgress size={24} /> : (editingRole ? "Guardar Cambios" : "Crear Rol")}
+                    {roleDialogLoading ? <CircularProgress size={24} /> : (editingRole ? "Save Changes" : "Create Role")}
                   </Button>
                 </DialogActions>
               </form>
@@ -1084,7 +1084,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                 }}
                 onClick={() => handleOpenPermissionDialog(null)}
               >
-                + NUEVO PERMISO
+                + NEW PERMISSION
               </Button>
             </Box>
 
@@ -1092,9 +1092,9 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#3a506b' }}>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Nombre</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Descripción</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#fff' }} align="right">Acciones</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }}>Description</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#fff' }} align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1102,13 +1102,13 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                     <TableRow>
                       <TableCell colSpan={3} align="center" sx={{ color: '#fff' }}>
                         <CircularProgress size={24} color="inherit" sx={{ my: 3 }} />
-                        <Typography>Cargando permisos...</Typography>
+                        <Typography>Loading permissions...</Typography>
                       </TableCell>
                     </TableRow>
                   ) : permissions.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} align="center" sx={{ color: "#aaa", py: 5 }}>
-                        No hay permisos encontrados.
+                        No permissions found.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -1143,24 +1143,24 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
             <Dialog open={openPermissionDialog} onClose={handleClosePermissionDialog} maxWidth="sm" fullWidth
               PaperProps={{ sx: { bgcolor: '#283e51', color: '#fff', borderRadius: 2 } }}
             >
-              <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingPermission ? "Editar Permiso" : "Nuevo Permiso"}</DialogTitle>
+              <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingPermission ? "Edit Permission" : "New Permission"}</DialogTitle>
               <form onSubmit={handleSavePermission}>
                 <DialogContent sx={{ pt: '20px !important' }}>
                   {!editingPermission && (
                     <>
                       <FormControl fullWidth sx={{ mt: 1, mb: 2 }}>
-                        <InputLabel id="permission-template-label">Plantilla de Permiso</InputLabel>
+                        <InputLabel id="permission-template-label">Permission Template</InputLabel>
                         <Select
                           labelId="permission-template-label"
                           value={permissionTemplate}
-                          label="Plantilla de Permiso"
+                          label="Permission Template"
                           onChange={(e) => {
                             setPermissionTemplate(e.target.value);
                             setSelectedFacilityForPermission('');
                           }}
                           disabled={permissionDialogLoading}
                         >
-                          <MenuItem value=""><em>Seleccione una plantilla</em></MenuItem>
+                          <MenuItem value=""><em>Select a template</em></MenuItem>
                           {permissionTemplates.map((template) => (
                             <MenuItem key={template.value} value={template.value}>
                               {template.label}
@@ -1171,18 +1171,18 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
 
                       {permissionTemplate.includes('{id}') && (
                         <FormControl fullWidth sx={{ mb: 2 }}>
-                          <InputLabel id="facility-for-permission-label">Seleccionar Instalación</InputLabel>
+                          <InputLabel id="facility-for-permission-label">Select Facility</InputLabel>
                           <Select
                             labelId="facility-for-permission-label"
                             value={selectedFacilityForPermission}
-                            label="Seleccionar Instalación"
+                            label="Select Facility"
                             onChange={(e) => setSelectedFacilityForPermission(e.target.value)}
                             required={permissionTemplate.includes('{id}')}
                             disabled={permissionDialogLoading || (facilities && facilities.length === 0)}
                           >
                             {facilities && facilities.length === 0 ? (
                               <MenuItem value="" disabled>
-                                <em>No hay instalaciones disponibles</em>
+                                <em>No facilities available</em>
                               </MenuItem>
                             ) : (facilities || []).map((f) => (
                                 <MenuItem key={f.id} value={f.id}>{f.name} (ID: {f.id})</MenuItem>
@@ -1191,7 +1191,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                           </Select>
                           {facilities && facilities.length === 0 && (
                             <Typography variant="caption" color="error" sx={{ mt: 1 }}>
-                              No hay instalaciones para asignar permisos específicos.
+                              No facilities to assign specific permissions.
                             </Typography>
                           )}
                         </FormControl>
@@ -1200,19 +1200,19 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   )}
 
                   <TextField
-                    label="Nombre del Permiso"
+                    label="Permission Name"
                     value={permissionName}
                     onChange={e => setPermissionName(e.target.value)}
                     fullWidth
                     required
                     sx={{ mt: !editingPermission && !permissionTemplate.includes('{id}') ? 1 : 0, mb: 2 }}
                     disabled={permissionDialogLoading || (!editingPermission && permissionTemplate.includes('{id}'))}
-                    helperText={!editingPermission && permissionTemplate.includes('{id}') ? 'El nombre se genera automáticamente al seleccionar una instalación.' : ''}
+                    helperText={!editingPermission && permissionTemplate.includes('{id}') ? 'Name is automatically generated when selecting a facility.' : ''}
                     inputProps={{ maxLength: 255 }}
                     aria-label="Nombre del permiso"
                   />
                   <TextField
-                    label="Descripción del Permiso"
+                    label="Permission Description"
                     value={permissionDescription}
                     onChange={e => setPermissionDescription(e.target.value)}
                     fullWidth
@@ -1224,7 +1224,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                   />
                 </DialogContent>
                 <DialogActions sx={{ bgcolor: '#3a506b' }}>
-                  <Button onClick={handleClosePermissionDialog} disabled={permissionDialogLoading}>Cancelar</Button>
+                  <Button onClick={handleClosePermissionDialog} disabled={permissionDialogLoading}>Cancel</Button>
                   <Button
                     type="submit"
                     variant="contained"
@@ -1234,7 +1234,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
                       '&:hover': { bgcolor: '#43A047' }
                     }}
                   >
-                    {permissionDialogLoading ? <CircularProgress size={24} /> : (editingPermission ? "Guardar Cambios" : "Crear Permiso")}
+                    {permissionDialogLoading ? <CircularProgress size={24} /> : (editingPermission ? "Save Changes" : "Create Permission")}
                   </Button>
                 </DialogActions>
               </form>
@@ -1257,7 +1257,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <GroupIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} />
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}>
-          Gestión de Usuarios, Roles y Permisos
+          Users, Roles & Permissions Management
         </Typography>
       </Box>
 
@@ -1266,7 +1266,7 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
-          aria-label="Navegación de Usuarios, Roles y Permisos"
+          aria-label="Users, Roles and Permissions Navigation"
           indicatorColor="primary"
           textColor="inherit"
           centered
@@ -1276,9 +1276,9 @@ const UsuariosCrudInternal = ({ tenantId, isAppReady, facilities, setParentSnack
             '& .MuiTabs-indicator': { backgroundColor: '#4CAF50' },
           }}
         >
-          <Tab label="Usuarios" icon={<PeopleIcon />} iconPosition="start" />
+          <Tab label="Users" icon={<PeopleIcon />} iconPosition="start" />
           <Tab label="Roles" icon={<LockIcon />} iconPosition="start" />
-          <Tab label="Permisos" icon={<VpnKeyIcon />} iconPosition="start" />
+          <Tab label="Permissions" icon={<VpnKeyIcon />} iconPosition="start" />
         </Tabs>
       </Paper>
 

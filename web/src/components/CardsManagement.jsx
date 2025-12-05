@@ -3,25 +3,25 @@ import React from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 
 const CardsManagement = ({ tenantId, isAppReady }) => {
-  // Aquí irá la lógica para el CRUD de Tarjetas:
-  // - Listar todas las tarjetas (quizás con filtros por tablero/lista, fecha, asignado)
-  // - Crear, editar, eliminar tarjetas
-  // - Podría ser una tabla con búsqueda y paginación.
+  // Here will be the logic for Cards CRUD:
+  // - List all cards (maybe with filters by board/list, date, assignee)
+  // - Create, edit, delete cards
+  // - Could be a table with search and pagination.
 
   if (!isAppReady || !tenantId) {
-    return <Typography>Cargando gestión de tarjetas...</Typography>;
+    return <Typography>Loading cards management...</Typography>;
   }
 
   return (
     <Paper elevation={1} sx={{ p: 3, borderRadius: 2 }}>
-      <Typography variant="h5" mb={2}>Gestión de Tarjetas</Typography>
+      <Typography variant="h5" mb={2}>Cards Management</Typography>
       <Typography variant="body1" color="text.secondary">
-        Aquí podrás ver y gestionar todas las tarjetas (tareas) de tus tableros de calendario.
-        (Próximamente: Tabla de tarjetas, botones de crear/editar/eliminar, filtros avanzados.)
+        Here you can view and manage all the cards (tasks) from your calendar boards.
+        (Coming soon: Cards table, create/edit/delete buttons, advanced filters.)
       </Typography>
       <Box sx={{ mt: 3, p: 2, border: '1px dashed #ccc', borderRadius: 1 }}>
         <Typography variant="body2" color="text.disabled">
-          Tenant ID: {tenantId} | App Ready: {isAppReady ? 'Sí' : 'No'}
+          Tenant ID: {tenantId} | App Ready: {isAppReady ? 'Yes' : 'No'}
         </Typography>
       </Box>
     </Paper>

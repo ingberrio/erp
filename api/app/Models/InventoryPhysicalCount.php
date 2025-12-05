@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasRecordRetention;
 
 class InventoryPhysicalCount extends Model
 {
-    use HasFactory;
+    use HasFactory, HasRecordRetention;
 
     protected $fillable = [
         'batch_id',
@@ -17,6 +18,17 @@ class InventoryPhysicalCount extends Model
         'counted_quantity',
         'notes',
         'user_id',
+        'retention_expires_at',
+        'is_archived',
+        'archived_at',
+        'archive_reason',
+    ];
+
+    protected $casts = [
+        'count_date' => 'datetime',
+        'retention_expires_at' => 'datetime',
+        'archived_at' => 'datetime',
+        'is_archived' => 'boolean',
     ];
 
     // Relaciones útiles (opcional)

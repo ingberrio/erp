@@ -9,9 +9,17 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Batch;
 use App\Models\InventoryReconciliation;
 use App\Models\InventoryPhysicalCount;
+use App\Services\LossTheftDetectionService;
+use App\Models\LossTheftReport;
 
 class InventoryReconciliationController extends Controller
 {
+    protected LossTheftDetectionService $lossTheftService;
+
+    public function __construct(LossTheftDetectionService $lossTheftService)
+    {
+        $this->lossTheftService = $lossTheftService;
+    }
     public function index(Request $request)
     {
         $tenantId = $request->header('X-Tenant-ID') ?? (Auth::check() ? Auth::user()->tenant_id : null);
@@ -111,13 +119,51 @@ class InventoryReconciliationController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        // Busca el último conteo físico para este lote (podrías buscar por fecha si lo necesitas)
+        // Busca el último conteo físico para este lote
         $physicalCount = \App\Models\InventoryPhysicalCount::where('batch_id', $batch_id)
             ->orderByDesc('count_date')
             ->first();
 
         if (!$physicalCount) {
-            return response()->json(['message' => 'No se encontró un conteo físico para este lote.'], 404);
+            return response()->json(['message' => 'No se encontró un conteo físico para este lote.'], 404)
+;
+        }
+
+        // Get the batch and reason for loss/theft analysis
+        $batch = Batch::findOrFail($batch_id);
+        $discrepancyReason = \App\Models\DiscrepancyReason::find($request->reason_id);
+        
+        // Calculate discrepancy
+        $expectedQuantity = $batch->current_units;
+        $actualQuantity = $physicalCount->counted_quantity;
+        $discrepancyAmount = $expectedQuantity - $actualQuantity;
+        
+        // Analyze for potential loss/theft BEFORE justifying
+        $lossReport = null;
+        if ($discrepancyAmount > 0) { // Only for shortages
+            try {
+                $lossReport = $this->lossTheftService->analyzeInventoryDiscrepancy(
+                    $batch,
+                    $expectedQuantity,
+                    $actualQuantity,
+                    $discrepancyReason?->name,
+                    \Auth::id()
+                );
+                
+                if ($lossReport) {
+                    Log::info('Loss/theft report generated during reconciliation', [
+                        'batch_id' => $batch_id,
+                        'report_id' => $lossReport->id,
+                        'report_number' => $lossReport->report_number,
+                        'discrepancy' => $discrepancyAmount,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to analyze inventory discrepancy for loss/theft', [
+                    'batch_id' => $batch_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         // Guarda la justificación
@@ -127,10 +173,22 @@ class InventoryReconciliationController extends Controller
         $physicalCount->justified_at = now();
         $physicalCount->save();
 
-        return response()->json([
+        $response = [
             'message' => 'Discrepancia justificada exitosamente.',
             'data' => $physicalCount
-        ]);
+        ];
+        
+        // Include loss report information if generated
+        if ($lossReport) {
+            $response['loss_theft_report'] = [
+                'id' => $lossReport->id,
+                'report_number' => $lossReport->report_number,
+                'requires_hc_reporting' => $lossReport->requiresHealthCanadaReporting(),
+                'message' => 'A loss/theft report has been automatically generated due to the nature and amount of the discrepancy.'
+            ];
+        }
+
+        return response()->json($response);
     }
 
 }

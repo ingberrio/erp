@@ -38,8 +38,8 @@ const RolesCrudInternal = () => {
       const res = await api.get("/roles?with_permissions=true&with_users_count=true");
       setRoles(Array.isArray(res.data) ? res.data : res.data.data || []);
     } catch (err) {
-      console.error("Error al cargar roles:", err);
-      setSnack({ open: true, message: "No se pudieron cargar los roles", severity: "error" });
+      console.error("Error loading roles:", err);
+      setSnack({ open: true, message: "Could not load roles", severity: "error" });
     }
     setLoading(false);
   };
@@ -49,8 +49,8 @@ const RolesCrudInternal = () => {
       const res = await api.get("/permissions"); // Obtener todos los permisos para asignación
       setPerms(Array.isArray(res.data) ? res.data : res.data.data || []);
     } catch (err) {
-      console.error("Error al cargar permisos para asignación:", err);
-      setSnack({ open: true, message: "No se pudieron cargar los permisos para asignación", severity: "error" });
+      console.error("Error loading permissions for assignment:", err);
+      setSnack({ open: true, message: "Could not load permissions for assignment", severity: "error" });
     }
   };
 
@@ -95,30 +95,30 @@ const RolesCrudInternal = () => {
 
       if (editingRole) {
         await api.put(`/roles/${editingRole.id}`, roleData);
-        setSnack({ open: true, message: "Rol actualizado", severity: "success" });
+        setSnack({ open: true, message: "Role updated", severity: "success" });
       } else {
         await api.post("/roles", roleData);
-        setSnack({ open: true, message: "Rol creado", severity: "success" });
+        setSnack({ open: true, message: "Role created", severity: "success" });
       }
       handleCloseRoleDialog();
       fetchRoles(); // Refresh list
     } catch (err) {
-      console.error("Error al guardar rol:", err.response?.data || err.message);
-      setSnack({ open: true, message: "Error al guardar rol: " + (err.response?.data?.message || err.message), severity: "error" });
+      console.error("Error saving role:", err.response?.data || err.message);
+      setSnack({ open: true, message: "Error saving role: " + (err.response?.data?.message || err.message), severity: "error" });
     }
     setLoading(false);
   };
 
   const handleDeleteRole = async (roleToDelete) => {
-    if (!window.confirm(`¿Eliminar rol "${roleToDelete.name}"? Esta acción es irreversible.`)) return;
+    if (!window.confirm(`Delete role "${roleToDelete.name}"? This action is irreversible.`)) return;
     setLoading(true);
     try {
       await api.delete(`/roles/${roleToDelete.id}`);
-      setSnack({ open: true, message: "Rol eliminado", severity: "info" });
+      setSnack({ open: true, message: "Role deleted", severity: "info" });
       fetchRoles();
     } catch (err) {
-      console.error("No se pudo eliminar el rol:", err);
-      setSnack({ open: true, message: "No se pudo eliminar el rol", severity: "error" });
+      console.error("Could not delete role:", err);
+      setSnack({ open: true, message: "Could not delete role", severity: "error" });
     }
     setLoading(false);
   };
@@ -137,7 +137,7 @@ const RolesCrudInternal = () => {
       <Box sx={{ display: "flex", mb: 2, gap: 2, alignItems: "center", flexWrap: "wrap" }}>
         <TextField
           size="small"
-          placeholder="Buscar roles..."
+          placeholder="Search roles..."
           value={roleSearch}
           onChange={e => setRoleSearch(e.target.value)}
           sx={{ width: { xs: "100%", sm: 250 }, bgcolor: "#f9f9f9" }}
@@ -156,7 +156,7 @@ const RolesCrudInternal = () => {
           sx={{ minWidth: 160, borderRadius: 2, width: { xs: "100%", sm: "auto" } }}
           onClick={() => handleOpenRoleDialog(null)}
         >
-          + NUEVO ROL
+                    + NEW ROLE
         </Button>
       </Box>
 
@@ -164,11 +164,11 @@ const RolesCrudInternal = () => {
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: "#fafbfc" }}>
-              <TableCell sx={{ fontWeight: 600 }}>Nombre</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Descripción</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Permisos</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Usuarios Asignados</TableCell>
-              <TableCell sx={{ fontWeight: 600 }} align="right">Acciones</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Permissions</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Assigned Users</TableCell>
+              <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -181,7 +181,7 @@ const RolesCrudInternal = () => {
             ) : filteredRoles.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} align="center" sx={{ color: "#aaa", py: 5 }}>
-                  No hay roles encontrados.
+                                    No roles found.
                 </TableCell>
               </TableRow>
             ) : (
@@ -191,7 +191,7 @@ const RolesCrudInternal = () => {
                     <Typography fontWeight={500}>{role.name}</Typography>
                   </TableCell>
                   <TableCell>
-                    {role.description || <span style={{ color: "#bbb" }}>Sin descripción</span>}
+                    {role.description || <span style={{ color: "#bbb" }}>No description</span>}
                   </TableCell>
                   <TableCell sx={{ maxWidth: 220 }}>
                     {(role.permissions || []).slice(0, 2).map(p => (
@@ -214,12 +214,12 @@ const RolesCrudInternal = () => {
                     ))}
                     {(role.permissions || []).length > 2 && (
                       <Typography component="span" sx={{ color: "#888", fontSize: 13 }}>
-                        +{role.permissions.length - 2} más
+                                                +{role.permissions.length - 2} more
                       </Typography>
                     )}
                     {(role.permissions || []).length === 0 && (
                       <Typography component="span" sx={{ color: "#bbb", fontSize: 13 }}>
-                        Ninguno
+                                                None
                       </Typography>
                     )}
                   </TableCell>
@@ -251,11 +251,11 @@ const RolesCrudInternal = () => {
 
       {/* Role Dialog (Create/Edit) */}
       <Dialog open={openRoleDialog} onClose={handleCloseRoleDialog} maxWidth="xs" fullWidth>
-        <DialogTitle>{editingRole ? "Editar Rol" : "Nuevo Rol"}</DialogTitle>
+        <DialogTitle>{editingRole ? "Edit Role" : "New Role"}</DialogTitle>
         <form onSubmit={handleSaveRole}>
           <DialogContent>
             <TextField
-              label="Nombre del Rol"
+                            label="Role Name"
               value={roleName}
               onChange={e => setRoleName(e.target.value)}
               fullWidth
@@ -264,7 +264,7 @@ const RolesCrudInternal = () => {
               disabled={loading}
             />
             <TextField
-              label="Descripción del Rol"
+                            label="Role Description"
               value={roleDesc}
               onChange={e => setRoleDesc(e.target.value)}
               fullWidth
@@ -274,10 +274,10 @@ const RolesCrudInternal = () => {
               disabled={loading}
             />
             <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle2" mb={1}>Permisos Asignados</Typography>
+                        <Typography variant="subtitle2" mb={1}>Assigned Permissions</Typography>
             <Box sx={{ maxHeight: 180, overflowY: "auto", border: "1px solid #ccc", p: 1, borderRadius: 1 }}>
               {perms.length === 0 ? (
-                <Typography color="text.secondary">No hay permisos configurados.</Typography>
+                                <Typography color="text.secondary">No permissions configured.</Typography>
               ) : (
                 perms.map((perm) => (
                   <Box key={perm.id} sx={{ display: "flex", alignItems: "center", mb: 0.5 }}>
@@ -296,13 +296,13 @@ const RolesCrudInternal = () => {
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseRoleDialog} disabled={loading}>Cancelar</Button>
+                        <Button onClick={handleCloseRoleDialog} disabled={loading}>Cancel</Button>
             <Button
               type="submit"
               variant="contained"
               disabled={loading || !roleName}
             >
-              {loading ? <CircularProgress size={24} /> : (editingRole ? "Guardar Cambios" : "Crear Rol")}
+                            {loading ? <CircularProgress size={24} /> : (editingRole ? "Save Changes" : "Create Role")}
             </Button>
           </DialogActions>
         </form>

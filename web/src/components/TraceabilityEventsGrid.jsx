@@ -102,17 +102,17 @@ const TraceabilityEventsGrid = ({
   // Columnas adaptadas para tus datos reales
   const columns = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'batch_id', headerName: 'Lote', width: 90 },
-    { field: 'area_id', headerName: 'Área', width: 90 },
-    { field: 'event_type', headerName: 'Tipo Evento', width: 120 },
-    { field: 'method', headerName: 'Método', width: 120 },
-    { field: 'from_location', headerName: 'Origen', width: 120 }, // Nueva columna para origen
-    { field: 'to_location', headerName: 'Destino', width: 120 },   // Nueva columna para destino
-    { field: 'quantity', headerName: 'Cantidad', width: 100 },     // Cantidad del evento
-    { field: 'unit', headerName: 'Unidad', width: 80 },            // Unidad de la cantidad
-    { field: 'description', headerName: 'Descripción', flex: 1, minWidth: 200 }, // Descripción del evento
-    { field: 'created_at', headerName: 'Fecha/Hora', width: 180 },
-    { field: 'user_name', headerName: 'Quien registra', width: 100 }, // Cambiado a user_id si el backend no devuelve user_name
+    { field: 'batch_id', headerName: 'Batch', width: 90 },
+    { field: 'area_id', headerName: 'Area', width: 90 },
+    { field: 'event_type', headerName: 'Event Type', width: 120 },
+    { field: 'method', headerName: 'Method', width: 120 },
+    { field: 'from_location', headerName: 'Origin', width: 120 }, // Nueva columna para origen
+    { field: 'to_location', headerName: 'Destination', width: 120 },   // Nueva columna para destino
+    { field: 'quantity', headerName: 'Quantity', width: 100 },     // Cantidad del evento
+    { field: 'unit', headerName: 'Unit', width: 80 },            // Unidad de la cantidad
+    { field: 'description', headerName: 'Description', flex: 1, minWidth: 200 }, // Descripción del evento
+    { field: 'created_at', headerName: 'Date/Time', width: 180 },
+    { field: 'user_name', headerName: 'Recorded by', width: 100 }, // Cambiado a user_id si el backend no devuelve user_name
   ];
 
   return (
@@ -128,7 +128,7 @@ const TraceabilityEventsGrid = ({
         <Select
           value={selectedBatchForTraceability}
           onChange={(e) => setSelectedBatchForTraceability(e.target.value)}
-          label="Ver Eventos para"
+                    label="See Events For"
           sx={{
             color: '#fff',
             '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },

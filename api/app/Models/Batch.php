@@ -3,10 +3,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasRecordRetention;
 
 class Batch extends Model
 {
-    use HasFactory;
+    use HasFactory, HasRecordRetention;
     
     protected $fillable = [
         'name',
@@ -23,6 +24,10 @@ class Batch extends Model
         'is_packaged',
         'units',
         'sub_location',
+        'retention_expires_at',
+        'is_archived',
+        'archived_at',
+        'archive_reason',
     ];
     
     protected $casts = [
@@ -30,6 +35,9 @@ class Batch extends Model
         'projected_yield' => 'decimal:2',
         'is_packaged' => 'boolean',
         'current_units' => 'decimal:2',  // AÑADIDO: Casteo para current_units como decimal
+        'retention_expires_at' => 'datetime',
+        'archived_at' => 'datetime',
+        'is_archived' => 'boolean',
         // NOTA: 'units' no debe estar casteado como numérico, es una cadena de texto
     ];
     

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasRecordRetention;
 
 // Asegúrate de que estos modelos existan y estén en sus respectivos namespaces
 use App\Models\Tenant;
@@ -14,7 +15,7 @@ use App\Models\Facility;
 
 class TraceabilityEvent extends Model
 {
-    use HasFactory;
+    use HasFactory, HasRecordRetention;
 
     /**
      * The table associated with the model.
@@ -45,6 +46,10 @@ class TraceabilityEvent extends Model
         'reason',
         'new_batch_id',
         'tenant_id',
+        'retention_expires_at',
+        'is_archived',
+        'archived_at',
+        'archive_reason',
     ];
 
     /**
@@ -56,6 +61,9 @@ class TraceabilityEvent extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'quantity'   => 'float',
+        'retention_expires_at' => 'datetime',
+        'archived_at' => 'datetime',
+        'is_archived' => 'boolean',
     ];
 
     /**

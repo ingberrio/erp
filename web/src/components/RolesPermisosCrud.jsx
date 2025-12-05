@@ -40,17 +40,17 @@ const RolesPermisosCrud = ({ tenantId, isAppReady }) => {
       >
         <Typography variant="h5" gutterBottom>
           <SecurityIcon sx={{ mr: 1, mb: -0.5 }} />
-          Gestión de Usuarios, Roles y Permisos
+          Users, Roles and Permissions Management
         </Typography>
         <Divider sx={{ my: 2 }} />
 
         {/* Pestañas para navegar entre Usuarios, Roles y Permisos */}
         {/* Este bloque de Tabs es el que renderiza el submenu */}
-        <Tabs value={activeTab} onChange={handleChangeTab} aria-label="Secciones de gestión"
+        <Tabs value={activeTab} onChange={handleChangeTab} aria-label="Management sections"
               sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Tab label="Usuarios" icon={<PeopleIcon />} iconPosition="start" />
+          <Tab label="Users" icon={<PeopleIcon />} iconPosition="start" />
           <Tab label="Roles" icon={<AssignmentIndIcon />} iconPosition="start" />
-          <Tab label="Permisos" icon={<SecurityIcon />} iconPosition="start" />
+          <Tab label="Permissions" icon={<SecurityIcon />} iconPosition="start" />
         </Tabs>
 
         {/* Contenido de las pestañas, pasando tenantId e isAppReady a los hijos */}
