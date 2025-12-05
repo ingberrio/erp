@@ -71,9 +71,9 @@ const AddEditBatchDialog = ({ open, editingBatch, onClose, onSaveSuccess, facili
   };
 
   return (
-    <Dialog open={open} onClose={onClose} PaperProps={{ component: 'form', onSubmit: handleSave }}>
-      <DialogTitle>{editingBatch ? DIALOG_TITLES.EDIT_BATCH : DIALOG_TITLES.ADD_BATCH}</DialogTitle>
-      <DialogContent>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ component: 'form', onSubmit: handleSave, sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}>
+      <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', borderBottom: '1px solid #e0e0e0' }}>{editingBatch ? DIALOG_TITLES.EDIT_BATCH : DIALOG_TITLES.ADD_BATCH}</DialogTitle>
+      <DialogContent sx={{ pt: '20px !important' }}>
         <TextField name="name" label="Batch Name" value={formData.name || ''} onChange={handleChange} fullWidth margin="dense" required />
         <TextField name="current_units" label="Current Units" value={formData.current_units || ''} onChange={handleChange} fullWidth margin="dense" type="number" required />
         <FormControl fullWidth margin="dense" required>
@@ -101,7 +101,7 @@ const AddEditBatchDialog = ({ open, editingBatch, onClose, onSaveSuccess, facili
         <TextField name="sub_location" label="Sub-location" value={formData.sub_location || ''} onChange={handleChange} fullWidth margin="dense" />
         <FormControlLabel control={<Checkbox name="is_packaged" checked={formData.is_packaged || false} onChange={handleChange} />} label="Is Packaged" />
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0' }}>
         <Button onClick={onClose} disabled={loading}>{BUTTON_LABELS.CANCEL}</Button>
         <Button type="submit" variant="contained" disabled={loading}>
           {loading ? <CircularProgress size={24} /> : (editingBatch ? BUTTON_LABELS.SAVE_CHANGES : BUTTON_LABELS.CREATE_BATCH)}

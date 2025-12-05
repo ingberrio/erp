@@ -20,7 +20,7 @@ import {
   Box, Typography, Button, CircularProgress, Snackbar, Alert,
   TextField, Paper, Divider, IconButton, FormControl, InputLabel, Select, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  List, ListItem, ListItemText, Grid,
+  List, ListItem, ListItemText, Grid, Chip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -163,6 +163,35 @@ const HEALTH_CANADA_PRODUCT_TYPES = [
   { value: 'Other', label: 'Other' },
 ];
 
+// SKU-style color functions for consistent UI
+const getProductTypeColor = (productType) => {
+  switch (productType) {
+    case 'Vegetative cannabis plants': return '#388e3c'; // Green - like Sativa
+    case 'Fresh cannabis': return '#4caf50'; // Light Green
+    case 'Dried cannabis': return '#f57c00'; // Orange - like Medium yield
+    case 'Seeds': return '#1976d2'; // Blue - like Hybrid
+    case 'Pure Intermediates': return '#7b1fa2'; // Purple - like Indica
+    case 'Edibles - Solids': return '#e91e63'; // Pink
+    case 'Edibles - Non-solids': return '#9c27b0'; // Deep Purple
+    case 'Extracts - Inhaled': return '#00bcd4'; // Cyan
+    case 'Extracts - Ingested': return '#009688'; // Teal
+    case 'Extracts - Other': return '#607d8b'; // Blue Grey
+    case 'Topicals': return '#795548'; // Brown
+    case 'Other': return '#616161'; // Gray - like unpackaged
+    default: return '#757575';
+  }
+};
+
+const getStageColor = (stageName) => {
+  const name = (stageName || '').toLowerCase();
+  if (name.includes('seed') || name.includes('germination')) return '#1976d2'; // Blue
+  if (name.includes('vegetat') || name.includes('veg')) return '#388e3c'; // Green
+  if (name.includes('flower') || name.includes('bloom')) return '#7b1fa2'; // Purple
+  if (name.includes('harvest')) return '#f57c00'; // Orange
+  if (name.includes('dry') || name.includes('cure')) return '#795548'; // Brown
+  if (name.includes('process') || name.includes('extract')) return '#00bcd4'; // Cyan
+  return '#455a64'; // Default Blue Grey
+};
 
 // --- Generic Confirmation Dialog Component ---
 const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
@@ -172,19 +201,19 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
       onClose={onCancel}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
-      PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+      PaperProps={{ sx: { bgcolor: '#fff', borderRadius: 2 } }}
     >
-      <DialogTitle id="alert-dialog-title" sx={{ color: '#e2e8f0' }}>{title}</DialogTitle>
+      <DialogTitle id="alert-dialog-title" sx={{ color: 'text.primary' }}>{title}</DialogTitle>
       <DialogContent>
-        <Typography id="alert-dialog-description" sx={{ color: '#a0aec0' }}>
+        <Typography id="alert-dialog-description" sx={{ color: 'text.secondary' }}>
           {message}
         </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} sx={{ color: '#a0aec0' }}>
+        <Button onClick={onCancel}>
           {BUTTON_LABELS.CANCEL}
         </Button>
-        <Button onClick={onConfirm} color="error" autoFocus sx={{ color: '#fc8181' }}>
+        <Button onClick={onConfirm} color="error" variant="contained" autoFocus>
           {BUTTON_LABELS.CONFIRM}
         </Button>
       </DialogActions>
@@ -206,23 +235,32 @@ const BatchItem = ({ batch, setParentSnack, isFacilityOperator }) => {
   const handleCreateSample = () => setParentSnack(`Create sample for batch: ${batch.name}`, 'info');
 
   return (
-    <Paper elevation={1} sx={{ p: 1.5, mb: 1, bgcolor: '#e8f5e9', borderRadius: 1 }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#2e7d32' }}>
+    <Paper elevation={1} sx={{ p: 1.5, mb: 1, bgcolor: '#fff', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1976d2' }}>
         Batch: {batch.name}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{ color: '#4a5568' }}>
         Units: {batch.current_units}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{ color: '#4a5568' }}>
         Variety: {batch.variety}
       </Typography>
-      {batch.product_type && ( // Display product type if available
-        <Typography variant="body2" color="text.secondary">
-          Product Type: {batch.product_type}
-        </Typography>
+      {batch.product_type && (
+        <Box sx={{ mt: 0.5 }}>
+          <Chip 
+            label={batch.product_type} 
+            size="small" 
+            sx={{ 
+              bgcolor: getProductTypeColor(batch.product_type), 
+              color: 'white',
+              fontSize: '0.7rem',
+              height: '22px'
+            }} 
+          />
+        </Box>
       )}
       {batch.advance_to_harvesting_on && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ mt: 0.5, color: '#4a5568' }}>
           Harvest: {new Date(batch.advance_to_harvesting_on).toLocaleDateString()}
         </Typography>
       )}
@@ -245,8 +283,8 @@ const CultivationAreaContent = ({ area, handleEdit, handleDelete, isFacilityOper
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Typography variant="body1" sx={{ fontWeight: 500, color: '#333', flexGrow: 1, pr: 1 }}>
-          <LocationOnIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+        <Typography variant="body1" sx={{ fontWeight: 600, color: '#1a202c', flexGrow: 1, pr: 1, fontSize: '0.95rem' }}>
+          <LocationOnIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle', color: '#64748b' }} />
           {area.name}
         </Typography>
         <Box>
@@ -257,7 +295,7 @@ const CultivationAreaContent = ({ area, handleEdit, handleDelete, isFacilityOper
             aria-label={`Edit area ${area.name}`}
             disabled={isFacilityOperator}
           >
-            <EditIcon sx={{ fontSize: 16, color: isFacilityOperator ? '#666' : '#004d80' }} />
+            <EditIcon sx={{ fontSize: 18, color: isFacilityOperator ? '#cbd5e1' : '#1976d2' }} />
           </IconButton>
           <IconButton
             size="small"
@@ -266,23 +304,41 @@ const CultivationAreaContent = ({ area, handleEdit, handleDelete, isFacilityOper
             aria-label={`Delete area ${area.name}`}
             disabled={isFacilityOperator}
           >
-            <DeleteIcon sx={{ fontSize: 16, color: isFacilityOperator ? '#666' : '#004d80' }} />
+            <DeleteIcon sx={{ fontSize: 18, color: isFacilityOperator ? '#cbd5e1' : '#64748b' }} />
           </IconButton>
         </Box>
       </Box>
       {area.description && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: 13, color: '#555' }}>
+        <Typography variant="body2" sx={{ mt: 0.5, fontSize: 13, color: '#64748b' }}>
           {area.description.length > 70 ? `${area.description.substring(0, 70)}...` : area.description}
         </Typography>
       )}
       {area.capacity_units && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: 13, color: '#555' }}>
-          Capacity: {area.capacity_units} {area.capacity_unit_type || 'units'}
+        <Typography variant="body2" sx={{ 
+          mt: 0.5, 
+          fontSize: '0.85rem', 
+          color: '#475569',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5
+        }}>
+          <strong>Capacity:</strong> {area.capacity_units} {area.capacity_unit_type || 'units'}
         </Typography>
       )}
       {area.batches && area.batches.length > 0 && (
-        <Typography variant="body2" sx={{ mt: 0.5, fontSize: 13, fontWeight: 500, color: '#444' }}>
-          Batches: {area.batches.length}
+        <Typography variant="body2" sx={{ 
+          mt: 0.5, 
+          fontSize: '0.85rem', 
+          fontWeight: 600, 
+          color: '#1976d2',
+          display: 'inline-flex',
+          alignItems: 'center',
+          bgcolor: '#e3f2fd',
+          px: 1,
+          py: 0.25,
+          borderRadius: '4px'
+        }}>
+          🌿 {area.batches.length} Batches
         </Typography>
       )}
     </Box>
@@ -321,9 +377,10 @@ const CultivationAreaItem = React.memo(({ area, handleEdit, handleDelete, setPar
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 9999 : 'auto',
     marginBottom: '12px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    backgroundColor: '#fff',
+    borderRadius: '10px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
     padding: '12px',
     cursor: isFacilityOperator ? 'default' : (isDragging ? 'grabbing' : 'grab'),
   };
@@ -383,6 +440,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
   const [openAddBatchDialog, setOpenAddBatchDialog] = useState(false);
   const [batchName, setBatchName] = useState('');
   const [batchCurrentUnits, setBatchCurrentUnits] = useState('');
+  const [batchUnits, setBatchUnits] = useState('units'); // Unit type: g, kg, units, etc.
   const [batchEndType, setBatchEndType] = useState('');
   const [batchVariety, setBatchVariety] = useState('');
   const [batchProductType, setBatchProductType] = useState(''); // NEW: Product Type for batch
@@ -674,9 +732,8 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       <Box component="form" onSubmit={handleRegisterEvent} sx={{ mt: 2 }}>
         {/* Affected Batch - Always select the original batch */}
         <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel sx={{ color: '#fff' }}>Affected Batch</InputLabel>
-          <Select value={eventBatchId} onChange={(e) => setEventBatchId(e.target.value)} required={currentEventType !== 'cultivation'} sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-            MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+          <InputLabel>Affected Batch</InputLabel>
+          <Select value={eventBatchId} onChange={(e) => setEventBatchId(e.target.value)} required={currentEventType !== 'cultivation'} label="Affected Batch"
           >
             <MenuItem value="" disabled><em>{currentEventType === 'cultivation' ? 'Optional: Select Batch' : 'Select Batch'}</em></MenuItem>
             {batchesInCurrentArea.length === 0 ? (
@@ -689,67 +746,64 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
 
         {currentEventType === 'movement' && (
           <>
-            <TextField label="Quantity of Units" type="number" value={eventQuantity} onChange={(e) => setEventQuantity(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField label="Quantity of Units" type="number" value={eventQuantity} onChange={(e) => setEventQuantity(e.target.value)} fullWidth required sx={{ mb: 2 }} />
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Unit</InputLabel>
-              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+              <InputLabel>Unit</InputLabel>
+              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required label="Unit"
               >
                 {unitOptions.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="Origin (e.g., 'Room2')" value={eventFromLocation} onChange={(e) => setEventFromLocation(e.target.value)} fullWidth sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <TextField label="Destination (e.g., 'Drying')" value={eventToLocation} onChange={(e) => setEventToLocation(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField label="Origin (e.g., 'Room2')" value={eventFromLocation} onChange={(e) => setEventFromLocation(e.target.value)} fullWidth sx={{ mb: 2 }} />
+            <TextField label="Destination (e.g., 'Drying')" value={eventToLocation} onChange={(e) => setEventToLocation(e.target.value)} fullWidth required sx={{ mb: 2 }} />
           </>
         )}
 
         {currentEventType === 'cultivation' && (
-          <TextField label="Event Type (e.g., Watering, Pruning, Application)" value={eventMethod} onChange={(e) => setEventMethod(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+          <TextField label="Event Type (e.g., Watering, Pruning, Application)" value={eventMethod} onChange={(e) => setEventMethod(e.target.value)} fullWidth required sx={{ mb: 2 }} />
         )}
 
         {currentEventType === 'harvest' && (
           <>
-            <Typography variant="body2" sx={{ mb: 2, color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ mb: 2, color: '#64748b' }}>
               Register the wet weight harvested from the selected batch.
             </Typography>
-            <TextField label="Wet Weight (kg)" type="number" value={eventWeight} onChange={(e) => setEventWeight(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField label="Wet Weight (kg)" type="number" value={eventWeight} onChange={(e) => setEventWeight(e.target.value)} fullWidth required sx={{ mb: 2 }} />
           </>
         )}
 
         {currentEventType === 'sampling' && (
           <>
-            <TextField label="Sample Quantity (Weight)" type="number" value={eventWeight} onChange={(e) => setEventWeight(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField label="Sample Quantity (Weight)" type="number" value={eventWeight} onChange={(e) => setEventWeight(e.target.value)} fullWidth required sx={{ mb: 2 }} />
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Sample Unit</InputLabel>
-              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+              <InputLabel>Sample Unit</InputLabel>
+              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required label="Sample Unit"
               >
                 {unitOptions.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="Sampling Purpose" value={eventReason} onChange={(e) => setEventReason(e.target.value)} fullWidth sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField label="Sampling Purpose" value={eventReason} onChange={(e) => setEventReason(e.target.value)} fullWidth sx={{ mb: 2 }} />
           </>
         )}
 
         {currentEventType === 'destruction' && (
           <>
-            <TextField label="Destroyed Quantity (Weight/Units)" type="number" value={eventWeight} onChange={(e) => setEventWeight(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField label="Destroyed Quantity (Weight/Units)" type="number" value={eventWeight} onChange={(e) => setEventWeight(e.target.value)} fullWidth required sx={{ mb: 2 }} />
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Destruction Unit</InputLabel>
-              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+              <InputLabel>Destruction Unit</InputLabel>
+              <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required label="Destruction Unit"
               >
                 {unitOptions.map(unit => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
               </Select>
             </FormControl>
-            <TextField label="Destruction Method" value={eventMethod} onChange={(e) => setEventMethod(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-            <TextField label="Reason for Destruction" multiline rows={3} value={eventReason} onChange={(e) => setEventReason(e.target.value)} fullWidth required sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
+            <TextField label="Destruction Method" value={eventMethod} onChange={(e) => setEventMethod(e.target.value)} fullWidth required sx={{ mb: 2 }} />
+            <TextField label="Reason for Destruction" multiline rows={3} value={eventReason} onChange={(e) => setEventReason(e.target.value)} fullWidth required sx={{ mb: 2 }} />
           </>
         )}
 
-        <TextField label="Additional Notes" multiline rows={3} value={eventDescription} onChange={(e) => setEventDescription(e.target.value)} fullWidth sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }} />
-        <DialogActions sx={{ bgcolor: '#3a506b', mt: 2 }}>
-          <Button onClick={handleCloseRegisterEventDialog} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+        <TextField label="Additional Notes" multiline rows={3} value={eventDescription} onChange={(e) => setEventDescription(e.target.value)} fullWidth sx={{ mb: 2 }} />
+        <DialogActions sx={{ bgcolor: '#f8fafc', mt: 2, borderTop: '1px solid #e0e0e0', mx: -3, px: 3, py: 2 }}>
+          <Button onClick={handleCloseRegisterEventDialog} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
           <Button type="submit" variant="contained" sx={{ bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }} disabled={isFacilityOperator}>
             {BUTTON_LABELS.REGISTER}
           </Button>
@@ -762,6 +816,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
   const handleOpenAddBatchDialog = useCallback(() => {
     setBatchName('');
     setBatchCurrentUnits('');
+    setBatchUnits('units'); // Default unit type
     setBatchEndType('');
     setBatchVariety('');
     setBatchProductType(''); // Reset product type field
@@ -775,6 +830,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
     setOpenAddBatchDialog(false);
     setBatchName('');
     setBatchCurrentUnits('');
+    setBatchUnits('units'); // Reset unit type
     setBatchEndType('');
     setBatchVariety('');
     setBatchProductType(''); // Reset product type field
@@ -808,6 +864,22 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
     if (!batchProductType.trim()) { // Validation for product type
       setParentSnack(SNACK_MESSAGES.BATCH_PRODUCT_TYPE_REQUIRED, 'warning');
       return;
+    }
+
+    // Validar capacidad del área
+    if (currentAreaDetail.capacity_units) {
+      const currentUsage = (currentAreaDetail.batches || []).reduce((sum, b) => sum + (parseFloat(b.current_units) || 0), 0);
+      const requestedUnits = parseInt(batchCurrentUnits, 10);
+      const availableUnits = currentAreaDetail.capacity_units - currentUsage;
+      
+      if (requestedUnits > availableUnits) {
+        setParentSnack(
+          `Capacity exceeded! Area "${currentAreaDetail.name}" has ${currentAreaDetail.capacity_units} units capacity. ` +
+          `Current usage: ${currentUsage} units. Available: ${availableUnits} units. You requested: ${requestedUnits} units.`,
+          'error'
+        );
+        return;
+      }
     }
   
     setBatchDialogLoading(true);
@@ -847,6 +919,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       const batchData = {
         name: batchName,
         current_units: parseInt(batchCurrentUnits, 10),
+        units: batchUnits, // Unit type (g, kg, units, etc.)
         end_type: batchEndType,
         variety: batchVariety,
         product_type: batchProductType, // Include new product type
@@ -1224,40 +1297,45 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
   const selectedBatch = currentAreaDetail?.batches?.find(b => b.id === processBatchId);
   const maxQuantity = selectedBatch?.current_units ?? 0;
 
+  const stageColor = getStageColor(stage.name);
+
   return (
     <Paper
       sx={{
-        bgcolor: '#283e51',
+        bgcolor: '#fff',
         borderRadius: 2,
         p: 1.5,
         minWidth: 280,
         maxWidth: 280,
         flexShrink: 0,
-        boxShadow: '0 1px 0 rgba(9,30,66,.25)',
-        color: '#fff',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        border: '1px solid #e0e0e0',
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', flexGrow: 1 }}>
-          {stage.name}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ width: 8, height: 24, bgcolor: stageColor, borderRadius: 1 }} />
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', flexGrow: 1 }}>
+            {stage.name}
+          </Typography>
+        </Box>
         <IconButton
           size="small"
           onClick={() => handleDeleteStage(stage)}
           aria-label={`Delete stage ${stage.name}`}
           disabled={isFacilityOperator}
         >
-          <DeleteIcon sx={{ fontSize: 18, color: isFacilityOperator ? '#666' : '#aaa' }} />
+          <DeleteIcon sx={{ fontSize: 18, color: isFacilityOperator ? '#ccc' : '#666' }} />
         </IconButton>
       </Box>
-      <Divider sx={{ mb: 1.5, bgcolor: 'rgba(255,255,255,0.2)' }} />
+      <Divider sx={{ mb: 1.5 }} />
       <Box
         ref={setNodeRef} // useDroppable ref
         sx={{
           maxHeight: 'calc(100vh - 250px)',
           overflowY: 'auto',
           pr: 1,
-          bgcolor: isOver ? 'rgba(255,255,255,0.1)' : 'transparent',
+          bgcolor: isOver ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
           minHeight: cultivationAreas.length === 0 ? '80px' : 'auto',
           transition: 'background-color 0.2s ease',
           pb: 1,
@@ -1276,7 +1354,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
           />
         ))}
         {cultivationAreas.length === 0 && !isOver && (
-          <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center', color: '#aaa' }}>
+          <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
             Drag areas here or add a new one.
           </Typography>
         )}
@@ -1287,15 +1365,13 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         onClick={() => handleOpenAddAreaDialog(null)}
         fullWidth
         disabled={isFacilityOperator}
-        sx={{ mt: 1, color: isFacilityOperator ? '#666' : '#b0c4de', '&:hover': { bgcolor: isFacilityOperator ? 'transparent' : 'rgba(255,255,255,0.1)' } }}
+        sx={{ mt: 1, color: isFacilityOperator ? '#ccc' : 'primary.main' }}
       >
         {BUTTON_LABELS.ADD_CULTIVATION_AREA}
       </Button>
 
-      <Dialog open={openAddAreaDialog} onClose={handleCloseAddAreaDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
-      >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingArea ? DIALOG_TITLES.EDIT_AREA : DIALOG_TITLES.CREATE_AREA}</DialogTitle>
+      <Dialog open={openAddAreaDialog} onClose={handleCloseAddAreaDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingArea ? DIALOG_TITLES.EDIT_AREA : DIALOG_TITLES.CREATE_AREA}</DialogTitle>
         <form onSubmit={handleSaveArea}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField
@@ -1304,13 +1380,8 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               onChange={e => setAreaName(e.target.value)}
               fullWidth
               required
-              sx={{ mt: 1, mb: 2,
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              }}
+              size="small"
+              sx={{ mt: 1, mb: 2 }}
               disabled={areaDialogLoading || isFacilityOperator}
               inputProps={{ maxLength: 100 }}
               aria-label="Cultivation area name"
@@ -1322,13 +1393,8 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               fullWidth
               multiline
               rows={3}
-              sx={{ mb: 2,
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              }}
+              size="small"
+              sx={{ mb: 2 }}
               disabled={areaDialogLoading || isFacilityOperator}
               aria-label="Cultivation area description"
             />
@@ -1338,13 +1404,8 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               onChange={e => setAreaCapacityUnits(e.target.value)}
               type="number"
               fullWidth
-              sx={{ mb: 2,
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              }}
+              size="small"
+              sx={{ mb: 2 }}
               disabled={areaDialogLoading || isFacilityOperator}
               aria-label="Capacity units"
             />
@@ -1353,18 +1414,13 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               value={areaCapacityUnitType}
               onChange={e => setAreaCapacityUnitType(e.target.value)}
               fullWidth
-              sx={{ mb: 2,
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              }}
+              size="small"
+              sx={{ mb: 2 }}
               disabled={areaDialogLoading || isFacilityOperator}
               aria-label="Capacity unit type"
             />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel id="area-facility-select-label" sx={{ color: '#fff' }}>Assigned Facility</InputLabel>
+            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+              <InputLabel id="area-facility-select-label">Assigned Facility</InputLabel>
               <Select
                 labelId="area-facility-select-label"
                 value={areaFacilityId}
@@ -1373,21 +1429,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
                 required
                 disabled={areaDialogLoading || isFacilityOperator}
                 aria-label="Select assigned facility"
-                sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-                  '.MuiSvgIcon-root': { color: '#fff' },
-                }}
-                MenuProps={{
-                  PaperProps: {
-                    sx: { bgcolor: '#004060', color: '#fff' },
-                  },
-                }}
               >
                 {facilities.length === 0 ? (
-                  <MenuItem value="" sx={{ color: '#aaa' }}>
+                  <MenuItem value="">
                     <em>No facilities available</em>
                   </MenuItem>
                 ) : (
@@ -1400,16 +1444,12 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               </Select>
             </FormControl>
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseAddAreaDialog} disabled={areaDialogLoading || isFacilityOperator} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions>
+            <Button onClick={handleCloseAddAreaDialog} disabled={areaDialogLoading || isFacilityOperator}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
               disabled={areaDialogLoading || !areaName.trim() || isFacilityOperator}
-              sx={{
-                bgcolor: '#4CAF50',
-                '&:hover': { bgcolor: '#43A047' }
-              }}
             >
               {areaDialogLoading ? <CircularProgress size={24} /> : (editingArea ? BUTTON_LABELS.SAVE_CHANGES : BUTTON_LABELS.CREATE_AREA)}
             </Button>
@@ -1418,13 +1458,11 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       </Dialog>
 
       {/* --- Area Detail Dialog (Expanded with Traceability) --- */}
-      <Dialog open={openAreaDetailDialog} onClose={handleCloseAreaDetail} maxWidth="lg" fullWidth // Expanded to lg
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2, minHeight: '80vh' } }} // Minimum height
+      <Dialog open={openAreaDetailDialog} onClose={handleCloseAreaDetail} maxWidth="lg" fullWidth
+        PaperProps={{ sx: { minHeight: '80vh', bgcolor: '#fff' } }}
       >
         <DialogTitle
           sx={{
-            bgcolor: '#6b7582',
-            color: '#fff',
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
@@ -1434,10 +1472,12 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
             px: { xs: 2, sm: 3 },
             gap: 2,
             flexWrap: 'wrap',
+            borderBottom: '1px solid #e0e0e0',
+            bgcolor: '#fff',
           }}
         >
           {/* FIX: Changed Typography component to "span" to avoid h6 inside h2 nesting error */}
-          <Typography component="span" variant="h6" sx={{ fontWeight: 600, color: '#fff', flexGrow: 1, minWidth: '150px' }}>
+          <Typography component="span" variant="h6" sx={{ fontWeight: 600, flexGrow: 1, minWidth: '150px', color: '#1a202c' }}>
             {DIALOG_TITLES.AREA_DETAIL} {currentAreaDetail?.name}
           </Typography>
 
@@ -1475,9 +1515,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               startIcon={<TrendingUpIcon />}
               onClick={() => handleOpenRegisterEventDialog('movement')}
               sx={{
-                bgcolor: '#4a5568',
-                color: '#e2e8f0',
-                '&:hover': { bgcolor: '#66748c' },
+                bgcolor: '#607d8b',
+                color: '#fff',
+                '&:hover': { bgcolor: '#546e7a' },
                 borderRadius: 1,
                 textTransform: 'none',
                 py: '6px',
@@ -1494,9 +1534,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               startIcon={<EcoIcon />}
               onClick={() => handleOpenRegisterEventDialog('cultivation')}
               sx={{
-                bgcolor: '#4a5568',
-                color: '#e2e8f0',
-                '&:hover': { bgcolor: '#66748c' },
+                bgcolor: '#607d8b',
+                color: '#fff',
+                '&:hover': { bgcolor: '#546e7a' },
                 borderRadius: 1,
                 textTransform: 'none',
                 py: '6px',
@@ -1513,9 +1553,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               startIcon={<HarvestIcon />}
               onClick={() => handleOpenRegisterEventDialog('harvest')}
               sx={{
-                bgcolor: '#4a5568',
-                color: '#e2e8f0',
-                '&:hover': { bgcolor: '#66748c' },
+                bgcolor: '#607d8b',
+                color: '#fff',
+                '&:hover': { bgcolor: '#546e7a' },
                 borderRadius: 1,
                 textTransform: 'none',
                 py: '6px',
@@ -1532,9 +1572,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               startIcon={<ScienceIcon />}
               onClick={() => handleOpenRegisterEventDialog('sampling')}
               sx={{
-                bgcolor: '#4a5568',
-                color: '#e2e8f0',
-                '&:hover': { bgcolor: '#66748c' },
+                bgcolor: '#607d8b',
+                color: '#fff',
+                '&:hover': { bgcolor: '#546e7a' },
                 borderRadius: 1,
                 textTransform: 'none',
                 py: '6px',
@@ -1551,9 +1591,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               startIcon={<DeleteForeverIcon />}
               onClick={() => handleOpenRegisterEventDialog('destruction')}
               sx={{
-                bgcolor: '#4a5568',
-                color: '#e2e8f0',
-                '&:hover': { bgcolor: '#66748c' },
+                bgcolor: '#607d8b',
+                color: '#fff',
+                '&:hover': { bgcolor: '#546e7a' },
                 borderRadius: 1,
                 textTransform: 'none',
                 py: '6px',
@@ -1592,8 +1632,9 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
                 position: 'absolute',
                 top: 8,
                 right: 8,
-                color: '#e2e8f0',
-                zIndex: 5
+                color: '#64748b',
+                zIndex: 5,
+                '&:hover': { bgcolor: '#f1f5f9' }
               }}
               aria-label="Close"
             >
@@ -1607,27 +1648,28 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' }, // Column on mobile, row on desktop
           gap: { xs: 3, md: 4 }, // Space between sections
+          bgcolor: '#fff',
         }}>
           {/* Left Section: General Info and Batches */}
           <Box sx={{ flexGrow: 1, minWidth: { md: '40%' } }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0' }}>General Information</Typography>
-            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, color: '#e2e8f0' }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 500 }}>General Information</Typography>
+            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, color: '#64748b' }}>
               Description: {currentAreaDetail?.description || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#1976d2', fontWeight: 500 }}>
               Capacity: {currentAreaDetail?.capacity_units} {currentAreaDetail?.capacity_unit_type || 'units'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#1a202c' }}>
               Current Stage: {currentAreaDetail?.current_stage?.name || 'Loading...'}
             </Typography>
-            <Divider sx={{ my: 2, bgcolor: 'rgba(255,255,255,0.2)' }} />
-            <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0' }}>Batches in this Area:</Typography>
+            <Divider sx={{ my: 2, bgcolor: '#e2e8f0' }} />
+            <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 500 }}>Batches in this Area:</Typography>
             {currentAreaDetail?.batches && currentAreaDetail.batches.length > 0 ? (
               currentAreaDetail.batches.map(batch => (
                 <BatchItem key={batch.id} batch={batch} setParentSnack={setParentSnack} isFacilityOperator={isFacilityOperator} />
               ))
             ) : (
-              <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
                 No batches in this area.
               </Typography>
             )}
@@ -1648,43 +1690,91 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
 
       {/* --- Dialog for Adding New Batch --- */}
       <Dialog open={openAddBatchDialog} onClose={handleCloseAddBatchDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
           {DIALOG_TITLES.ADD_BATCH}
-          <IconButton onClick={handleCloseAddBatchDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseAddBatchDialog} sx={{ color: '#64748b' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <form onSubmit={handleSaveBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
+            {/* Indicador de capacidad */}
+            {currentAreaDetail && currentAreaDetail.capacity_units && (
+              <Box sx={{ 
+                mb: 2, 
+                p: 2, 
+                bgcolor: '#f0f9ff', 
+                borderRadius: 1, 
+                border: '1px solid #0ea5e9' 
+              }}>
+                <Typography variant="body2" sx={{ color: '#0369a1', fontWeight: 'medium' }}>
+                  Area Capacity: {currentAreaDetail.capacity_units} {currentAreaDetail.capacity_unit_type || 'units'}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#0369a1' }}>
+                  Current Usage: {(currentAreaDetail.batches || []).reduce((sum, b) => sum + (parseFloat(b.current_units) || 0), 0)} units
+                </Typography>
+                <Typography variant="body2" sx={{ 
+                  color: (currentAreaDetail.capacity_units - (currentAreaDetail.batches || []).reduce((sum, b) => sum + (parseFloat(b.current_units) || 0), 0)) > 0 ? '#15803d' : '#dc2626',
+                  fontWeight: 'bold' 
+                }}>
+                  Available: {currentAreaDetail.capacity_units - (currentAreaDetail.batches || []).reduce((sum, b) => sum + (parseFloat(b.current_units) || 0), 0)} units
+                </Typography>
+              </Box>
+            )}
             <TextField
               label="Batch Name"
               value={batchName}
               onChange={e => setBatchName(e.target.value)}
               fullWidth
               required
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mt: 1, mb: 2 }}
               disabled={batchDialogLoading}
             />
-            <TextField
-              label="Current Units"
-              type="number"
-              value={batchCurrentUnits}
-              onChange={e => setBatchCurrentUnits(e.target.value)}
-              fullWidth
-              required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
-              disabled={batchDialogLoading}
-            />
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+              <TextField
+                label="Quantity"
+                type="number"
+                value={batchCurrentUnits}
+                onChange={e => setBatchCurrentUnits(e.target.value)}
+                required
+                sx={{ flex: 2 }}
+                disabled={batchDialogLoading}
+                inputProps={{ 
+                  max: currentAreaDetail?.capacity_units 
+                    ? currentAreaDetail.capacity_units - (currentAreaDetail.batches || []).reduce((sum, b) => sum + (parseFloat(b.current_units) || 0), 0) 
+                    : undefined 
+                }}
+                helperText={currentAreaDetail?.capacity_units 
+                  ? `Max available: ${currentAreaDetail.capacity_units - (currentAreaDetail.batches || []).reduce((sum, b) => sum + (parseFloat(b.current_units) || 0), 0)}`
+                  : ''
+                }
+              />
+              <FormControl sx={{ flex: 1, minWidth: 100 }}>
+                <InputLabel>Unit</InputLabel>
+                <Select
+                  value={batchUnits}
+                  onChange={e => setBatchUnits(e.target.value)}
+                  required
+                  label="Unit"
+                  disabled={batchDialogLoading}
+                >
+                  <MenuItem value="units">Units</MenuItem>
+                  <MenuItem value="g">Grams (g)</MenuItem>
+                  <MenuItem value="kg">Kilograms (kg)</MenuItem>
+                  <MenuItem value="ml">Milliliters (ml)</MenuItem>
+                  <MenuItem value="L">Liters (L)</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>End Type</InputLabel>
+              <InputLabel>End Type</InputLabel>
               <Select
                 value={batchEndType}
                 onChange={e => setBatchEndType(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                label="End Type"
                 disabled={batchDialogLoading}
               >
                 <MenuItem value="" disabled><em>Select Type</em></MenuItem>
@@ -1699,18 +1789,17 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               onChange={e => setBatchVariety(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2 }}
               disabled={batchDialogLoading}
             />
             {/* NEW: Product Type for Batch Creation */}
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Product Type</InputLabel>
+              <InputLabel>Product Type</InputLabel>
               <Select
                 value={batchProductType}
                 onChange={e => setBatchProductType(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                label="Product Type"
                 disabled={batchDialogLoading}
               >
                 <MenuItem value="" disabled><em>Select Product Type</em></MenuItem>
@@ -1725,7 +1814,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               value={batchProjectedYield}
               onChange={e => setBatchProjectedYield(e.target.value)}
               fullWidth
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2 }}
               disabled={batchDialogLoading}
             />
             <TextField
@@ -1735,12 +1824,12 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               onChange={e => setBatchAdvanceToHarvestingOn(e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2 }}
               disabled={batchDialogLoading}
             />
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseAddBatchDialog} disabled={batchDialogLoading} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions sx={{ bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0', px: 3, py: 2 }}>
+            <Button onClick={handleCloseAddBatchDialog} disabled={batchDialogLoading} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -1758,11 +1847,11 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
 
       {/* --- Global Event Registration Dialog --- */}
       <Dialog open={openRegisterEventDialog} onClose={handleCloseRegisterEventDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
           {DIALOG_TITLES.REGISTER_EVENT}
-          <IconButton onClick={handleCloseRegisterEventDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseRegisterEventDialog} sx={{ color: '#64748b' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
@@ -1773,24 +1862,23 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
 
       {/* --- Process Batch Dialog (NEW) --- */}
       <Dialog open={openProcessBatchDialog} onClose={handleCloseProcessBatchDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
           {DIALOG_TITLES.PROCESS_BATCH}
-          <IconButton onClick={handleCloseProcessBatchDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseProcessBatchDialog} sx={{ color: '#64748b' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <form onSubmit={handleProcessBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>Batch to Process</InputLabel>
+              <InputLabel>Batch to Process</InputLabel>
               <Select
                 value={processBatchId}
                 onChange={(e) => setProcessBatchId(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                label="Batch to Process"
                 disabled={processDialogLoading}
               >
                 <MenuItem value="" disabled><em>Select Batch</em></MenuItem>
@@ -1813,7 +1901,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               inputProps={{ min: 1, max: maxQuantity }}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2 }}
               disabled={processDialogLoading}
               helperText={processBatchId ? `Max: ${batchesInCurrentArea.find(b => b.id === processBatchId)?.current_units || 0}` : ''}
             />
@@ -1823,17 +1911,16 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               onChange={e => setProcessMethod(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2 }}
               disabled={processDialogLoading}
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#fff' }}>New Product Type</InputLabel>
+              <InputLabel>New Product Type</InputLabel>
               <Select
                 value={newProductType}
                 onChange={e => setNewProductType(e.target.value)}
                 required
-                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' }, '.MuiSvgIcon-root': { color: '#fff' } }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                label="New Product Type"
                 disabled={processDialogLoading}
               >
                 <MenuItem value="" disabled><em>Select New Product Type</em></MenuItem>
@@ -1849,12 +1936,12 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
               value={processDescription}
               onChange={e => setProcessDescription(e.target.value)}
               fullWidth
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2 }}
               disabled={processDialogLoading}
             />
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseProcessBatchDialog} disabled={processDialogLoading} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions sx={{ bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0', px: 3, py: 2 }}>
+            <Button onClick={handleCloseProcessBatchDialog} disabled={processDialogLoading} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -2573,17 +2660,16 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
     <Box sx={{
       p: { xs: 2, sm: 3 },
       minHeight: 'calc(100vh - 64px)',
-      bgcolor: '#004d80',
-      color: '#fff',
+      bgcolor: '#fff',
     }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <GrassIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} />
-        <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <GrassIcon sx={{ fontSize: 32, color: 'primary.main', mr: 1 }} />
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>
           Cultivation Management
         </Typography>
         {/* Facility Selector */}
-        <FormControl sx={{ minWidth: 200, mr: 1 }}>
-          <InputLabel id="facility-select-label" sx={{ color: '#fff' }}>Facility</InputLabel>
+        <FormControl size="small" sx={{ minWidth: 200, mr: 1 }}>
+          <InputLabel id="facility-select-label">Facility</InputLabel>
           <Select
             labelId="facility-select-label"
             value={selectedFacilityId}
@@ -2592,21 +2678,9 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
                 setSelectedFacilityId(e.target.value);
             }}
             disabled={loading || facilities.length === 0 || isFacilityOperator}
-            sx={{
-              color: '#fff',
-              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              '.MuiSvgIcon-root': { color: '#fff' },
-            }}
-            MenuProps={{
-              PaperProps: {
-                sx: { bgcolor: '#004060', color: '#fff' },
-              },
-            }}
           >
             {facilities.length === 0 && !loading ? (
-              <MenuItem value="" sx={{ color: '#aaa' }}>
+              <MenuItem value="">
                 <em>No facilities available</em>
               </MenuItem>
             ) : (
@@ -2659,9 +2733,9 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
       </Box>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', color: '#fff' }}>
-          <CircularProgress color="inherit" />
-          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Loading cultivation data...</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+          <CircularProgress color="primary" />
+          <Typography variant="body1" sx={{ ml: 2 }}>Loading cultivation data...</Typography>
         </Box>
       ) : (
         <DndContext
@@ -2688,7 +2762,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
             }}
           >
             {stages.length === 0 ? (
-              <Typography variant="h6" sx={{ color: '#aaa', textAlign: 'center', width: '100%', mt: 5 }}>
+              <Typography variant="h6" sx={{ color: 'text.secondary', textAlign: 'center', width: '100%', mt: 5 }}>
                 No cultivation stages. Add one to get started!
               </Typography>
             ) : (
@@ -2745,9 +2819,9 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
       </Snackbar>
 
       <Dialog open={openStageDialog} onClose={handleCloseStageDialog} maxWidth="xs" fullWidth
-        PaperProps={{ sx: { bgcolor: '#283e51', color: '#fff', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-      <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff' }}>{editingStage ? DIALOG_TITLES.EDIT_STAGE : DIALOG_TITLES.CREATE_STAGE}</DialogTitle>
+      <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', borderBottom: '1px solid #e0e0e0' }}>{editingStage ? DIALOG_TITLES.EDIT_STAGE : DIALOG_TITLES.CREATE_STAGE}</DialogTitle>
         <form onSubmit={handleSaveStage}>
           <DialogContent sx={{ pt: '20px !important' }}>
             <TextField
@@ -2756,13 +2830,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
               onChange={e => setStageName(e.target.value)}
               fullWidth
               required
-              sx={{ mt: 1, mb: 2,
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              }}
+              sx={{ mt: 1, mb: 2 }}
               disabled={stageDialogLoading}
               helperText={!stageName.trim() && openStageDialog ? SNACK_MESSAGES.STAGE_NAME_REQUIRED : ''}
               error={!stageName.trim() && openStageDialog}
@@ -2770,8 +2838,8 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
               aria-label="Stage name"
             />
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseStageDialog} disabled={stageDialogLoading} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions sx={{ bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0', px: 3, py: 2 }}>
+            <Button onClick={handleCloseStageDialog} disabled={stageDialogLoading} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -2797,16 +2865,16 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
 
       {/* --- Export Events Dialog --- */}
       <Dialog open={openExportDialog} onClose={() => setOpenExportDialog(false)} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
           {DIALOG_TITLES.EXPORT_EVENTS}
-          <IconButton onClick={() => setOpenExportDialog(false)} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={() => setOpenExportDialog(false)} sx={{ color: '#64748b' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: '20px !important' }}>
-          <Typography variant="body2" sx={{ mb: 2, color: '#a0aec0' }}>
+          <Typography variant="body2" sx={{ mb: 2, color: '#64748b' }}>
             Select a date range to export traceability events for the current facility.
           </Typography>
           <TextField
@@ -2816,7 +2884,7 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
             onChange={e => setExportStartDate(e.target.value)}
             fullWidth
             InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+            sx={{ mb: 2 }}
             disabled={exportLoading}
           />
           <TextField
@@ -2826,19 +2894,19 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
             onChange={e => setExportEndDate(e.target.value)}
             fullWidth
             InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+            sx={{ mb: 2 }}
             disabled={exportLoading}
           />
         </DialogContent>
-        <DialogActions sx={{ bgcolor: '#3a506b' }}>
-          <Button onClick={() => setOpenExportDialog(false)} disabled={exportLoading} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+        <DialogActions sx={{ bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0', px: 3, py: 2 }}>
+          <Button onClick={() => setOpenExportDialog(false)} disabled={exportLoading} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
           <Button
             onClick={handleExportTraceabilityEvents}
             variant="contained"
             disabled={exportLoading || !selectedFacilityId || !exportStartDate || !exportEndDate}
             sx={{
-              bgcolor: '#007bff',
-              '&:hover': { bgcolor: '#0056b3' }
+              bgcolor: '#1976d2',
+              '&:hover': { bgcolor: '#1565c0' }
             }}
           >
             {exportLoading ? <CircularProgress size={24} /> : BUTTON_LABELS.EXPORT_EVENTS}

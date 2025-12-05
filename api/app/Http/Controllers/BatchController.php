@@ -84,6 +84,27 @@ class BatchController extends Controller
 
             $cultivationArea = CultivationArea::find($validated['cultivation_area_id']);
 
+            // Validar que las unidades no excedan la capacidad del área
+            if ($cultivationArea->capacity_units) {
+                $currentTotalUnits = Batch::where('cultivation_area_id', $validated['cultivation_area_id'])
+                    ->sum('current_units');
+                $newTotalUnits = $currentTotalUnits + $validated['current_units'];
+                
+                if ($newTotalUnits > $cultivationArea->capacity_units) {
+                    $availableUnits = $cultivationArea->capacity_units - $currentTotalUnits;
+                    return response()->json([
+                        'error' => 'Validation failed.',
+                        'message' => "Capacity exceeded. Area '{$cultivationArea->name}' has capacity of {$cultivationArea->capacity_units} units. Current usage: {$currentTotalUnits} units. Available: {$availableUnits} units. You requested: {$validated['current_units']} units.",
+                        'details' => [
+                            'capacity' => $cultivationArea->capacity_units,
+                            'current_usage' => $currentTotalUnits,
+                            'available' => $availableUnits,
+                            'requested' => $validated['current_units']
+                        ]
+                    ], 422);
+                }
+            }
+
             $batch = Batch::create(array_merge($validated, [
                 'tenant_id' => $tenantId,
                 'facility_id' => $cultivationArea->facility_id,

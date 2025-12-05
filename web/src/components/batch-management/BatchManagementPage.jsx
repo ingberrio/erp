@@ -22,7 +22,7 @@ import ConfirmationDialog from './ConfirmationDialog';
 
 function CustomNoRowsOverlay() {
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'white' }}>
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#64748b' }}>
       <Typography>No batches to display for the selected facility.</Typography>
     </Box>
   );
@@ -229,35 +229,46 @@ const BatchManagementPage = ({ tenantId, isAppReady, userFacilityId, isGlobalAdm
   ], [isFacilityOperator, cultivationAreas, stages, handleOpenDialog]);
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, minHeight: 'calc(100vh - 64px)', bgcolor: '#1a202c', color: '#fff' }}>
+    <Box sx={{ p: { xs: 2, sm: 3 }, minHeight: 'calc(100vh - 64px)', bgcolor: '#f8fafc', color: '#1a202c' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Batch Management</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600, color: '#1a202c' }}>Batch Management</Typography>
         {isGlobalAdmin && facilities.length > 0 && (
-            <FormControl sx={{ minWidth: 200, ml: 2, bgcolor: '#2d3748', borderRadius: 1 }}>
-                <InputLabel sx={{ color: '#e2e8f0' }}>Select Facility</InputLabel>
-                <Select value={selectedFacilityId} onChange={(e) => setSelectedFacilityId(e.target.value)} sx={{ color: '#e2e8f0', '.MuiSvgIcon-root': { color: '#e2e8f0' } }}>
+            <FormControl sx={{ minWidth: 200, ml: 2, bgcolor: '#fff', borderRadius: 1 }}>
+                <InputLabel>Select Facility</InputLabel>
+                <Select value={selectedFacilityId} onChange={(e) => setSelectedFacilityId(e.target.value)}>
                     {facilities.map(fac => <MenuItem key={fac.id} value={fac.id}>{fac.name}</MenuItem>)}
                 </Select>
             </FormControl>
         )}
         <Box sx={{ ml: 'auto' }}>
-            <Button startIcon={<AddIcon />} onClick={() => handleOpenDialog('ADD', null)}>{BUTTON_LABELS.ADD_NEW_BATCH}</Button>
-            <Button startIcon={<LocalShippingIcon />} onClick={() => handleOpenDialog('ADD_EXTERNAL', null)} sx={{ ml: 1 }}>{BUTTON_LABELS.REGISTER_EXTERNAL_BATCH}</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog('ADD', null)}>{BUTTON_LABELS.ADD_NEW_BATCH}</Button>
+            <Button variant="outlined" startIcon={<LocalShippingIcon />} onClick={() => handleOpenDialog('ADD_EXTERNAL', null)} sx={{ ml: 1 }}>{BUTTON_LABELS.REGISTER_EXTERNAL_BATCH}</Button>
         </Box>
       </Box>
 
       {isGlobalAdmin && !selectedFacilityId && !loading && (
-          <Alert severity="info" sx={{ bgcolor: '#3a506b', color: '#e2e8f0' }}>Please select a facility to view batches.</Alert>
+          <Alert severity="info">Please select a facility to view batches.</Alert>
       )}
 
-      <Box sx={{ height: 650, width: '100%' }}>
+      <Box sx={{ height: 650, width: '100%', 
+        '& .MuiDataGrid-root': { bgcolor: '#fff', border: '1px solid #e0e0e0', borderRadius: 2 },
+        '& .MuiDataGrid-columnHeaders': { bgcolor: '#1976d2', color: '#fff' },
+        '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 'bold', color: '#fff' },
+        '& .MuiDataGrid-columnHeader': { bgcolor: '#1976d2 !important' },
+        '& .MuiDataGrid-sortIcon': { color: '#fff !important' },
+        '& .MuiDataGrid-menuIconButton': { color: '#fff !important' },
+        '& .MuiDataGrid-columnSeparator': { color: 'rgba(255,255,255,0.3) !important' },
+        '& .MuiDataGrid-cell': { color: '#1a202c', borderColor: '#e0e0e0' },
+        '& .MuiDataGrid-row:hover': { bgcolor: '#f0f9ff' },
+        '& .MuiDataGrid-footerContainer': { bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0' },
+        '& .MuiTablePagination-root': { color: '#1a202c' },
+      }}>
          <DataGrid
             rows={batches}
             columns={columns}
             getRowId={(row) => row.id}
             loading={loading}
             components={{ Toolbar: CustomDataGridToolbar, NoRowsOverlay: CustomNoRowsOverlay }}
-            sx={{ bgcolor: '#2d3748', color: '#e2e8f0', border: 'none' }}
           />
       </Box>
       

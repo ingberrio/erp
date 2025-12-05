@@ -100,19 +100,19 @@ const ConfirmationDialog = ({ open, title, message, onConfirm, onCancel }) => {
       onClose={onCancel}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
-      PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+      PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
     >
-      <DialogTitle id="alert-dialog-title" sx={{ color: '#e2e8f0' }}>{title}</DialogTitle>
-      <DialogContent>
-        <Typography id="alert-dialog-description" sx={{ color: '#a0aec0' }}>
+      <DialogTitle id="alert-dialog-title" sx={{ color: '#1a202c', borderBottom: '1px solid #e0e0e0' }}>{title}</DialogTitle>
+      <DialogContent sx={{ pt: '20px !important' }}>
+        <Typography id="alert-dialog-description" sx={{ color: '#4a5568' }}>
           {message}
         </Typography>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel} sx={{ color: '#a0aec0' }}>
+      <DialogActions sx={{ bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0' }}>
+        <Button onClick={onCancel}>
           {BUTTON_LABELS.CANCEL}
         </Button>
-        <Button onClick={onConfirm} color="error" autoFocus sx={{ color: '#fc8181' }}>
+        <Button onClick={onConfirm} color="error" variant="contained" autoFocus>
           {BUTTON_LABELS.CONFIRM}
         </Button>
       </DialogActions>
@@ -131,9 +131,9 @@ function CustomDataGridToolbar() {
   return (
     <GridToolbarContainer
       sx={{
-        bgcolor: '#3a506b !important',
-        color: '#e2e8f0 !important',
-        borderBottom: '1px solid #4a5568',
+        bgcolor: '#fff !important',
+        color: '#1a202c !important',
+        borderBottom: '1px solid #e0e0e0',
         padding: '8px',
         borderRadius: '4px 4px 0 0',
         minHeight: '48px',
@@ -143,31 +143,31 @@ function CustomDataGridToolbar() {
         flexWrap: 'wrap',
         gap: '8px',
         '& .MuiButtonBase-root': {
-          color: '#e2e8f0 !important',
+          color: '#1976d2 !important',
           '&:hover': {
-            bgcolor: 'rgba(255,255,255,0.1)',
+            bgcolor: 'rgba(25,118,210,0.08)',
           },
         },
         '& .MuiInputBase-root': {
-          color: '#e2e8f0 !important',
+          color: '#1a202c !important',
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(255,255,255,0.5) !important',
+            borderColor: '#e0e0e0 !important',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(255,255,255,0.8) !important',
+            borderColor: '#1976d2 !important',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#fff !important',
+            borderColor: '#1976d2 !important',
           },
         },
         '& .MuiInputBase-input': {
-          color: '#e2e8f0 !important',
+          color: '#1a202c !important',
         },
         '& .MuiInputLabel-root': {
-          color: 'rgba(255,255,255,0.7) !important',
+          color: 'rgba(0,0,0,0.6) !important',
         },
         '& .MuiSvgIcon-root': {
-          color: '#e2e8f0 !important',
+          color: '#1a202c !important',
         },
       }}
     >
@@ -1692,17 +1692,17 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     return (
       <Box component="form" onSubmit={handleRegisterEvent} sx={{ mt: 2 }}>
         <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-          <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Affected Batch</InputLabel>
+          <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Affected Batch</InputLabel>
           <Select
             value={eventBatchId}
             onChange={(e) => setEventBatchId(e.target.value)}
             required
             sx={{
-              color: '#fff',
-              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-              '.MuiSvgIcon-root': { color: '#fff' }
+              color: '#1a202c',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+              '.MuiSvgIcon-root': { color: '#1a202c' }
             }}
-            MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
             disabled={eventDialogLoading}
           >
             <MenuItem value=""><em>Select Batch</em></MenuItem>
@@ -1714,23 +1714,23 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           </Select>
         </FormControl>
         <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-          <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Event Type</InputLabel>
+          <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Event Type</InputLabel>
           <Select
             value={currentEventType}
             onChange={(e) => setCurrentEventType(e.target.value)}
             required
             sx={{
-              color: '#fff',
-              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-              '.MuiSvgIcon-root': { color: '#fff' }
+              color: '#1a202c',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+              '.MuiSvgIcon-root': { color: '#1a202c' }
             }}
-            MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
             disabled={eventDialogLoading}
           >
             <MenuItem value=""><em>Select Event Type</em></MenuItem>
             {EVENT_TYPES.map((type) => (
               <MenuItem key={type.value} value={type.value}>
-                <ListItemIcon sx={{ color: '#fff', minWidth: 36 }}>
+                <ListItemIcon sx={{ color: '#1a202c', minWidth: 36 }}>
                   {type.icon && <type.icon fontSize="small" />}
                 </ListItemIcon>
                 <ListItemText primary={type.label} />
@@ -1745,7 +1745,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           fullWidth
           value={formatDate(new Date())}
           InputLabelProps={{ shrink: true }}
-          sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+          sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
           disabled={true}
         />
         {(currentEventType === 'movement') && (
@@ -1756,20 +1756,20 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               value={eventQuantity}
               onChange={(e) => setEventQuantity(e.target.value)}
               fullWidth
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Unit</InputLabel>
               <Select
                 value={eventUnit}
                 onChange={(e) => setEventUnit(e.target.value)}
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={eventDialogLoading}
               >
                 <MenuItem value=""><em>Select Unit</em></MenuItem>
@@ -1781,7 +1781,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               value={eventFromLocation}
               onChange={(e) => setEventFromLocation(e.target.value)}
               fullWidth
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <TextField
@@ -1790,7 +1790,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventToLocation(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
           </>
@@ -1802,7 +1802,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
             onChange={(e) => setEventMethod(e.target.value)}
             fullWidth
             required
-            sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+            sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
             disabled={eventDialogLoading}
           />
         )}
@@ -1815,7 +1815,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventQuantity(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <TextField
@@ -1823,7 +1823,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               value={eventNewBatchId}
               onChange={(e) => setEventNewBatchId(e.target.value)}
               fullWidth
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
           </>
@@ -1837,21 +1837,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventQuantity(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Sample Unit</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Sample Unit</InputLabel>
               <Select
                 value={eventUnit}
                 onChange={(e) => setEventUnit(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={eventDialogLoading}
               >
                 <MenuItem value=""><em>Select Unit</em></MenuItem>
@@ -1863,7 +1863,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               value={eventReason}
               onChange={(e) => setEventReason(e.target.value)}
               fullWidth
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
           </>
@@ -1877,21 +1877,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventQuantity(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit of Destruction</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Unit of Destruction</InputLabel>
               <Select
                 value={eventUnit}
                 onChange={(e) => setEventUnit(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={eventDialogLoading}
               >
                 <MenuItem value=""><em>Select Unit</em></MenuItem>
@@ -1904,7 +1904,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventMethod(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <TextField
@@ -1915,7 +1915,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventReason(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
           </>
@@ -1929,21 +1929,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventQuantity(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit of Loss/Theft</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Unit of Loss/Theft</InputLabel>
               <Select
                 value={eventUnit}
                 onChange={(e) => setEventUnit(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={eventDialogLoading}
               >
                 <MenuItem value=""><em>Select Unit</em></MenuItem>
@@ -1958,7 +1958,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventReason(e.target.value)}
               fullWidth
               required
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
           </>
@@ -1974,21 +1974,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               required
               inputProps={{ min: 0, step: "any" }}
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Unit</InputLabel>
               <Select
                 value={eventUnit}
                 onChange={(e) => setEventUnit(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={eventDialogLoading}
               >
                 <MenuItem value=""><em>Select Unit</em></MenuItem>
@@ -2003,7 +2003,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={(e) => setEventMethod(e.target.value)}
               required
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={eventDialogLoading}
             />
           </>
@@ -2018,29 +2018,29 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           value={eventDescription}
           onChange={(e) => setEventDescription(e.target.value)}
           InputLabelProps={{ shrink: true }}
-          sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+          sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
           disabled={eventDialogLoading}
         />
         <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-          <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Responsible User</InputLabel>
+          <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Responsible User</InputLabel>
           <Select
             value={eventResponsibleUserId}
             onChange={(e) => setEventResponsibleUserId(e.target.value)}
             required
             sx={{
-              color: '#fff',
-              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-              '.MuiSvgIcon-root': { color: '#fff' }
+              color: '#1a202c',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+              '.MuiSvgIcon-root': { color: '#1a202c' }
             }}
-            MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
             disabled={eventDialogLoading}
           >
             <MenuItem value=""><em>Select Responsible User</em></MenuItem>
             {users.map(user => <MenuItem key={user.id} value={user.id}>{user.name}</MenuItem>)}
           </Select>
         </FormControl>
-        <DialogActions sx={{ bgcolor: '#3a506b', mt: 2 }}>
-          <Button onClick={handleCloseRegisterEventDialog} disabled={eventDialogLoading} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+        <DialogActions sx={{ bgcolor: '#f8fafc', mt: 2 }}>
+          <Button onClick={handleCloseRegisterEventDialog} disabled={eventDialogLoading} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
           <Button
             type="submit"
             variant="contained"
@@ -2139,19 +2139,19 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     
     return [
       { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 150, renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+        <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
       )},
       { field: 'variety', headerName: 'Variety', width: 100, renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+        <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
       )},
       { field: 'product_type', headerName: 'Product Type', width: 150, renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value || 'N/A'}</Typography>
+        <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value || 'N/A'}</Typography>
       )},
       { field: 'current_units', headerName: 'Units', type: 'number', width: 95, renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value} {params.row?.units}</Typography>
+        <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value} {params.row?.units}</Typography>
       )},
       { field: 'end_type', headerName: 'End Type', width: 95, renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+        <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
       )},
       {
         field: 'projected_yield',
@@ -2159,7 +2159,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         type: 'number',
         width: 140,
         renderCell: (params) => (
-          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
+          <Typography variant="body2" sx={{ color: '#1a202c' }}>
             {params.value !== null && params.value !== undefined ? `${params.value} kg` : 'N/A'}
           </Typography>
         )
@@ -2169,7 +2169,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         headerName: 'Harvest Date',
         width: 120,
         renderCell: (params) => (
-          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
+          <Typography variant="body2" sx={{ color: '#1a202c' }}>
             {params.value ? new Date(params.value).toLocaleDateString() : 'N/A'}
           </Typography>
         )
@@ -2186,7 +2186,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           return area ? area.name : '';
         },
         renderCell: (params) => (
-          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+          <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
         )
       },
       {
@@ -2205,7 +2205,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           return 'N/A';
         },
         renderCell: (params) => (
-          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value}</Typography>
+          <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
         )
       },
       {
@@ -2214,7 +2214,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         width: 100,
         type: 'boolean',
         renderCell: (params) => (
-          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>{params.value ? 'Yes' : 'No'}</Typography>
+          <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value ? 'Yes' : 'No'}</Typography>
         )
       },
       {
@@ -2222,7 +2222,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         headerName: 'Sub-location',
         width: 140,
         renderCell: (params) => (
-          <Typography variant="body2" sx={{ color: '#e2e8f0' }}>
+          <Typography variant="body2" sx={{ color: '#1a202c' }}>
             {params.value || '—'}
           </Typography>
         )
@@ -2323,16 +2323,16 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     <Box sx={{
       p: { xs: 2, sm: 3 },
       minHeight: 'calc(100vh - 64px)',
-      bgcolor: '#1a202c',
-      color: '#fff',
+      bgcolor: '#f8fafc',
+      color: '#1a202c',
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <InventoryIcon sx={{ fontSize: 32, color: '#fff', mr: 1 }} />
-        <Typography variant="h5" sx={{ fontWeight: 600, color: '#fff' }}>
+        <InventoryIcon sx={{ fontSize: 32, color: '#1976d2', mr: 1 }} />
+        <Typography variant="h5" sx={{ fontWeight: 600, color: '#1a202c' }}>
           Batch Management
         </Typography>
-        <FormControl sx={{ minWidth: 200, mr: 1 }}>
-          <InputLabel id="facility-select-label" sx={{ color: 'rgba(255,255,255,0.7)' }}>Facility</InputLabel>
+        <FormControl sx={{ minWidth: 200, mr: 1, bgcolor: '#fff', borderRadius: 1 }}>
+          <InputLabel id="facility-select-label" sx={{ color: 'rgba(0,0,0,0.6)' }}>Facility</InputLabel>
           <Select
             labelId="facility-select-label"
             value={selectedFacilityId}
@@ -2342,18 +2342,12 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
             }}
             disabled={loading || facilities.length === 0 || isFacilityOperator}
             sx={{
-              color: '#fff',
-              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              '.MuiSvgIcon-root': { color: '#fff' },
-            }}
-            MenuProps={{
-              PaperProps: {
-                sx: { bgcolor: '#004060', color: '#fff' },
-              },
+              color: '#1a202c',
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+              '.MuiSvgIcon-root': { color: '#1a202c' },
             }}
           >
+          
             {facilities.length === 0 && !loading ? (
               <MenuItem value="" sx={{ color: '#aaa' }}>
                 <em>No facilities available</em>
@@ -2397,22 +2391,22 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         </Button>
       </Box>
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400, color: '#fff' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400, color: '#1a202c' }}>
           <CircularProgress color="inherit" />
-          <Typography variant="body1" sx={{ ml: 2, color: '#fff' }}>Loading batches...</Typography>
+          <Typography variant="body1" sx={{ ml: 2, color: '#1a202c' }}>Loading batches...</Typography>
         </Box>
       ) : (
         <Box sx={{ height: 'auto', minHeight: 400, width: '100%' }}>
           {filteredAndCleanedBatches.length === 0 && selectedFacilityId ? (
-            <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', width: '100%', mt: 5 }}>
+            <Typography variant="h6" sx={{ color: '#64748b', textAlign: 'center', width: '100%', mt: 5 }}>
               No batches available for this facility.
             </Typography>
           ) : filteredAndCleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length > 0 ? (
-            <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', width: '100%', mt: 5 }}>
+            <Typography variant="h6" sx={{ color: '#64748b', textAlign: 'center', width: '100%', mt: 5 }}>
               As Super Admin, please select a facility with a valid Tenant ID to view batches.
             </Typography>
           ) : filteredAndCleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length === 0 ? (
-            <Typography variant="h6" sx={{ color: '#a0aec0', textAlign: 'center', width: '100%', mt: 5 }}>
+            <Typography variant="h6" sx={{ color: '#64748b', textAlign: 'center', width: '100%', mt: 5 }}>
               As Super Admin, no facilities are registered in the system. Please create a facility.
             </Typography>
           ) : (
@@ -2430,70 +2424,68 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               disableRowSelectionOnClick
               slots={{ toolbar: CustomDataGridToolbar }}
               sx={{
-                bgcolor: '#2d3748',
-                color: '#e2e8f0',
-                border: 'none',
+                bgcolor: '#fff',
+                color: '#1a202c',
+                border: '1px solid #e0e0e0',
+                borderRadius: 2,
                 minHeight: 350,
                 '& .MuiDataGrid-columnHeaders': {
-                  bgcolor: '#3a506b',
-                  borderBottom: '1px solid #4a5568',
+                  bgcolor: '#1976d2',
+                  borderBottom: '1px solid #e0e0e0',
                 },
                 '& .MuiDataGrid-columnHeaderTitle': {
                   fontWeight: 'bold',
-                  color: '#4a5568 !important',
+                  color: '#fff !important',
+                },
+                '& .MuiDataGrid-columnHeader': {
+                  bgcolor: '#1976d2 !important',
                 },
                 '& .MuiDataGrid-iconButtonContainer': {
-                  color: '#e2e8f0 !important',
+                  color: '#fff !important',
                 },
                 '& .MuiDataGrid-sortIcon': {
-                  color: '#4cb051 !important',
+                  color: '#fff !important',
+                },
+                '& .MuiDataGrid-menuIconButton': {
+                  color: '#fff !important',
+                },
+                '& .MuiDataGrid-columnSeparator': {
+                  color: 'rgba(0,0,0,0.12) !important',
                 },
                 '& .MuiDataGrid-cell': {
-                  borderColor: 'rgba(255,255,255,0.1)',
-                  color: '#e2e8f0',
+                  borderColor: '#e0e0e0',
+                  color: '#1a202c',
                 },
                 '& .MuiDataGrid-row': {
-                  '&:nth-of-type(odd)': {
-                    backgroundColor: 'rgba(0,0,0,0.05)',
-                  },
                   '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    backgroundColor: '#f0f9ff',
                   },
                 },
                 '& .MuiDataGrid-footerContainer': {
-                  bgcolor: '#3a506b',
-                  color: '#fff',
-                  borderTop: '1px solid #4a5568',
+                  bgcolor: '#f8fafc',
+                  color: '#1a202c',
+                  borderTop: '1px solid #e0e0e0',
                 },
                 '& .MuiTablePagination-root': {
-                  color: '#e2e8f0',
+                  color: '#1a202c',
                 },
                 '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                  color: '#e2e8f0 !important',
+                  color: '#1a202c !important',
                 },
                 '& .MuiTablePagination-select': {
-                  color: '#e2e8f0 !important',
-                  '.MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(255,255,255,0.5) !important',
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(255,255,255,0.8) !important',
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#fff !important',
-                  },
+                  color: '#1a202c !important',
                 },
                 '& .MuiTablePagination-actions .MuiButtonBase-root': {
-                  color: '#e2e8f0 !important',
+                  color: '#1a202c !important',
                 },
                 '& .MuiSvgIcon-root': {
-                  color: '#4cb051',
+                  color: '#64748b',
                 },
                 '& .MuiDataGrid-overlay': {
-                  bgcolor: '#2d3748',
+                  bgcolor: '#fff',
                 },
                 '& .MuiCircularProgress-root': {
-                  color: '#4cb051',
+                  color: '#1976d2',
                 },
               }}
             />
@@ -2502,11 +2494,11 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       )}
       {/* --- Add/Edit Batch Dialog --- */}
       <Dialog open={openBatchDialog} onClose={handleCloseBatchDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
           {editingBatch ? DIALOG_TITLES.EDIT_BATCH : DIALOG_TITLES.ADD_BATCH}
-          <IconButton onClick={handleCloseBatchDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseBatchDialog} sx={{ color: '#64748b' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
@@ -2531,7 +2523,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               helperText={validationErrors.batchName}
               inputProps={{ maxLength: SECURITY_RULES.BATCH_NAME_MAX_LENGTH }}
               InputLabelProps={{ shrink: true }}
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
@@ -2559,21 +2551,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                   max: SECURITY_RULES.MAX_QUANTITY
                 }}
                 InputLabelProps={{ shrink: true }}
-                sx={{ '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+                sx={{ '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               />
               <FormControl margin="dense" sx={{ minWidth: 120 }}>
-                <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+                <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Unit</InputLabel>
                 <Select
                   value={batchUnit}
                   onChange={e => setBatchUnit(e.target.value)}
                   required
                   sx={{
-                    color: '#fff',
-                    '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                    '.MuiSvgIcon-root': { color: '#fff' }
+                    color: '#1a202c',
+                    '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                    '.MuiSvgIcon-root': { color: '#1a202c' }
                   }}
-                  MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                  MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                   disabled={batchDialogLoading || isFacilityOperator}
                 >
                   <MenuItem value=""><em>Select Unit</em></MenuItem>
@@ -2582,17 +2574,17 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               </FormControl>
             </Box>
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>End Type</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>End Type</InputLabel>
               <Select
                 value={batchEndType}
                 onChange={e => setBatchEndType(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Type</em></MenuItem>
@@ -2616,21 +2608,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               helperText={validationErrors.batchVariety}
               inputProps={{ maxLength: SECURITY_RULES.VARIETY_MAX_LENGTH }}
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Product Type</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Product Type</InputLabel>
               <Select
                 value={batchProductType}
                 onChange={e => setBatchProductType(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Product Type</em></MenuItem>
@@ -2640,7 +2632,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               </Select>
             </FormControl>
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Origin Type</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Origin Type</InputLabel>
               <Select
                 value={batchOriginType}
                 onChange={e => {
@@ -2649,11 +2641,11 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 }}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Origin</em></MenuItem>
@@ -2670,7 +2662,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 fullWidth
                 multiline
                 rows={2}
-                sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+                sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               />
             )}
@@ -2682,7 +2674,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               fullWidth
               inputProps={{ step: "any" }}
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
             <TextField
@@ -2692,21 +2684,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onChange={e => setBatchAdvanceToHarvestingOn(e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Cultivation Area</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Cultivation Area</InputLabel>
               <Select
                 value={batchCultivationAreaId}
                 onChange={e => setBatchCultivationAreaId(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={batchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Area</em></MenuItem>
@@ -2726,7 +2718,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               value={batchSubLocation}
               onChange={e => setBatchSubLocation(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
             <FormControlLabel
@@ -2735,7 +2727,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                   checked={isPackaged}
                   onChange={(e) => setIsPackaged(e.target.checked)}
                   sx={{
-                    color: 'rgba(255,255,255,0.7)',
+                    color: 'rgba(0,0,0,0.6)',
                     '&.Mui-checked': {
                       color: '#4CAF50',
                     },
@@ -2743,12 +2735,12 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                   disabled={batchDialogLoading || isFacilityOperator}
                 />
               }
-              label={<Typography sx={{ color: '#e2e8f0' }}>Is Packaged?</Typography>}
+              label={<Typography sx={{ color: '#1a202c' }}>Is Packaged?</Typography>}
               sx={{ mb: 2 }}
             />
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseBatchDialog} disabled={batchDialogLoading || isFacilityOperator} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions sx={{ bgcolor: '#f8fafc' }}>
+            <Button onClick={handleCloseBatchDialog} disabled={batchDialogLoading || isFacilityOperator} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -2768,11 +2760,11 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       </Dialog>
       {/* --- Batch Detail Dialog (with Traceability) --- */}
       <Dialog open={openBatchDetailDialog} onClose={handleCloseBatchDetailDialog} maxWidth="lg" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2, minHeight: '80vh' } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2, minHeight: '80vh' } }}
       >
         <DialogTitle sx={{
-          bgcolor: '#3a506b',
-          color: '#fff',
+          bgcolor: '#f8fafc',
+          color: '#1a202c',
           display: 'flex',
           flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
@@ -2784,10 +2776,10 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           flexWrap: 'wrap',
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff', mr: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c', mr: 1 }}>
               {DIALOG_TITLES.BATCH_DETAIL} {currentBatchDetail?.name}
             </Typography>
-            <IconButton onClick={handleCloseBatchDetailDialog} sx={{ color: '#e2e8f0', ml: 'auto' }}>
+            <IconButton onClick={handleCloseBatchDetailDialog} sx={{ color: '#1a202c', ml: 'auto' }}>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -2803,7 +2795,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               variant="contained"
               startIcon={<TrendingUpIcon />}
               onClick={() => handleOpenRegisterEventDialog('movement', currentBatchDetail.id)}
-              sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
               Register Movement
@@ -2812,7 +2804,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               variant="contained"
               startIcon={<EcoIcon />}
               onClick={() => handleOpenRegisterEventDialog('cultivation', currentBatchDetail.id)}
-              sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
               Register Cultivation Event
@@ -2821,7 +2813,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               variant="contained"
               startIcon={<HarvestIcon />}
               onClick={() => handleOpenRegisterEventDialog('harvest', currentBatchDetail.id)}
-              sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
               Register Harvest
@@ -2830,7 +2822,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               variant="contained"
               startIcon={<ScienceIcon />}
               onClick={() => handleOpenRegisterEventDialog('sampling', currentBatchDetail.id)}
-              sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
               Register Sampling
@@ -2839,7 +2831,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               variant="contained"
               startIcon={<DeleteForeverIcon />}
               onClick={() => handleOpenRegisterEventDialog('destruction', currentBatchDetail.id)}
-              sx={{ bgcolor: '#4a5568', color: '#e2e8f0', '&:hover': { bgcolor: '#66748c' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
               Register Destruction
@@ -2850,7 +2842,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onClick={() => handleOpenRegisterEventDialog('loss_theft', currentBatchDetail.id)}
               sx={{
                 bgcolor: '#d32f2f',
-                color: '#fff',
+                color: '#1a202c',
                 '&:hover': { bgcolor: '#b71c1c' },
                 borderRadius: 1,
                 textTransform: 'none',
@@ -2870,7 +2862,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               onClick={() => handleOpenAdjustmentDialog(currentBatchDetail)}
               sx={{
                 bgcolor: '#4CAF50',
-                color: '#fff',
+                color: '#1a202c',
                 '&:hover': { bgcolor: '#43A047' },
                 borderRadius: 1,
                 textTransform: 'none',
@@ -2892,42 +2884,42 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           gap: { xs: 3, md: 4 },
         }}>
           <Box sx={{ flexGrow: 1, minWidth: { md: '40%' } }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0' }}>General Information</Typography>
-            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, color: '#e2e8f0' }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#1a202c' }}>General Information</Typography>
+            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, color: '#1a202c' }}>
               Variety: {currentBatchDetail?.variety || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               Product Type: {currentBatchDetail?.product_type || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               Current Units: {currentBatchDetail?.current_units} {currentBatchDetail?.units || 'g'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               End Type: {currentBatchDetail?.end_type || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               Projected Yield: {currentBatchDetail?.projected_yield || 'N/A'}
             </Typography>
             {currentBatchDetail?.advance_to_harvesting_on && (
-              <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
                 Harvest Date: {new Date(currentBatchDetail.advance_to_harvesting_on).toLocaleDateString()}
               </Typography>
             )}
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               Cultivation Area: {cultivationAreas.find(area => area.id === currentBatchDetail?.cultivation_area_id)?.name || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               Current Stage: {stages.find(s => s.id === cultivationAreas.find(area => area.id === currentBatchDetail?.cultivation_area_id)?.current_stage_id)?.name || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               Packaged: {currentBatchDetail?.is_packaged ? 'Yes' : 'No'}
             </Typography>
             {/* NEW: Mostrar sub_location */}
-            <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               Sub-location: {currentBatchDetail?.sub_location || '—'}
             </Typography>
-            <Divider sx={{ my: 2, borderColor: '#4a5568' }} />
-            <Typography variant="body2" sx={{ color: '#e2e8f0', fontWeight: 'bold' }}>
+            <Divider sx={{ my: 2, borderColor: '#e0e0e0' }} />
+            <Typography variant="body2" sx={{ color: '#1a202c', fontWeight: 'bold' }}>
               Origin Type: {(() => {
                 switch (currentBatchDetail?.origin_type) {
                   case 'internal': return 'Internal';
@@ -2937,32 +2929,32 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               })()}
             </Typography>
             {currentBatchDetail?.origin_details && (
-              <Typography variant="body2" sx={{ color: '#a0aec0' }}>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
                 Origin Details: {currentBatchDetail.origin_details}
               </Typography>
             )}
           </Box>
           <Box sx={{ width: { md: '60%' }, flexShrink: 0, ml: { md: 4 } }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0', display: 'flex', alignItems: 'center' }}>
-              <HistoryIcon sx={{ mr: 1, color: '#a0aec0' }} />
+            <Typography variant="h6" sx={{ mb: 2, color: '#1a202c', display: 'flex', alignItems: 'center' }}>
+              <HistoryIcon sx={{ mr: 1, color: '#64748b' }} />
               Traceability Events
             </Typography>
             <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>View Events for</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>View Events for</InputLabel>
               <Select
                 value={selectedBatchForTraceability}
                 onChange={(e) => setSelectedBatchForTraceability(e.target.value)}
                 label="View Events for"
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-                  '.MuiSvgIcon-root': { color: '#fff' },
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.87)' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1976d2' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' },
                 }}
                 MenuProps={{
                   PaperProps: {
-                    sx: { bgcolor: '#004060', color: '#fff' },
+                    sx: { bgcolor: '#fff', color: '#1a202c' },
                   },
                 }}
               >
@@ -2970,32 +2962,32 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 {currentBatchDetail && <MenuItem value={currentBatchDetail.id}>{currentBatchDetail.name}</MenuItem>}
               </Select>
             </FormControl>
-            <Box sx={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #4a5568', borderRadius: 1, mb: 2 }}>
+            <Box sx={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, mb: 2 }}>
               <List disablePadding>
-                <ListItem sx={{ bgcolor: '#3a506b', py: 1, borderBottom: '1px solid #4a5568' }}>
+                <ListItem sx={{ bgcolor: '#f8fafc', py: 1, borderBottom: '1px solid #e0e0e0' }}>
                   <Grid container spacing={1}>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Date/Time</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Event Type</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Batch</Typography></Grid>
-                    <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Details</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#fff' }}>Performed By</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Date/Time</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Event Type</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Batch</Typography></Grid>
+                    <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Details</Typography></Grid>
+                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Performed By</Typography></Grid>
                   </Grid>
                 </ListItem>
                 {traceabilityEvents.length > 0 ? (
                   traceabilityEvents.map(event => (
                     <ListItem key={event.id} sx={{ py: 1,  '&:last-child': { borderBottom: 'none' } }}>
                       <Grid container spacing={1}>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{new Date(event.created_at).toLocaleDateString()} {new Date(event.created_at).toLocaleTimeString()}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{event.event_type}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#e2e8f0', fontSize: 12 }}>{event.batch_name || event.batch_id}</Typography></Grid>
-                        <Grid item xs={4}><Typography variant="body2" sx={{ color: '#a0aec0', fontSize: 12 }}>{event.description || event.method || event.reason || 'N/A'}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#a0aec0', fontSize: 12 }}>{event.user_name || event.user_id}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#1a202c', fontSize: 12 }}>{new Date(event.created_at).toLocaleDateString()} {new Date(event.created_at).toLocaleTimeString()}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#1a202c', fontSize: 12 }}>{event.event_type}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#1a202c', fontSize: 12 }}>{event.batch_name || event.batch_id}</Typography></Grid>
+                        <Grid item xs={4}><Typography variant="body2" sx={{ color: '#64748b', fontSize: 12 }}>{event.description || event.method || event.reason || 'N/A'}</Typography></Grid>
+                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#64748b', fontSize: 12 }}>{event.user_name || event.user_id}</Typography></Grid>
                       </Grid>
                     </ListItem>
                   ))
                 ) : (
                   <ListItem>
-                    <ListItemText primary="No traceability events registered for this batch." primaryTypographyProps={{ sx: { color: '#a0aec0', textAlign: 'center', py: 2 } }} />
+                    <ListItemText primary="No traceability events registered for this batch." primaryTypographyProps={{ sx: { color: '#64748b', textAlign: 'center', py: 2 } }} />
                   </ListItem>
                 )}
               </List>
@@ -3005,11 +2997,11 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       </Dialog>
       {/* --- Global Event Registration Dialog --- */}
       <Dialog open={openRegisterEventDialog} onClose={handleCloseRegisterEventDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#f8fafc', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {DIALOG_TITLES.REGISTER_EVENT}
-          <IconButton onClick={handleCloseRegisterEventDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseRegisterEventDialog} sx={{ color: '#1a202c' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
@@ -3019,17 +3011,17 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       </Dialog>
       {/* --- Split Batch Dialog --- */}
       <Dialog open={openSplitBatchDialog} onClose={handleCloseSplitBatchDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#f8fafc', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {DIALOG_TITLES.SPLIT_BATCH} {batchToSplit?.name}
-          <IconButton onClick={handleCloseSplitBatchDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseSplitBatchDialog} sx={{ color: '#1a202c' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <form onSubmit={handleSplitBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
-            <Typography variant="body1" sx={{ mb: 2, color: '#e2e8f0' }}>
+            <Typography variant="body1" sx={{ mb: 2, color: '#1a202c' }}>
               Current units of batch: {batchToSplit?.current_units || 0} {batchToSplit?.units || 'g'}
             </Typography>
             <TextField
@@ -3040,7 +3032,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               fullWidth
               required
               inputProps={{ min: 0.01, max: (batchToSplit?.current_units || 0) - 0.01, step: "any" }}
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={splitBatchDialogLoading || isFacilityOperator}
             />
             <TextField
@@ -3050,21 +3042,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               fullWidth
               required
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={splitBatchDialogLoading || isFacilityOperator}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>New Batch Product Type</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>New Batch Product Type</InputLabel>
               <Select
                 value={newSplitBatchProductType}
                 onChange={e => setNewSplitBatchProductType(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={splitBatchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Product Type</em></MenuItem>
@@ -3074,17 +3066,17 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               </Select>
             </FormControl>
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Destination Cultivation Area</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Destination Cultivation Area</InputLabel>
               <Select
                 value={splitBatchCultivationAreaId}
                 onChange={e => setSplitBatchCultivationAreaId(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={splitBatchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Area</em></MenuItem>
@@ -3096,8 +3088,8 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               </Select>
             </FormControl>
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseSplitBatchDialog} disabled={splitBatchDialogLoading || isFacilityOperator} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions sx={{ bgcolor: '#f8fafc' }}>
+            <Button onClick={handleCloseSplitBatchDialog} disabled={splitBatchDialogLoading || isFacilityOperator} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -3114,17 +3106,17 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       </Dialog>
       {/* --- Process Batch Dialog --- */}
       <Dialog open={openProcessBatchDialog} onClose={handleCloseProcessBatchDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#f8fafc', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {DIALOG_TITLES.PROCESS_BATCH} {batchToProcess?.name}
-          <IconButton onClick={handleCloseProcessBatchDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseProcessBatchDialog} sx={{ color: '#1a202c' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <form onSubmit={handleProcessBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
-            <Typography variant="body1" sx={{ mb: 2, color: '#e2e8f0' }}>
+            <Typography variant="body1" sx={{ mb: 2, color: '#1a202c' }}>
               Current units of batch: {batchToProcess?.current_units || 0} {batchToProcess?.units || 'g'}
             </Typography>
             <TextField
@@ -3135,22 +3127,22 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               fullWidth
               required
               inputProps={{ min: 0, step: "any" }}
-              InputLabelProps={{ shrink: true, sx: { color: 'rgba(255,255,255,0.7)' } }}
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              InputLabelProps={{ shrink: true, sx: { color: 'rgba(0,0,0,0.6)' } }}
+              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={processBatchDialogLoading || isFacilityOperator}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Processing Method</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Processing Method</InputLabel>
               <Select
                 value={processMethod}
                 onChange={e => setProcessMethod(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={processBatchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Method</em></MenuItem>
@@ -3162,17 +3154,17 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               </Select>
             </FormControl>
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>New Product Type</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>New Product Type</InputLabel>
               <Select
                 value={newProductType}
                 onChange={e => setNewProductType(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={processBatchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select New Product Type</em></MenuItem>
@@ -3189,12 +3181,12 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               multiline
               rows={3}
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={processBatchDialogLoading || isFacilityOperator}
             />
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseProcessBatchDialog} disabled={processBatchDialogLoading || isFacilityOperator} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions sx={{ bgcolor: '#f8fafc' }}>
+            <Button onClick={handleCloseProcessBatchDialog} disabled={processBatchDialogLoading || isFacilityOperator} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -3211,11 +3203,11 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       </Dialog>
       {/* --- External Batch Registration Dialog --- */}
       <Dialog open={openExternalBatchDialog} onClose={handleCloseExternalBatchDialog} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ bgcolor: '#f8fafc', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {DIALOG_TITLES.REGISTER_EXTERNAL_BATCH}
-          <IconButton onClick={handleCloseExternalBatchDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseExternalBatchDialog} sx={{ color: '#1a202c' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
@@ -3228,7 +3220,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               fullWidth
               required
               InputLabelProps={{ shrink: true }}
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={externalBatchDialogLoading || isFacilityOperator}
             />
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
@@ -3241,21 +3233,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 required
                 inputProps={{ step: "any" }}
                 InputLabelProps={{ shrink: true }}
-                sx={{ '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+                sx={{ '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
                 disabled={externalBatchDialogLoading || isFacilityOperator}
               />
               <FormControl margin="dense" sx={{ minWidth: 120 }}>
-                <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+                <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Unit</InputLabel>
                 <Select
                   value={externalBatchUnit}
                   onChange={e => setExternalBatchUnit(e.target.value)}
                   required
                   sx={{
-                    color: '#fff',
-                    '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                    '.MuiSvgIcon-root': { color: '#fff' }
+                    color: '#1a202c',
+                    '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                    '.MuiSvgIcon-root': { color: '#1a202c' }
                   }}
-                  MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                  MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                   disabled={externalBatchDialogLoading || isFacilityOperator}
                 >
                   <MenuItem value=""><em>Select Unit</em></MenuItem>
@@ -3264,17 +3256,17 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               </FormControl>
             </Box>
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Product Type</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Product Type</InputLabel>
               <Select
                 value={externalBatchProductType}
                 onChange={e => setExternalBatchProductType(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={externalBatchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Product Type</em></MenuItem>
@@ -3290,7 +3282,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               fullWidth
               required
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={externalBatchDialogLoading || isFacilityOperator}
             />
             <TextField
@@ -3303,21 +3295,21 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               rows={2}
               required
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={externalBatchDialogLoading || isFacilityOperator}
             />
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Receiving Cultivation Area</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Receiving Cultivation Area</InputLabel>
               <Select
                 value={externalBatchCultivationAreaId}
                 onChange={e => setExternalBatchCultivationAreaId(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={externalBatchDialogLoading || isFacilityOperator}
               >
                 <MenuItem value=""><em>Select Area</em></MenuItem>
@@ -3329,8 +3321,8 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               </Select>
             </FormControl>
           </DialogContent>
-          <DialogActions sx={{ bgcolor: '#3a506b' }}>
-            <Button onClick={handleCloseExternalBatchDialog} disabled={externalBatchDialogLoading || isFacilityOperator} sx={{ color: '#a0aec0' }}>{BUTTON_LABELS.CANCEL}</Button>
+          <DialogActions sx={{ bgcolor: '#f8fafc' }}>
+            <Button onClick={handleCloseExternalBatchDialog} disabled={externalBatchDialogLoading || isFacilityOperator} sx={{ color: '#64748b' }}>{BUTTON_LABELS.CANCEL}</Button>
             <Button
               type="submit"
               variant="contained"
@@ -3352,26 +3344,26 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         onClose={handleCloseAdjustmentDialog}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}
+        PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
       >
         <DialogTitle sx={{ 
-          bgcolor: '#3a506b', 
-          color: '#fff', 
+          bgcolor: '#f8fafc', 
+          color: '#1a202c', 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center' 
         }}>
           {DIALOG_TITLES.INVENTORY_ADJUSTMENT}
-          <IconButton onClick={handleCloseAdjustmentDialog} sx={{ color: '#e2e8f0' }}>
+          <IconButton onClick={handleCloseAdjustmentDialog} sx={{ color: '#1a202c' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: '20px !important' }}>
           <Box component="form" onSubmit={handleRegisterAdjustment}>
-            <Typography sx={{ mb: 2, color: '#e2e8f0' }}>
+            <Typography sx={{ mb: 2, color: '#1a202c' }}>
               Batch: <b>{selectedBatchForAdjustment?.name || ''}</b>
             </Typography>
-            <Typography sx={{ mb: 2, color: '#a0aec0' }}>
+            <Typography sx={{ mb: 2, color: '#64748b' }}>
               Current Units: {selectedBatchForAdjustment?.current_units} {selectedBatchForAdjustment?.units}
             </Typography>
             <TextField
@@ -3380,24 +3372,24 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               fullWidth
               value={adjustmentQuantity}
               onChange={e => setAdjustmentQuantity(e.target.value)}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={adjustmentDialogLoading}
               required
               inputProps={{ step: "any" }}
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Unit</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Unit</InputLabel>
               <Select
                 value={adjustmentUnit}
                 onChange={e => setAdjustmentUnit(e.target.value)}
                 disabled={adjustmentDialogLoading}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
               >
                 {UNIT_OPTIONS.map(unit => (
                   <MenuItem key={unit} value={unit}>{unit}</MenuItem>
@@ -3413,20 +3405,20 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               required
               multiline
               rows={3}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } }}
+              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Responsible User</InputLabel>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Responsible User</InputLabel>
               <Select
                 value={eventResponsibleUserId}
                 onChange={e => setEventResponsibleUserId(e.target.value)}
                 required
                 sx={{
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '.MuiSvgIcon-root': { color: '#fff' }
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
                 }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
                 disabled={adjustmentDialogLoading}
               >
                 <MenuItem value=""><em>Select Responsible User</em></MenuItem>
@@ -3435,8 +3427,8 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
             </FormControl>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ bgcolor: '#3a506b' }}>
-          <Button onClick={handleCloseAdjustmentDialog} color="secondary" sx={{ color: '#a0aec0' }}>
+        <DialogActions sx={{ bgcolor: '#f8fafc' }}>
+          <Button onClick={handleCloseAdjustmentDialog} color="secondary" sx={{ color: '#64748b' }}>
             {BUTTON_LABELS.CANCEL}
           </Button>
           <Button

@@ -99,47 +99,41 @@ const TraceabilityEventsGrid = ({
   // LOG: Filas enviadas al DataGrid
   console.log('[TraceabilityEventsGrid] Filas para DataGrid:', rows);
 
-  // Columnas adaptadas para tus datos reales
+  // Columnas adaptadas para tus datos reales con headerClassName para estilos
   const columns = [
-    { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'batch_id', headerName: 'Batch', width: 90 },
-    { field: 'area_id', headerName: 'Area', width: 90 },
-    { field: 'event_type', headerName: 'Event Type', width: 120 },
-    { field: 'method', headerName: 'Method', width: 120 },
-    { field: 'from_location', headerName: 'Origin', width: 120 }, // Nueva columna para origen
-    { field: 'to_location', headerName: 'Destination', width: 120 },   // Nueva columna para destino
-    { field: 'quantity', headerName: 'Quantity', width: 100 },     // Cantidad del evento
-    { field: 'unit', headerName: 'Unit', width: 80 },            // Unidad de la cantidad
-    { field: 'description', headerName: 'Description', flex: 1, minWidth: 200 }, // Descripción del evento
-    { field: 'created_at', headerName: 'Date/Time', width: 180 },
-    { field: 'user_name', headerName: 'Recorded by', width: 100 }, // Cambiado a user_id si el backend no devuelve user_name
+    { field: 'id', headerName: 'ID', width: 70, headerClassName: 'super-app-theme--header' },
+    { field: 'batch_id', headerName: 'Batch', width: 90, headerClassName: 'super-app-theme--header' },
+    { field: 'area_id', headerName: 'Area', width: 90, headerClassName: 'super-app-theme--header' },
+    { field: 'event_type', headerName: 'Event Type', width: 120, headerClassName: 'super-app-theme--header' },
+    { field: 'method', headerName: 'Method', width: 120, headerClassName: 'super-app-theme--header' },
+    { field: 'from_location', headerName: 'Origin', width: 120, headerClassName: 'super-app-theme--header' },
+    { field: 'to_location', headerName: 'Destination', width: 120, headerClassName: 'super-app-theme--header' },
+    { field: 'quantity', headerName: 'Quantity', width: 100, headerClassName: 'super-app-theme--header' },
+    { field: 'unit', headerName: 'Unit', width: 80, headerClassName: 'super-app-theme--header' },
+    { field: 'description', headerName: 'Description', flex: 1, minWidth: 200, headerClassName: 'super-app-theme--header' },
+    { field: 'created_at', headerName: 'Date/Time', width: 180, headerClassName: 'super-app-theme--header' },
+    { field: 'user_name', headerName: 'Recorded by', width: 100, headerClassName: 'super-app-theme--header' },
   ];
 
   return (
     <Box sx={{ width: '100%', flexShrink: 0 }}>
-      <Typography variant="h6" sx={{ mb: 2, color: '#e2e8f0', display: 'flex', alignItems: 'center' }}>
-        <HistoryIcon sx={{ mr: 1, color: '#a0aec0' }} />
+      <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 500, display: 'flex', alignItems: 'center' }}>
+        <HistoryIcon sx={{ mr: 1, color: '#1976d2' }} />
         Traceability Batch
       </Typography>
 
       {/* Batch filter for traceability */}
       <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-        <InputLabel sx={{ color: '#fff' }}>See events</InputLabel>
+        <InputLabel>See events</InputLabel>
         <Select
           value={selectedBatchForTraceability}
           onChange={(e) => setSelectedBatchForTraceability(e.target.value)}
                     label="See Events For"
           sx={{
-            color: '#fff',
-            '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-            '.MuiSvgIcon-root': { color: '#fff' },
-          }}
-          MenuProps={{
-            PaperProps: {
-              sx: { bgcolor: '#004060', color: '#fff' },
-            },
+            color: '#1a202c',
+            '.MuiOutlinedInput-notchedOutline': { borderColor: '#e0e0e0' },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#1976d2' },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1976d2' },
           }}
         >
           <MenuItem value="all">All batches</MenuItem>
@@ -150,7 +144,18 @@ const TraceabilityEventsGrid = ({
       </FormControl>
 
       {/* DataGrid for traceability events */}
-      <Box sx={{ height: 400, width: '100%', bgcolor: '#2d3748', borderRadius: 2 }}>
+      <Box sx={{ 
+        height: 400, 
+        width: '100%', 
+        bgcolor: '#fff', 
+        borderRadius: 2, 
+        border: '1px solid #e0e0e0',
+        '& .super-app-theme--header': {
+          backgroundColor: '#1976d2',
+          color: '#fff',
+          fontWeight: 600,
+        },
+      }}>
         <DataGrid
           rows={rows}
           columns={columns}
@@ -165,48 +170,53 @@ const TraceabilityEventsGrid = ({
           disableColumnSelector
           sx={{
             border: 'none',
-            '& .MuiDataGrid-root': { border: 'none' },
             '& .MuiDataGrid-cell': {
-              color: '#e2e8f0',
-              borderBottom: '1px solid #4a5568',
-              backgroundColor: '#2d3748',
+              color: '#1a202c',
+              borderBottom: '1px solid #e2e8f0',
             },
-            '& .MuiDataGrid-columnHeaders div[role="row"]': {
-              backgroundColor: '#3a506b !important',
-              color: '#fff !important', // Asegura que el texto de la cabecera sea blanco
-              borderBottom: '1px solid #4a5568',
+            '& .MuiDataGrid-columnHeader': {
+              backgroundColor: '#1976d2 !important',
+              color: '#fff !important',
             },
             '& .MuiDataGrid-columnHeaderTitle': {
-              fontWeight: 'bold',
-              color: '#4f5155', // Color del texto de la cabecera
+              fontWeight: 600,
+              color: '#fff !important',
+            },
+            '& .MuiDataGrid-columnSeparator': {
+              color: 'rgba(255,255,255,0.3)',
+            },
+            '& .MuiDataGrid-sortIcon': {
+              color: '#fff !important',
+            },
+            '& .MuiDataGrid-iconButtonContainer': {
+              '& .MuiSvgIcon-root': {
+                color: '#fff !important',
+              },
             },
             '& .MuiDataGrid-footerContainer': {
-              backgroundColor: '#3a506b',
-              color: '#fff',
-              borderTop: '1px solid #4a5568',
+              backgroundColor: '#f8fafc',
+              color: '#1a202c',
+              borderTop: '1px solid #e0e0e0',
             },
             '& .MuiTablePagination-root': {
-              color: '#e2e8f0',
+              color: '#1a202c',
             },
-            '& .MuiSvgIcon-root': {
-              color: '#4f5155', // Iconos de paginación
+            '& .MuiTablePagination-selectIcon': {
+              color: '#64748b',
             },
-            '& .MuiDataGrid-virtualScrollerContent': {
-              backgroundColor: '#2d3748',
-            },
-            '& .MuiDataGrid-overlay': {
-              backgroundColor: '#2d3748',
+            '& .MuiDataGrid-footerContainer .MuiIconButton-root': {
+              color: '#64748b',
             },
             '& .MuiDataGrid-row:hover': {
-              backgroundColor: '#3a506b',
+              backgroundColor: '#f8fafc',
             },
             '& .Mui-selected': {
-              backgroundColor: '#4a5568 !important',
+              backgroundColor: '#e3f2fd !important',
             },
           }}
           slots={{
             noRowsOverlay: () => (
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#a0aec0' }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
                 <Typography variant="h6">No hay eventos de trazabilidad registrados.</Typography>
                 <Typography variant="body2">Registra un evento para ver su historial aquí.</Typography>
               </Box>

@@ -135,26 +135,26 @@ export const EVENT_TYPES = [
 ];
 
 export const DIALOG_STYLES = {
-  paper: { sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } },
-  title: { sx: { bgcolor: '#3a506b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+  paper: { sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } },
+  title: { sx: { bgcolor: '#fff', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0' } },
   content: { sx: { pt: '20px !important' } },
-  actions: { sx: { bgcolor: '#3a506b' } },
-  closeButton: { sx: { color: '#e2e8f0' } },
+  actions: { sx: { bgcolor: '#f8fafc', borderTop: '1px solid #e0e0e0' } },
+  closeButton: { sx: { color: '#64748b' } },
   input: {
     sx: { 
       mb: 2, 
-      '& .MuiInputBase-input': { color: '#fff' }, 
-      '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }, 
-      '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' } 
+      '& .MuiInputBase-input': { color: '#1a202c' }, 
+      '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, 
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } 
     }
   },
   select: {
     sx: {
-      color: '#fff',
-      '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-      '.MuiSvgIcon-root': { color: '#fff' }
+      color: '#1a202c',
+      '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+      '.MuiSvgIcon-root': { color: '#64748b' }
     },
-    menu: { PaperProps: { sx: { bgcolor: '#004060', color: '#fff' } } }
+    menu: { PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }
   }
 };
 

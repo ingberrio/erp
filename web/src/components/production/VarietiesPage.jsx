@@ -5,7 +5,7 @@ import { api } from '../../App';
 import {
   Box, Typography, Button, CircularProgress, Snackbar, Alert,
   TextField, Paper, IconButton, Chip, MenuItem, Select,
-  FormControl, InputLabel, Tooltip, Switch, Checkbox, ListItemText,
+  FormControl, InputLabel, Tooltip, Switch, Checkbox, ListItemText, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TablePagination, TableSortLabel, OutlinedInput,
@@ -24,14 +24,22 @@ const YIELD_POTENTIALS = ['Low', 'Medium', 'High'];
 
 const getStrainColor = (strain) => {
   switch (strain) {
-    case 'Indica': return '#7b1fa2'; // Purple
-    case 'Sativa': return '#388e3c'; // Green
-    case 'Hybrid': return '#1976d2'; // Blue
+    case 'Indica': return '#7b1fa2';
+    case 'Sativa': return '#388e3c';
+    case 'Hybrid': return '#1976d2';
     default: return '#757575';
   }
 };
 
-// Initial form state
+const getYieldColor = (yieldPotential) => {
+  switch (yieldPotential) {
+    case 'High': return '#388e3c';
+    case 'Medium': return '#f57c00';
+    case 'Low': return '#d32f2f';
+    default: return '#757575';
+  }
+};
+
 const initialFormData = {
   name: '',
   strain: [],
@@ -43,7 +51,7 @@ const initialFormData = {
   is_active: true,
 };
 
-const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) => {
+const VarietiesPage = ({ isAppReady, isGlobalAdmin, setParentSnack }) => {
   const [varieties, setVarieties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
@@ -53,6 +61,7 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
   const [order, setOrder] = useState('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStrain, setFilterStrain] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVariety, setEditingVariety] = useState(null);
   const [dialogLoading, setDialogLoading] = useState(false);
@@ -60,8 +69,6 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [varietyToDelete, setVarietyToDelete] = useState(null);
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
-  
-  // Tenants for Global Admin
   const [tenants, setTenants] = useState([]);
   const [selectedTenantId, setSelectedTenantId] = useState('');
 
@@ -73,7 +80,6 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
     }
   }, [setParentSnack]);
 
-  // Fetch tenants for Global Admin
   useEffect(() => {
     const fetchTenants = async () => {
       if (!isGlobalAdmin || !isAppReady) return;
@@ -91,25 +97,22 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
     if (!isAppReady) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: page + 1,
-        per_page: rowsPerPage,
-        sort_by: orderBy,
-        sort_order: order,
-      });
+      const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
       if (filterStrain !== 'all') params.append('strain', filterStrain);
+      if (filterStatus !== 'all') params.append('is_active', filterStatus === 'active' ? '1' : '0');
       
-      const response = await api.get(`/production/varieties?${params.toString()}`);
-      setVarieties(response.data.data || []);
-      setTotalCount(response.data.total || 0);
+      const response = await api.get('/production/varieties?' + params.toString());
+      const data = Array.isArray(response.data) ? response.data : response.data.data || [];
+      setVarieties(data);
+      setTotalCount(data.length);
     } catch (error) {
       console.error('Error fetching varieties:', error);
       showSnack('Error loading varieties', 'error');
     } finally {
       setLoading(false);
     }
-  }, [isAppReady, page, rowsPerPage, orderBy, order, searchTerm, filterStrain, showSnack]);
+  }, [isAppReady, searchTerm, filterStrain, filterStatus, showSnack]);
 
   useEffect(() => {
     fetchVarieties();
@@ -177,37 +180,28 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
   const handleSaveVariety = async (e) => {
     e.preventDefault();
     setDialogLoading(true);
-
     try {
       const payload = { ...formData };
-      
-      // Convert flowering_time_days to integer if provided
       if (payload.flowering_time_days) {
         payload.flowering_time_days = parseInt(payload.flowering_time_days, 10);
       } else {
         delete payload.flowering_time_days;
       }
-      
-      // For Global Admin, add tenant_id
       if (isGlobalAdmin && selectedTenantId) {
         payload.tenant_id = selectedTenantId;
       }
-
       if (editingVariety) {
-        await api.put(`/production/varieties/${editingVariety.id}`, payload);
+        await api.put('/production/varieties/' + editingVariety.id, payload);
         showSnack('Variety updated successfully', 'success');
       } else {
         await api.post('/production/varieties', payload);
         showSnack('Variety created successfully', 'success');
       }
-
       handleCloseDialog();
       fetchVarieties();
     } catch (error) {
       console.error('Error saving variety:', error);
-      const message = error.response?.data?.message || error.response?.data?.errors 
-        ? Object.values(error.response.data.errors).flat().join(', ')
-        : 'Error saving variety';
+      const message = error.response?.data?.message || 'Error saving variety';
       showSnack(message, 'error');
     } finally {
       setDialogLoading(false);
@@ -221,9 +215,8 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
 
   const handleDeleteConfirm = async () => {
     if (!varietyToDelete) return;
-    
     try {
-      await api.delete(`/production/varieties/${varietyToDelete.id}`);
+      await api.delete('/production/varieties/' + varietyToDelete.id);
       showSnack('Variety deleted successfully', 'success');
       fetchVarieties();
     } catch (error) {
@@ -237,7 +230,7 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
 
   const handleToggleActive = async (variety) => {
     try {
-      await api.patch(`/production/varieties/${variety.id}/toggle-active`);
+      await api.patch('/production/varieties/' + variety.id + '/toggle-active');
       showSnack(variety.is_active ? 'Variety deactivated' : 'Variety activated', 'success');
       fetchVarieties();
     } catch (error) {
@@ -246,304 +239,198 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
     }
   };
 
-  return (
-    <Box>
-      {/* Breadcrumb */}
-      <Typography variant="body2" color="primary" sx={{ mb: 1, cursor: 'pointer' }}>
-        Administration /
-      </Typography>
+  const sortedVarieties = [...varieties].sort((a, b) => {
+    const aValue = a[orderBy] || '';
+    const bValue = b[orderBy] || '';
+    if (order === 'asc') return aValue > bValue ? 1 : -1;
+    return aValue < bValue ? 1 : -1;
+  });
 
+  const paginatedVarieties = sortedVarieties.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  return (
+    <Box sx={{ p: 3 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" fontWeight="bold">Varieties</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Variety
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <LocalFloristIcon sx={{ fontSize: 32, color: 'primary.main' }} />
+          <Typography variant="h5" fontWeight="bold">Varieties</Typography>
+        </Box>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+          New Variety
         </Button>
       </Box>
 
-      {/* Search and Filters */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-        <TextField
-          size="small"
-          placeholder="Search"
-          value={searchTerm}
-          onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-          InputProps={{
-            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-          }}
-          sx={{ minWidth: 200 }}
-        />
-        <FormControl size="small" sx={{ minWidth: 150 }}>
-          <InputLabel>Strain</InputLabel>
-          <Select
-            value={filterStrain}
-            label="Strain"
-            onChange={(e) => { setFilterStrain(e.target.value); setPage(0); }}
-          >
-            <MenuItem value="all">All Strains</MenuItem>
-            {STRAINS.map(strain => (
-              <MenuItem key={strain} value={strain}>{strain}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Tooltip title="Refresh">
-          <IconButton size="small" onClick={fetchVarieties}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
-      </Box>
-
-      {/* Varieties Table */}
-      <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-        <TableContainer sx={{ maxHeight: 600 }}>
-          <Table stickyHeader size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <TableSortLabel active={orderBy === 'id'} direction={orderBy === 'id' ? order : 'asc'} onClick={() => handleSort('id')}>
-                    ID
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel active={orderBy === 'name'} direction={orderBy === 'name' ? order : 'asc'} onClick={() => handleSort('name')}>
-                    Name
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>Strain</TableCell>
-                <TableCell>Active</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}><CircularProgress size={24} /></TableCell>
-                </TableRow>
-              ) : varieties.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">No varieties found</Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                varieties.map(variety => (
-                  <TableRow key={variety.id} hover>
-                    <TableCell>{variety.id}</TableCell>
-                    <TableCell><Typography fontWeight={500}>{variety.name}</Typography></TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        {variety.strain && variety.strain.length > 0 ? (
-                          variety.strain.map(s => (
-                            <Chip
-                              key={s}
-                              label={s}
-                              size="small"
-                              sx={{ bgcolor: getStrainColor(s), color: '#fff', fontWeight: 500 }}
-                            />
-                          ))
-                        ) : (
-                          <Typography color="text.secondary">-</Typography>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title={variety.is_active ? 'Click to deactivate' : 'Click to activate'}>
-                        <Switch
-                          checked={variety.is_active}
-                          onChange={() => handleToggleActive(variety)}
-                          size="small"
-                          color="success"
-                        />
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                        <Tooltip title="Edit">
-                          <IconButton size="small" color="primary" onClick={() => handleOpenDialog(variety)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton size="small" color="error" onClick={() => handleDeleteClick(variety)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={totalCount}
-          page={page}
-          onPageChange={handleChangePage}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          rowsPerPageOptions={[10, 20, 50, 100]}
-        />
+      {/* Filters */}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search by name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{ startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} /> }}
+            />
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Strain</InputLabel>
+              <Select value={filterStrain} onChange={(e) => setFilterStrain(e.target.value)} label="Strain">
+                <MenuItem value="all">All Strains</MenuItem>
+                {STRAINS.map((strain) => (<MenuItem key={strain} value={strain}>{strain}</MenuItem>))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} label="Status">
+                <MenuItem value="all">All Status</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="inactive">Inactive</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={2}>
+            <Tooltip title="Refresh">
+              <IconButton onClick={fetchVarieties} color="primary"><RefreshIcon /></IconButton>
+            </Tooltip>
+          </Grid>
+        </Grid>
       </Paper>
 
+      {/* Table */}
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>
+                <TableSortLabel active={orderBy === 'name'} direction={orderBy === 'name' ? order : 'asc'} onClick={() => handleSort('name')}>
+                  Variety Name
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>Strain</TableCell>
+              <TableCell>THC Range</TableCell>
+              <TableCell>CBD Range</TableCell>
+              <TableCell align="center">Flowering Days</TableCell>
+              <TableCell>Yield Potential</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="center">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={8} align="center" sx={{ py: 4 }}><CircularProgress /></TableCell></TableRow>
+            ) : paginatedVarieties.length === 0 ? (
+              <TableRow><TableCell colSpan={8} align="center" sx={{ py: 4 }}><Typography color="text.secondary">No varieties found</Typography></TableCell></TableRow>
+            ) : (
+              paginatedVarieties.map((variety) => (
+                <TableRow key={variety.id} hover>
+                  <TableCell><Typography fontWeight="medium">{variety.name}</Typography></TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                      {variety.strain && variety.strain.length > 0 ? (
+                        variety.strain.map((s) => (<Chip key={s} label={s} size="small" sx={{ bgcolor: getStrainColor(s), color: 'white' }} />))
+                      ) : (<Typography color="text.secondary">-</Typography>)}
+                    </Box>
+                  </TableCell>
+                  <TableCell>{variety.thc_range || '-'}</TableCell>
+                  <TableCell>{variety.cbd_range || '-'}</TableCell>
+                  <TableCell align="center">{variety.flowering_time_days || '-'}</TableCell>
+                  <TableCell>
+                    {variety.yield_potential ? (
+                      <Chip label={variety.yield_potential} size="small" sx={{ bgcolor: getYieldColor(variety.yield_potential), color: 'white' }} />
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Switch checked={variety.is_active} onChange={() => handleToggleActive(variety)} color="success" size="small" />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpenDialog(variety)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                    <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDeleteClick(variety)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <TablePagination component="div" count={totalCount} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} onRowsPerPageChange={handleChangeRowsPerPage} rowsPerPageOptions={[10, 20, 50, 100]} />
+      </TableContainer>
+
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, borderBottom: '1px solid #e0e0e0', pb: 2 }}>
-          <LocalFloristIcon color="success" />
-          {editingVariety ? 'Edit Variety' : 'Create Variety'}
-          <IconButton aria-label="close" onClick={handleCloseDialog} sx={{ position: 'absolute', right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight: '90vh' } }}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}>
+          <LocalFloristIcon color="primary" />
+          {editingVariety ? 'Edit Variety' : 'New Variety'}
+          <IconButton aria-label="close" onClick={handleCloseDialog} sx={{ position: 'absolute', right: 8, top: 8 }}><CloseIcon /></IconButton>
         </DialogTitle>
+
         <form onSubmit={handleSaveVariety}>
           <DialogContent sx={{ pt: 3 }}>
-            
             {/* Tenant Selector for Global Admin */}
             {isGlobalAdmin && !editingVariety && (
               <Box sx={{ mb: 3 }}>
-                <FormControl fullWidth size="small" required>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ mb: 1.5 }}>Select Tenant</Typography>
+                <FormControl size="small" sx={{ minWidth: 250 }} required>
                   <InputLabel>Tenant *</InputLabel>
-                  <Select 
-                    value={selectedTenantId} 
-                    label="Tenant *" 
-                    onChange={(e) => setSelectedTenantId(e.target.value)}
-                    required
-                  >
-                    {tenants.map(tenant => (
-                      <MenuItem key={tenant.id} value={tenant.id}>{tenant.name}</MenuItem>
-                    ))}
+                  <Select value={selectedTenantId} label="Tenant *" onChange={(e) => setSelectedTenantId(e.target.value)} required>
+                    <MenuItem value=""><em>Select Tenant</em></MenuItem>
+                    {tenants.map((tenant) => (<MenuItem key={tenant.id} value={tenant.id}>{tenant.name}</MenuItem>))}
                   </Select>
                 </FormControl>
               </Box>
             )}
 
-            {/* Name */}
-            <TextField
-              fullWidth
-              size="small"
-              name="name"
-              label="Name"
-              value={formData.name}
-              onChange={handleFormChange}
-              required
-              sx={{ mb: 2 }}
-            />
-
-            {/* Strain Multi-select */}
-            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-              <InputLabel>Strain</InputLabel>
-              <Select
-                multiple
-                value={formData.strain}
-                onChange={handleStrainChange}
-                input={<OutlinedInput label="Strain" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => (
-                      <Chip key={value} label={value} size="small" sx={{ bgcolor: getStrainColor(value), color: '#fff' }} />
-                    ))}
-                  </Box>
-                )}
-              >
-                {STRAINS.map((strain) => (
-                  <MenuItem key={strain} value={strain}>
-                    <Checkbox checked={formData.strain.indexOf(strain) > -1} />
-                    <ListItemText primary={strain} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {/* Description */}
-            <TextField
-              fullWidth
-              size="small"
-              name="description"
-              label="Description"
-              value={formData.description}
-              onChange={handleFormChange}
-              multiline
-              rows={2}
-              sx={{ mb: 2 }}
-            />
-
-            {/* THC and CBD Range */}
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                name="thc_range"
-                label="THC Range"
-                placeholder="e.g., 15-20%"
-                value={formData.thc_range}
-                onChange={handleFormChange}
-              />
-              <TextField
-                fullWidth
-                size="small"
-                name="cbd_range"
-                label="CBD Range"
-                placeholder="e.g., 0.1-1%"
-                value={formData.cbd_range}
-                onChange={handleFormChange}
-              />
-            </Box>
-
-            {/* Flowering Time and Yield */}
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                name="flowering_time_days"
-                label="Flowering Time (days)"
-                type="number"
-                value={formData.flowering_time_days}
-                onChange={handleFormChange}
-                inputProps={{ min: 1, max: 365 }}
-              />
-              <FormControl fullWidth size="small">
-                <InputLabel>Yield Potential</InputLabel>
-                <Select
-                  name="yield_potential"
-                  value={formData.yield_potential}
-                  label="Yield Potential"
-                  onChange={handleFormChange}
-                >
-                  <MenuItem value="">Select...</MenuItem>
-                  {YIELD_POTENTIALS.map(yp => (
-                    <MenuItem key={yp} value={yp}>{yp}</MenuItem>
-                  ))}
+            <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ mb: 1.5 }}>Basic Information</Typography>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+              <TextField size="small" name="name" label="Variety Name *" value={formData.name} onChange={handleFormChange} required sx={{ flex: 2, minWidth: 200 }} />
+              <FormControl size="small" sx={{ flex: 1, minWidth: 200 }}>
+                <InputLabel>Strain</InputLabel>
+                <Select multiple value={formData.strain} onChange={handleStrainChange} input={<OutlinedInput label="Strain" />}
+                  renderValue={(selected) => (<Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>{selected.map((value) => (<Chip key={value} label={value} size="small" sx={{ bgcolor: getStrainColor(value), color: '#fff' }} />))}</Box>)}>
+                  {STRAINS.map((strain) => (<MenuItem key={strain} value={strain}><Checkbox checked={formData.strain.indexOf(strain) > -1} /><ListItemText primary={strain} /></MenuItem>))}
                 </Select>
               </FormControl>
             </Box>
 
+            <Box sx={{ mb: 3 }}>
+              <TextField fullWidth size="small" name="description" label="Description" value={formData.description} onChange={handleFormChange} multiline rows={2} />
+            </Box>
+
+            <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ mb: 1.5 }}>Cannabinoid Profile</Typography>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+              <TextField size="small" name="thc_range" label="THC Range" placeholder="e.g., 15-20%" value={formData.thc_range} onChange={handleFormChange} sx={{ flex: 1, minWidth: 150 }} />
+              <TextField size="small" name="cbd_range" label="CBD Range" placeholder="e.g., 0.1-1%" value={formData.cbd_range} onChange={handleFormChange} sx={{ flex: 1, minWidth: 150 }} />
+            </Box>
+
+            <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ mb: 1.5 }}>Growth Characteristics</Typography>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+              <TextField size="small" name="flowering_time_days" label="Flowering Time (days)" type="number" value={formData.flowering_time_days} onChange={handleFormChange} inputProps={{ min: 1, max: 365 }} sx={{ flex: 1, minWidth: 180 }} />
+              <FormControl size="small" sx={{ flex: 1, minWidth: 180 }}>
+                <InputLabel>Yield Potential</InputLabel>
+                <Select name="yield_potential" value={formData.yield_potential} label="Yield Potential" onChange={handleFormChange}>
+                  <MenuItem value=""><em>Select...</em></MenuItem>
+                  {YIELD_POTENTIALS.map(yp => (<MenuItem key={yp} value={yp}>{yp}</MenuItem>))}
+                </Select>
+              </FormControl>
+            </Box>
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e0e0e0' }}>
-            <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-            <Button 
-              type="submit" 
-              variant="contained" 
-              disabled={dialogLoading || !formData.name || (isGlobalAdmin && !editingVariety && !selectedTenantId)}
-            >
-              {dialogLoading ? <CircularProgress size={20} /> : 'Save'}
+            <Button onClick={handleCloseDialog} disabled={dialogLoading}>Cancel</Button>
+            <Button type="submit" variant="contained" color="primary" disabled={dialogLoading || !formData.name || (isGlobalAdmin && !editingVariety && !selectedTenantId)} startIcon={dialogLoading && <CircularProgress size={16} color="inherit" />}>
+              {dialogLoading ? 'Saving...' : 'Save'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs">
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>Confirm Delete</DialogTitle>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete the variety &quot;{varietyToDelete?.name}&quot;?
-          </Typography>
+          <Typography>Are you sure you want to delete the variety "{varietyToDelete?.name}"? This action cannot be undone.</Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
@@ -552,27 +439,22 @@ const VarietiesPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
       </Dialog>
 
       {/* Snackbar */}
-      {!setParentSnack && (
-        <Snackbar 
-          open={snack.open} 
-          autoHideDuration={4000} 
-          onClose={() => setSnack(prev => ({ ...prev, open: false }))}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        >
-          <Alert severity={snack.severity} onClose={() => setSnack(prev => ({ ...prev, open: false }))}>
-            {snack.message}
-          </Alert>
-        </Snackbar>
-      )}
+      <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack({ ...snack, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })}>{snack.message}</Alert>
+      </Snackbar>
     </Box>
   );
 };
 
 VarietiesPage.propTypes = {
-  tenantId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-  isAppReady: PropTypes.bool,
+  isAppReady: PropTypes.bool.isRequired,
   isGlobalAdmin: PropTypes.bool,
   setParentSnack: PropTypes.func,
+};
+
+VarietiesPage.defaultProps = {
+  isGlobalAdmin: false,
+  setParentSnack: null,
 };
 
 export default VarietiesPage;
