@@ -41,8 +41,7 @@ import BatchManagementPage from './components/BatchManagementPage';
 import RegulatoryReportsPage from './components/RegulatoryReportsPage';
 import InventoryReconciliationPage from './components/InventoryReconciliationPage'; // NUEVO: Importar el componente de reconciliación
 import { CrmModuleWrapper } from './components/crm'; // CRM Module
-import VarietiesPage from './components/production/VarietiesPage'; // Production Module
-import SkuPage from './components/production/SkuPage'; // SKU Module
+import ProductionModuleWrapper from './components/production/ProductionModuleWrapper'; // Production Module
 
 // Configuración de Axios
 export const api = axios.create({
@@ -118,7 +117,6 @@ function App() {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [cultivationMenuOpen, setCultivationMenuOpen] = useState(false); // NUEVO: Estado para el submenú de Cultivo
   const [crmMenuOpen, setCrmMenuOpen] = useState(false); // Estado para el submenú de CRM
-  const [productionMenuOpen, setProductionMenuOpen] = useState(false); // Estado para el submenú de Production
 
   const [userPermissions, setUserPermissions] = useState([]);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
@@ -607,43 +605,11 @@ function App() {
                 <Collapse in={adminMenuOpen} timeout="auto" unmountOnExit>
                   <List component="div" disablePadding>
                     
-                    {/* Production Submenu */}
-                    <ListItem button sx={{ pl: 4 }} onClick={() => setProductionMenuOpen(!productionMenuOpen)}>
+                    {/* Production - Direct link to Production module with tabs */}
+                    <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/production'); setDrawerOpen(false); }} selected={location.pathname.startsWith('/production')}>
                       <ListItemIcon sx={{ color: '#e2e8f0' }}><LocalFloristIcon /></ListItemIcon>
-                      <ListItemText primary="Production" sx={{ '& .MuiTypography-root': { fontWeight: 500, textTransform: 'uppercase', fontSize: '0.75rem', color: '#94a3b8' } }} />
-                      {productionMenuOpen ? <ExpandLess sx={{ color: '#e2e8f0' }} /> : <ExpandMoreIcon sx={{ color: '#e2e8f0' }} />}
+                      <ListItemText primary="Production" />
                     </ListItem>
-                    <Collapse in={productionMenuOpen} timeout="auto" unmountOnExit>
-                      <List component="div" disablePadding>
-                        <ListItem button sx={{ pl: 6 }} onClick={() => { navigate('/production/varieties'); setDrawerOpen(false); }} selected={location.pathname === '/production/varieties'}>
-                          <ListItemText primary="Varieties" />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} onClick={() => { navigate('/production/skus'); setDrawerOpen(false); }} selected={location.pathname === '/production/skus'}>
-                          <ListItemText primary="SKUs" />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} disabled>
-                          <ListItemText primary="Rooms" sx={{ color: 'rgba(255,255,255,0.5)' }} />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} disabled>
-                          <ListItemText primary="Destruction Methods" sx={{ color: 'rgba(255,255,255,0.5)' }} />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} disabled>
-                          <ListItemText primary="Waste Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} disabled>
-                          <ListItemText primary="Compost Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} disabled>
-                          <ListItemText primary="Pest Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} disabled>
-                          <ListItemText primary="End Types" sx={{ color: 'rgba(255,255,255,0.5)' }} />
-                        </ListItem>
-                        <ListItem button sx={{ pl: 6 }} disabled>
-                          <ListItemText primary="Destruction Reasons" sx={{ color: 'rgba(255,255,255,0.5)' }} />
-                        </ListItem>
-                      </List>
-                    </Collapse>
 
                     {hasPermission('view-companies') && (
                       <ListItem button sx={{ pl: 4 }} onClick={() => { navigate('/empresas'); setDrawerOpen(false); }} selected={location.pathname === '/empresas'}>
@@ -801,22 +767,11 @@ function App() {
               }
             />
           )}
-          {/* Production Module Routes */}
+          {/* Production Module - Single route with tabs */}
           <Route
-            path="/production/varieties"
+            path="/production"
             element={
-              <VarietiesPage
-                tenantId={user?.tenant_id}
-                isAppReady={appReady}
-                isGlobalAdmin={isGlobalAdmin}
-                setParentSnack={showSnack}
-              />
-            }
-          />
-          <Route
-            path="/production/skus"
-            element={
-              <SkuPage
+              <ProductionModuleWrapper
                 tenantId={user?.tenant_id}
                 isAppReady={appReady}
                 isGlobalAdmin={isGlobalAdmin}
