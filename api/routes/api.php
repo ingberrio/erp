@@ -118,13 +118,17 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     // Batches CRUD (Rutas base para lotes: /api/batches, /api/batches/{id}, etc.)
     Route::apiResource('batches', BatchController::class);
 
-    // Rutas de acciones específicas para lotes (split, process)
+    // Rutas de acciones específicas para lotes (split, process, archive, restore)
     Route::prefix('batches')->group(function () {
         // NUEVA RUTA PARA DIVIDIR LOTES
         Route::post('/{batch}/split', [BatchController::class, 'split']);
 
         // ¡NUEVA RUTA PARA PROCESAR UN LOTE!
         Route::post('/{batch}/process', [BatchController::class, 'process']);
+        
+        // RUTAS PARA ARCHIVAR Y RESTAURAR LOTES (Health Canada compliance)
+        Route::post('/{batch}/archive', [BatchController::class, 'archive']);
+        Route::post('/{batch}/restore', [BatchController::class, 'restore']);
     });
 
     // Rutas para Eventos de Trazabilidad
@@ -146,6 +150,7 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
         Route::post('/', [LossTheftReportController::class, 'store']);
         Route::get('/{id}', [LossTheftReportController::class, 'show']);
         Route::put('/{id}', [LossTheftReportController::class, 'update']);
+        Route::delete('/{id}', [LossTheftReportController::class, 'destroy']);
         Route::get('/{id}/health-canada-form', [LossTheftReportController::class, 'generateHealthCanadaForm']);
         Route::post('/{id}/mark-submitted', [LossTheftReportController::class, 'markSubmittedToHealthCanada']);
     });

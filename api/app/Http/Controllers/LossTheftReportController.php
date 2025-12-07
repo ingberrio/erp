@@ -194,6 +194,42 @@ class LossTheftReportController extends Controller
     }
 
     /**
+     * Delete a loss/theft report
+     */
+    public function destroy(Request $request, $id)
+    {
+        $report = LossTheftReport::findOrFail($id);
+        
+        // Check access permissions
+        $user = Auth::user();
+        $tenantId = $request->header('X-Tenant-ID') ?? $user->tenant_id;
+        
+        if (!$user->is_global_admin && $report->tenant_id !== $tenantId) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        
+        // Check if report has been submitted to Health Canada
+        if ($report->hc_report_status === 'reported') {
+            return response()->json([
+                'message' => 'Cannot delete a report that has been submitted to Health Canada.',
+            ], 409);
+        }
+        
+        Log::warning('Loss/theft report deleted', [
+            'report_id' => $report->id,
+            'batch_id' => $report->batch_id,
+            'user_id' => Auth::id(),
+            'tenant_id' => $tenantId,
+        ]);
+        
+        $report->delete();
+        
+        return response()->json([
+            'message' => 'Report deleted successfully'
+        ]);
+    }
+
+    /**
      * Mark report as submitted to Health Canada
      */
     public function markSubmittedToHealthCanada(Request $request, $id)

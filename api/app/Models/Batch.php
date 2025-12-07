@@ -95,4 +95,10 @@ class Batch extends Model
     {
         return $this->hasMany(TraceabilityEvent::class, 'batch_id');
     }
+    
+    // Relation with loss/theft reports
+    public function lossTheftReports()
+    {
+        return $this->hasMany(LossTheftReport::class, 'batch_id');
+    }
 }

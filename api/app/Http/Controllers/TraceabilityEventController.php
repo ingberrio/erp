@@ -326,4 +326,49 @@ class TraceabilityEventController extends Controller
 
         return new StreamedResponse($callback, 200, $headers);
     }
+
+    /**
+     * Remove the specified traceability event from storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $event = TraceabilityEvent::findOrFail($id);
+            
+            // Check access permissions
+            $user = Auth::user();
+            $tenantId = $request->header('X-Tenant-ID') ?? $user->tenant_id;
+            
+            if (!$user->is_global_admin && $event->tenant_id !== $tenantId) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+            
+            Log::warning('Traceability event deleted', [
+                'event_id' => $event->id,
+                'event_type' => $event->event_type,
+                'batch_id' => $event->batch_id,
+                'user_id' => Auth::id(),
+                'tenant_id' => $tenantId,
+            ]);
+            
+            $event->delete();
+            
+            return response()->json([
+                'message' => 'Event deleted successfully'
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Event not found'], 404);
+        } catch (\Throwable $e) {
+            Log::error('Error deleting traceability event', [
+                'event_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'Failed to delete event.'], 500);
+        }
+    }
 }

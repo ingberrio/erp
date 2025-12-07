@@ -26,13 +26,16 @@ import {
   Box, Typography, Button, CircularProgress, Snackbar, Alert,
   TextField, Paper, Divider, IconButton, FormControl, InputLabel, Select, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  List, ListItem, ListItemText, Grid, Chip, FormControlLabel, Checkbox, ListItemIcon // Import Checkbox, FormControlLabel, Checkbox, ListItemIcon
+  List, ListItem, ListItemText, Grid, Chip, FormControlLabel, Checkbox, ListItemIcon,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  TablePagination, TableSortLabel, InputAdornment, Tooltip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import HistoryIcon from '@mui/icons-material/History'; // Icono para trazabilidad
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'; // Icono para movimiento
 import EcoIcon from '@mui/icons-material/Agriculture'; // Icono para evento de cultivo (usando Agriculture)
+import RefreshIcon from '@mui/icons-material/Refresh'; // Icon for refresh
 import HarvestIcon from '@mui/icons-material/LocalFlorist'; // Icono para cosecha (usando flor)
 import ScienceIcon from '@mui/icons-material/Science'; // Icono para muestreo
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'; // Icono para destrucción
@@ -48,6 +51,8 @@ import ClearIcon from '@mui/icons-material/Clear'; // Icono para clear filter
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline'; // Icono para Loss/Theft
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'; // Icono para external batches
 import AddBoxIcon from '@mui/icons-material/AddBox'; // Icono para ajuste de inventario
+import ArchiveIcon from '@mui/icons-material/Archive'; // Icono para archivar batch
+import RestoreIcon from '@mui/icons-material/Restore'; // Icono para restaurar batch archivado
 // Import DataGrid and individual components for the Toolbar as per documentation
 import {
   DataGrid,
@@ -195,6 +200,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
   const [cultivationAreas, setCultivationAreas] = useState([]);
   const [stages, setStages] = useState([]);
   const [users, setUsers] = useState([]); // For event registration (e.g., responsible user)
+  const [varieties, setVarieties] = useState([]); // List of varieties from Production module
   const [loading, setLoading] = useState(true);
   
   // Performance optimization: Use refs to prevent unnecessary re-renders
@@ -203,6 +209,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
   const cultivationAreasRef = useRef([]);
   const stagesRef = useRef([]);
   const usersRef = useRef([]);
+  const varietiesRef = useRef([]);
   
   // Cache for API responses to reduce unnecessary requests
   const apiCacheRef = useRef(new Map());
@@ -215,6 +222,41 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
   
   // Security: Input validation state
   const [validationErrors, setValidationErrors] = useState({});
+  
+  // Auto-generate batch name function
+  const generateBatchName = useCallback(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    
+    // Get existing batches to find the next sequence number
+    const currentBatches = batchesRef.current.length > 0 ? batchesRef.current : batches;
+    
+    // Pattern: BT-YYYYMMDD-XXX where XXX is a 3-digit sequence
+    const datePrefix = `BT-${year}${month}${day}`;
+    
+    // Find all batches that start with today's prefix
+    const todayBatches = currentBatches.filter(b => 
+      b.name && b.name.startsWith(datePrefix)
+    );
+    
+    // Extract sequence numbers and find the max
+    let maxSequence = 0;
+    todayBatches.forEach(b => {
+      const match = b.name.match(new RegExp(`^${datePrefix}-(\\d+)`));
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSequence) maxSequence = seq;
+      }
+    });
+    
+    // Next sequence number
+    const nextSequence = String(maxSequence + 1).padStart(3, '0');
+    
+    return `${datePrefix}-${nextSequence}`;
+  }, [batches]);
+  
   // Snackbar state (using parent snack for consistency) - Optimized with useMemo
   const showSnack = useCallback((message, severity = 'success') => {
     if (typeof setParentSnack === 'function') {
@@ -294,6 +336,31 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
   const [isPackaged, setIsPackaged] = useState(false); // State for is_packaged
   const [batchSubLocation, setBatchSubLocation] = useState(''); // NEW: State for sub_location
 
+  // Calculate available capacity for each cultivation area
+  const getAreaAvailableCapacity = useCallback((areaId) => {
+    if (!areaId) return null;
+    
+    const area = cultivationAreas.find(a => a.id === areaId);
+    if (!area) return null;
+    
+    const totalCapacity = parseFloat(area.capacity_units) || 0;
+    
+    // Sum units from all active batches in this area (excluding the one being edited)
+    const currentBatches = batchesRef.current.length > 0 ? batchesRef.current : batches;
+    const usedCapacity = currentBatches
+      .filter(b => b.cultivation_area_id === areaId && b.status === 'active' && (!editingBatch || b.id !== editingBatch.id))
+      .reduce((sum, b) => sum + (parseFloat(b.current_units) || 0), 0);
+    
+    const availableCapacity = totalCapacity - usedCapacity;
+    
+    return {
+      total: totalCapacity,
+      used: usedCapacity,
+      available: Math.max(0, availableCapacity),
+      unit: area.capacity_unit_type || 'units'
+    };
+  }, [cultivationAreas, batches, editingBatch]);
+
   // Batch Detail/Traceability States
   const [openBatchDetailDialog, setOpenBatchDetailDialog] = useState(false);
   const [currentBatchDetail, setCurrentBatchDetail] = useState(null);
@@ -356,9 +423,15 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
   // ------------------------------------------------------------------------
 
   // Filters - Currently managed by DataGrid's built-in filtering
-  const [searchTerm] = useState("");
-  const [filterProductType] = useState("");
-  const [filterCultivationAreaId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterProductType, setFilterProductType] = useState("");
+  const [filterCultivationAreaId, setFilterCultivationAreaId] = useState("");
+  
+  // Table pagination and sorting states (Accounts style)
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [orderBy, setOrderBy] = useState('name');
+  const [order, setOrder] = useState('asc');
   
   const isFacilityOperator = useFacilityOperator(hasPermission);
 
@@ -548,6 +621,43 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     }
   }, [isAppReady, tenantId, isGlobalAdmin, showSnack]);
 
+  // Fetch varieties from Production module
+  const fetchVarieties = useCallback(async () => {
+    if (!isAppReady || (!tenantId && !isGlobalAdmin)) return;
+    
+    const cacheKey = 'varieties_all';
+    
+    // Check cache first
+    if (apiCacheRef.current.has(cacheKey)) {
+      const cachedData = apiCacheRef.current.get(cacheKey);
+      if (Date.now() - cachedData.timestamp < 300000) { // 5-minute cache
+        setVarieties(cachedData.data);
+        return;
+      }
+    }
+    
+    try {
+      const response = await api.get('/production/varieties?is_active=1');
+      const fetchedVarieties = Array.isArray(response.data) 
+        ? response.data 
+        : response.data.data || [];
+      
+      // Cache the result
+      apiCacheRef.current.set(cacheKey, {
+        data: fetchedVarieties,
+        timestamp: Date.now()
+      });
+      
+      setVarieties(fetchedVarieties);
+      varietiesRef.current = fetchedVarieties;
+      console.log('BatchManagementPage: Fetched Varieties:', fetchedVarieties);
+    } catch (error) {
+      console.error("Error fetching varieties:", error.response?.data || error.message);
+      showSnack("Error fetching varieties: " + (error.response?.data?.message || error.message), "error");
+      setVarieties([]);
+    }
+  }, [isAppReady, tenantId, isGlobalAdmin, showSnack]);
+
   const fetchBatches = useCallback(async (currentSelectedFacilityId) => {
     if (!isAppReady || (!tenantId && !isGlobalAdmin)) {
       setBatches([]);
@@ -674,7 +784,8 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     }
     
     try {
-      const response = await api.get('/traceability-events', {
+      // Fetch traceability events
+      const eventsResponse = await api.get('/traceability-events', {
         headers,
         params: {
           batch_id: batchId,
@@ -682,15 +793,68 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         }
       });
       
-      const events = Array.isArray(response.data) ? response.data : [];
+      const traceabilityEvents = Array.isArray(eventsResponse.data) ? eventsResponse.data : [];
+      
+      // Also fetch loss/theft reports for this batch
+      let lossTheftReports = [];
+      try {
+        const lossTheftResponse = await api.get('/loss-theft-reports', {
+          headers,
+          params: {
+            facility_id: selectedFacilityId,
+          }
+        });
+        // The API returns: { data: { current_page, data: [...reports], ... }, summary: {...} }
+        // So we need lossTheftResponse.data.data.data for the actual reports array
+        let allReports = [];
+        if (Array.isArray(lossTheftResponse.data)) {
+          allReports = lossTheftResponse.data;
+        } else if (lossTheftResponse.data?.data?.data) {
+          // Paginated response: response.data = { data: { data: [...] }, summary: {...} }
+          allReports = lossTheftResponse.data.data.data;
+        } else if (lossTheftResponse.data?.data) {
+          allReports = Array.isArray(lossTheftResponse.data.data) 
+            ? lossTheftResponse.data.data 
+            : [];
+        }
+        
+        console.log('Loss/Theft reports fetched:', allReports);
+        console.log('Looking for batch_id:', batchId);
+        
+        // Filter by batch_id and format as events (compare as numbers)
+        lossTheftReports = allReports
+          .filter(report => Number(report.batch_id) === Number(batchId))
+          .map(report => ({
+            id: report.id,
+            event_type: 'loss_theft',
+            batch_id: report.batch_id,
+            batch_name: report.batch?.name || `Batch ${report.batch_id}`,
+            description: `${report.incident_type || 'Loss/Theft'}: ${report.description || 'N/A'} (${report.quantity_lost} ${report.unit})`,
+            quantity: report.quantity_lost,
+            unit: report.unit,
+            user_id: report.reported_by_user_id,
+            user_name: report.reported_by?.name || report.reportedBy?.name || `User ${report.reported_by_user_id}`,
+            created_at: report.incident_date || report.created_at,
+            is_loss_theft_report: true, // Flag to identify this is from loss_theft_reports table
+          }));
+        
+        console.log('Filtered loss/theft reports:', lossTheftReports);
+      } catch (lossTheftError) {
+        console.warn('Could not fetch loss/theft reports:', lossTheftError.message);
+      }
+      
+      // Combine and sort by date (newest first)
+      const allEvents = [...traceabilityEvents, ...lossTheftReports].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
       
       // Cache the result
       apiCacheRef.current.set(cacheKey, {
-        data: events,
+        data: allEvents,
         timestamp: Date.now()
       });
       
-      return events;
+      return allEvents;
     } catch (error) {
       console.error('BatchManagementPage: Error fetching traceability events:', error.response?.data || error.message);
       showSnack('Error loading traceability events: ' + (error.response?.data?.message || error.message), 'error');
@@ -707,10 +871,11 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       }
       setLoading(true);
       try {
-        // Fetch facilities and stages in parallel
+        // Fetch facilities, stages, and varieties in parallel
         const [fetchedFacs] = await Promise.all([
           fetchFacilities(),
-          fetchStages()
+          fetchStages(),
+          fetchVarieties()
         ]);
         
         setFacilities(fetchedFacs);
@@ -738,7 +903,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       }
     };
     loadInitialData();
-  }, [isAppReady, tenantId, isGlobalAdmin, fetchFacilities, userFacilityId, showSnack, fetchStages, isFacilityOperator]);
+  }, [isAppReady, tenantId, isGlobalAdmin, fetchFacilities, userFacilityId, showSnack, fetchStages, fetchVarieties, isFacilityOperator]);
   useEffect(() => {
     if (isAppReady && (tenantId || isGlobalAdmin)) {
       if (selectedFacilityId) {
@@ -777,7 +942,8 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
   // --- Batch Handlers (CRUD) ---
   const handleOpenBatchDialog = useCallback((batch = null) => {
     setEditingBatch(batch);
-    setBatchName(batch ? batch.name : '');
+    // Auto-generate batch name for new batches
+    setBatchName(batch ? batch.name : generateBatchName());
     setBatchCurrentUnits(batch ? batch.current_units : '');
     setBatchUnit(batch ? batch.units || 'g' : 'g');
     setBatchEndType(batch ? batch.end_type : '');
@@ -793,7 +959,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     setOpenBatchDialog(true);
     setBatchDialogLoading(false);
     console.log('handleOpenBatchDialog: isFacilityOperator:', isFacilityOperator);
-  }, [isFacilityOperator]);
+  }, [isFacilityOperator, generateBatchName]);
   const handleCloseBatchDialog = useCallback(() => {
     setOpenBatchDialog(false);
     setEditingBatch(null);
@@ -1029,7 +1195,8 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       console.error('Error deleting batch:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || err.message;
       if (err.response?.status === 409) {
-        showSnack(SNACK_MESSAGES.CANNOT_DELETE_BATCH_WITH_EVENTS, 'error');
+        // Show the specific message from the server (e.g., "This batch has X associated events...")
+        showSnack(errorMessage || SNACK_MESSAGES.CANNOT_DELETE_BATCH_WITH_EVENTS, 'error');
       } else if (err.response?.status === 403) {
         showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
       } else {
@@ -1048,6 +1215,104 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     });
     setConfirmDialogOpen(true);
   }, [handleDeleteBatchConfirm]);
+
+  // --- State for Archive Dialog ---
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [archiveReason, setArchiveReason] = useState('');
+  const [batchToArchive, setBatchToArchive] = useState(null);
+
+  // Handler to open archive dialog
+  const handleOpenArchiveDialog = useCallback((batch) => {
+    setBatchToArchive(batch);
+    setArchiveReason('');
+    setArchiveDialogOpen(true);
+  }, []);
+
+  // Handler to close archive dialog
+  const handleCloseArchiveDialog = useCallback(() => {
+    setArchiveDialogOpen(false);
+    setBatchToArchive(null);
+    setArchiveReason('');
+  }, []);
+
+  // Handler to archive a batch
+  const handleArchiveBatch = useCallback(async () => {
+    if (!batchToArchive || !archiveReason.trim()) {
+      showSnack('Please provide a reason for archiving.', 'error');
+      return;
+    }
+    
+    setLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    
+    if (isGlobalAdmin) {
+      if (selectedFacilityId) {
+        const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+        }
+      }
+    } else if (tenantId) {
+      effectiveTenantId = String(tenantId);
+    }
+    
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    
+    try {
+      await api.post(`/batches/${batchToArchive.id}/archive`, { reason: archiveReason }, { headers });
+      showSnack('Batch archived successfully. All traceability data has been preserved.', 'success');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
+      await fetchBatches(selectedFacilityId);
+      handleCloseArchiveDialog();
+    } catch (err) {
+      console.error('Error archiving batch:', err.response?.data || err.message);
+      showSnack(`Error archiving batch: ${err.response?.data?.message || err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [batchToArchive, archiveReason, isGlobalAdmin, selectedFacilityId, tenantId, showSnack, fetchBatches, handleCloseArchiveDialog]);
+
+  // Handler to restore an archived batch
+  const handleRestoreBatch = useCallback(async (batch) => {
+    setLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    
+    if (isGlobalAdmin) {
+      if (selectedFacilityId) {
+        const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+        }
+      }
+    } else if (tenantId) {
+      effectiveTenantId = String(tenantId);
+    }
+    
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    
+    try {
+      await api.post(`/batches/${batch.id}/restore`, {}, { headers });
+      showSnack('Batch restored successfully.', 'success');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
+      await fetchBatches(selectedFacilityId);
+    } catch (err) {
+      console.error('Error restoring batch:', err.response?.data || err.message);
+      showSnack(`Error restoring batch: ${err.response?.data?.message || err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [isGlobalAdmin, selectedFacilityId, tenantId, showSnack, fetchBatches]);
+
   // --- Handlers for Batch Details and Traceability ---
   const handleOpenBatchDetail = useCallback(async (batch) => {
     setCurrentBatchDetail(batch);
@@ -1067,6 +1332,61 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     setTraceabilityEvents([]);
     setSelectedBatchForTraceability('all');
   }, []);
+  
+  // Handler to delete a traceability event
+  const handleDeleteTraceabilityEvent = useCallback((event) => {
+    setConfirmDialogData({
+      title: 'Confirm Event Deletion',
+      message: `Are you sure you want to delete this ${event.event_type} event? This action cannot be undone.`,
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          const headers = {};
+          let effectiveTenantId = tenantId;
+          
+          if (isGlobalAdmin && selectedFacilityId) {
+            const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
+            if (selectedFacility?.tenant_id) {
+              effectiveTenantId = selectedFacility.tenant_id;
+            }
+          }
+          
+          if (effectiveTenantId) {
+            headers['X-Tenant-ID'] = effectiveTenantId;
+          }
+          
+          // Determine the endpoint based on event source
+          let endpoint = '';
+          if (event.is_loss_theft_report || event.event_type === 'loss_theft') {
+            // Loss/theft reports are in a separate table
+            endpoint = `/loss-theft-reports/${event.id}`;
+          } else {
+            endpoint = `/traceability-events/${event.id}`;
+          }
+          
+          await api.delete(endpoint, { headers });
+          showSnack('Event deleted successfully.', 'success');
+          
+          // Refresh traceability events
+          if (currentBatchDetail) {
+            const events = await fetchTraceabilityEvents(currentBatchDetail.id);
+            setTraceabilityEvents(events);
+          }
+          
+          // Invalidate batch cache
+          apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
+        } catch (err) {
+          console.error('Error deleting event:', err.response?.data || err.message);
+          showSnack(`Error deleting event: ${err.response?.data?.message || err.message}`, 'error');
+        } finally {
+          setLoading(false);
+          setConfirmDialogOpen(false);
+        }
+      },
+    });
+    setConfirmDialogOpen(true);
+  }, [tenantId, isGlobalAdmin, selectedFacilityId, facilities, showSnack, currentBatchDetail, fetchTraceabilityEvents]);
+
   // Handlers for event registration dialog
   const handleOpenRegisterEventDialog = useCallback((eventType, batchIdToPreselect = '') => {
     setCurrentEventType(eventType);
@@ -1476,8 +1796,33 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     }
   };
   // --- Handlers for Registering External Batch ---
+  const generateExternalBatchName = useCallback(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const datePrefix = `EXT-${year}${month}${day}`;
+    
+    // Find existing external batches with same date prefix to determine next sequence
+    const existingBatchesWithPrefix = batches.filter(b => 
+      b.name && b.name.startsWith(datePrefix)
+    );
+    
+    let maxSequence = 0;
+    existingBatchesWithPrefix.forEach(b => {
+      const match = b.name.match(new RegExp(`^${datePrefix}-(\\d+)$`));
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSequence) maxSequence = seq;
+      }
+    });
+    
+    const nextSequence = String(maxSequence + 1).padStart(3, '0');
+    return `${datePrefix}-${nextSequence}`;
+  }, [batches]);
+
   const handleOpenExternalBatchDialog = useCallback(() => {
-    setExternalBatchName('');
+    setExternalBatchName(generateExternalBatchName());
     setExternalBatchUnits('');
     setExternalBatchUnit('g');
     setExternalBatchProductType('');
@@ -1486,7 +1831,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     setExternalBatchCultivationAreaId('');
     setOpenExternalBatchDialog(true);
     setExternalBatchDialogLoading(false);
-  }, []);
+  }, [generateExternalBatchName]);
   const handleCloseExternalBatchDialog = useCallback(() => {
     setOpenExternalBatchDialog(false);
     setExternalBatchName('');
@@ -2116,9 +2461,63 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       );
     }
     
-    console.log("Cleaned batches for DataGrid:", result);
+    // Apply sorting
+    result = [...result].sort((a, b) => {
+      let aValue = a[orderBy];
+      let bValue = b[orderBy];
+      
+      // Handle null/undefined values
+      if (aValue == null) aValue = '';
+      if (bValue == null) bValue = '';
+      
+      // Convert to lowercase for string comparison
+      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+      
+      if (order === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+    
+    console.log("Cleaned batches for Table:", result);
     return result;
-  }, [batches, filterProductType, filterCultivationAreaId, searchTerm]);
+  }, [batches, filterProductType, filterCultivationAreaId, searchTerm, orderBy, order]);
+  
+  // Total count for pagination
+  const totalCount = filteredAndCleanedBatches.length;
+  
+  // Paginated batches for display
+  const paginatedBatches = useMemo(() => {
+    const startIndex = page * rowsPerPage;
+    return filteredAndCleanedBatches.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredAndCleanedBatches, page, rowsPerPage]);
+  
+  // Table sorting handler
+  const handleSort = useCallback((property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  }, [orderBy, order]);
+  
+  // Pagination handlers
+  const handleChangePage = useCallback((event, newPage) => {
+    setPage(newPage);
+  }, []);
+  
+  const handleChangeRowsPerPage = useCallback((event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  }, []);
+  
+  // Clear filters handler
+  const handleClearFilters = useCallback(() => {
+    setSearchTerm('');
+    setFilterProductType('');
+    setFilterCultivationAreaId('');
+    setPage(0);
+  }, []);
   // Currently unused but kept for potential future use
   // const handleClearFilters = useCallback(() => {
   //   setSearchTerm("");
@@ -2139,7 +2538,29 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     
     return [
       { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 150, renderCell: (params) => (
-        <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: params.row.is_archived ? '#9ca3af' : '#1a202c',
+              fontStyle: params.row.is_archived ? 'italic' : 'normal',
+            }}
+          >
+            {params.value}
+          </Typography>
+          {params.row.is_archived && (
+            <Chip 
+              label="Archived" 
+              size="small" 
+              sx={{ 
+                bgcolor: 'rgba(255, 152, 0, 0.2)', 
+                color: '#ff9800', 
+                fontSize: '0.65rem',
+                height: 20,
+              }} 
+            />
+          )}
+        </Box>
       )},
       { field: 'variety', headerName: 'Variety', width: 100, renderCell: (params) => (
         <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
@@ -2230,7 +2651,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       {
         field: 'actions',
         headerName: 'Actions',
-        width: 250,
+        width: 300,
         sortable: false,
         filterable: false,
         renderCell: (params) => (
@@ -2248,30 +2669,30 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               color="primary"
               onClick={() => handleOpenBatchDialog(params.row)}
               aria-label={`Edit ${params.row.name}`}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || params.row.is_archived}
               title="Edit Batch"
             >
-              <EditIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#fff' }} />
+              <EditIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.is_archived ? '#666' : '#fff' }} />
             </IconButton>
             <IconButton
               size="small"
               color="secondary"
               onClick={() => handleOpenSplitBatchDialog(params.row)}
               aria-label={`Split ${params.row.name}`}
-              disabled={isFacilityOperator || params.row.current_units <= 1}
+              disabled={isFacilityOperator || params.row.current_units <= 1 || params.row.is_archived}
               title="Split Batch"
             >
-              <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 ? '#666' : '#ffa726' }} />
+              <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 || params.row.is_archived ? '#666' : '#ffa726' }} />
             </IconButton>
             <IconButton
               size="small"
               color="success"
               onClick={() => handleOpenProcessBatchDialog(params.row)}
               aria-label={`Process ${params.row.name}`}
-              disabled={isFacilityOperator || params.row.current_units <= 0}
+              disabled={isFacilityOperator || params.row.current_units <= 0 || params.row.is_archived}
               title="Process Batch"
             >
-              <TransformIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 ? '#666' : '#4CAF50' }} />
+              <TransformIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 || params.row.is_archived ? '#666' : '#4CAF50' }} />
             </IconButton>
             
             <IconButton
@@ -2279,17 +2700,44 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               color="primary"
               onClick={() => handleOpenAdjustmentDialog(params.row)}
               aria-label={`Inventory Adjustment for ${params.row.name}`}
-              disabled={isFacilityOperator}
+              disabled={isFacilityOperator || params.row.is_archived}
               title="Inventory Adjustment"
             >
-              <AddBoxIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#4CAF50' }} />
+              <AddBoxIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.is_archived ? '#666' : '#4CAF50' }} />
             </IconButton>
+            
+            {/* Archive/Restore Button */}
+            {params.row.is_archived ? (
+              <IconButton
+                size="small"
+                onClick={() => handleRestoreBatch(params.row)}
+                aria-label={`Restore ${params.row.name}`}
+                disabled={isFacilityOperator}
+                title="Restore Batch"
+                sx={{ color: '#4CAF50' }}
+              >
+                <RestoreIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            ) : (
+              <IconButton
+                size="small"
+                onClick={() => handleOpenArchiveDialog(params.row)}
+                aria-label={`Archive ${params.row.name}`}
+                disabled={isFacilityOperator}
+                title="Archive Batch (preserves traceability)"
+                sx={{ color: '#ff9800' }}
+              >
+                <ArchiveIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            )}
+            
             <IconButton
               size="small"
               color="error"
               onClick={() => handleDeleteBatchClick(params.row)}
               aria-label={`Delete ${params.row.name}`}
               disabled={isFacilityOperator}
+              title="Delete Batch (fails if has events/reports)"
             >
               <DeleteIcon sx={{ fontSize: 20, color: isFacilityOperator ? '#666' : '#f44336' }} />
             </IconButton>
@@ -2297,7 +2745,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         ),
       },
     ];
-  }, [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages, handleOpenAdjustmentDialog]);
+  }, [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages, handleOpenAdjustmentDialog, handleOpenArchiveDialog, handleRestoreBatch]);
   
   // Function to get dynamic label and placeholder for origin_details
   const getOriginDetailsLabel = useCallback(() => {
@@ -2320,178 +2768,260 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
   }, []);
 
   return (
-    <Box sx={{
-      p: { xs: 2, sm: 3 },
-      minHeight: 'calc(100vh - 64px)',
-      bgcolor: '#f8fafc',
-      color: '#1a202c',
-    }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <InventoryIcon sx={{ fontSize: 32, color: '#1976d2', mr: 1 }} />
-        <Typography variant="h5" sx={{ fontWeight: 600, color: '#1a202c' }}>
-          Batch Management
-        </Typography>
-        <FormControl sx={{ minWidth: 200, mr: 1, bgcolor: '#fff', borderRadius: 1 }}>
-          <InputLabel id="facility-select-label" sx={{ color: 'rgba(0,0,0,0.6)' }}>Facility</InputLabel>
-          <Select
-            labelId="facility-select-label"
-            value={selectedFacilityId}
-            label="Facility"
-            onChange={(e) => {
-                setSelectedFacilityId(e.target.value);
-            }}
-            disabled={loading || facilities.length === 0 || isFacilityOperator}
-            sx={{
-              color: '#1a202c',
-              '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
-              '.MuiSvgIcon-root': { color: '#1a202c' },
-            }}
+    <Box sx={{ p: 0 }}>
+      {/* Header - Compact style like Accounts */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <InventoryIcon sx={{ fontSize: 24, color: '#1976d2' }} />
+          <Typography variant="h6" fontWeight="bold">Batch Management</Typography>
+          <Chip label={totalCount} size="small" color="primary" />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Tooltip title="Refresh">
+            <IconButton onClick={() => fetchBatches(selectedFacilityId)} disabled={loading} size="small">
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenBatchDialog(null)}
+            disabled={loading || isFacilityOperator || !selectedFacilityId}
+            sx={{ textTransform: 'none', bgcolor: '#4CAF50', '&:hover': { bgcolor: '#43A047' } }}
           >
-          
-            {facilities.length === 0 && !loading ? (
-              <MenuItem value="" sx={{ color: '#aaa' }}>
-                <em>No facilities available</em>
-              </MenuItem>
-            ) : (
-              facilities.map((facility) => (
-                <MenuItem key={facility.id} value={facility.id}>
-                  {facility.name}
-                </MenuItem>
-              ))
-            )}
-          </Select>
-        </FormControl>
-        <Box sx={{ flexGrow: 1 }} />
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenBatchDialog(null)}
-          disabled={loading || isFacilityOperator || !selectedFacilityId}
-          sx={{
-            borderRadius: 2,
-            bgcolor: '#4CAF50',
-            '&:hover': { bgcolor: '#43A047' },
-            mr: 1,
-          }}
-        >
-          {BUTTON_LABELS.ADD_NEW_BATCH}
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<LocalShippingIcon />}
-          onClick={handleOpenExternalBatchDialog}
-          disabled={loading || isFacilityOperator || !selectedFacilityId}
-          sx={{
-            borderRadius: 2,
-            bgcolor: '#007bff',
-            '&:hover': { bgcolor: '#0056b3' },
-          }}
-        >
-          {BUTTON_LABELS.REGISTER_EXTERNAL_BATCH}
-        </Button>
+            {BUTTON_LABELS.ADD_NEW_BATCH}
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<LocalShippingIcon />}
+            onClick={handleOpenExternalBatchDialog}
+            disabled={loading || isFacilityOperator || !selectedFacilityId}
+            sx={{ textTransform: 'none', bgcolor: '#007bff', '&:hover': { bgcolor: '#0056b3' } }}
+          >
+            {BUTTON_LABELS.REGISTER_EXTERNAL_BATCH}
+          </Button>
+        </Box>
       </Box>
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400, color: '#1a202c' }}>
-          <CircularProgress color="inherit" />
-          <Typography variant="body1" sx={{ ml: 2, color: '#1a202c' }}>Loading batches...</Typography>
+
+      {/* Filters - Same style as Accounts */}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+          <TextField
+            size="small"
+            placeholder="Search by name, variety..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            sx={{ minWidth: 250 }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>,
+            }}
+          />
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Facility</InputLabel>
+            <Select
+              value={selectedFacilityId}
+              label="Facility"
+              onChange={(e) => { setSelectedFacilityId(e.target.value); setPage(0); }}
+              disabled={loading || facilities.length === 0 || isFacilityOperator}
+            >
+              {facilities.length === 0 && !loading ? (
+                <MenuItem value=""><em>No facilities</em></MenuItem>
+              ) : (
+                facilities.map((facility) => (
+                  <MenuItem key={facility.id} value={facility.id}>{facility.name}</MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Product Type</InputLabel>
+            <Select
+              value={filterProductType}
+              label="Product Type"
+              onChange={(e) => { setFilterProductType(e.target.value); setPage(0); }}
+            >
+              <MenuItem value="">All Types</MenuItem>
+              {HEALTH_CANADA_PRODUCT_TYPES.map((type) => (
+                <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Area</InputLabel>
+            <Select
+              value={filterCultivationAreaId}
+              label="Area"
+              onChange={(e) => { setFilterCultivationAreaId(e.target.value); setPage(0); }}
+            >
+              <MenuItem value="">All Areas</MenuItem>
+              {cultivationAreas.map((area) => (
+                <MenuItem key={area.id} value={area.id}>{area.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FilterListIcon />}
+            onClick={handleClearFilters}
+          >
+            Clear Filters
+          </Button>
         </Box>
-      ) : (
-        <Box sx={{ height: 'auto', minHeight: 400, width: '100%' }}>
-          {filteredAndCleanedBatches.length === 0 && selectedFacilityId ? (
-            <Typography variant="h6" sx={{ color: '#64748b', textAlign: 'center', width: '100%', mt: 5 }}>
-              No batches available for this facility.
-            </Typography>
-          ) : filteredAndCleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length > 0 ? (
-            <Typography variant="h6" sx={{ color: '#64748b', textAlign: 'center', width: '100%', mt: 5 }}>
-              As Super Admin, please select a facility with a valid Tenant ID to view batches.
-            </Typography>
-          ) : filteredAndCleanedBatches.length === 0 && !selectedFacilityId && isGlobalAdmin && facilities.length === 0 ? (
-            <Typography variant="h6" sx={{ color: '#64748b', textAlign: 'center', width: '100%', mt: 5 }}>
-              As Super Admin, no facilities are registered in the system. Please create a facility.
-            </Typography>
-          ) : (
-            <DataGrid
-              rows={filteredAndCleanedBatches}
-              columns={columns}
-              getRowId={(row) => row.id}
-              pageSize={10}
-              pageSizeOptions={[5, 10, 25, 50]}
-              initialState={{
-                pagination: {
-                  paginationModel: { pageSize: 10 },
-                },
-              }}
-              disableRowSelectionOnClick
-              slots={{ toolbar: CustomDataGridToolbar }}
-              sx={{
-                bgcolor: '#fff',
-                color: '#1a202c',
-                border: '1px solid #e0e0e0',
-                borderRadius: 2,
-                minHeight: 350,
-                '& .MuiDataGrid-columnHeaders': {
-                  bgcolor: '#1976d2',
-                  borderBottom: '1px solid #e0e0e0',
-                },
-                '& .MuiDataGrid-columnHeaderTitle': {
-                  fontWeight: 'bold',
-                  color: '#fff !important',
-                },
-                '& .MuiDataGrid-columnHeader': {
-                  bgcolor: '#1976d2 !important',
-                },
-                '& .MuiDataGrid-iconButtonContainer': {
-                  color: '#fff !important',
-                },
-                '& .MuiDataGrid-sortIcon': {
-                  color: '#fff !important',
-                },
-                '& .MuiDataGrid-menuIconButton': {
-                  color: '#fff !important',
-                },
-                '& .MuiDataGrid-columnSeparator': {
-                  color: 'rgba(0,0,0,0.12) !important',
-                },
-                '& .MuiDataGrid-cell': {
-                  borderColor: '#e0e0e0',
-                  color: '#1a202c',
-                },
-                '& .MuiDataGrid-row': {
-                  '&:hover': {
-                    backgroundColor: '#f0f9ff',
-                  },
-                },
-                '& .MuiDataGrid-footerContainer': {
-                  bgcolor: '#f8fafc',
-                  color: '#1a202c',
-                  borderTop: '1px solid #e0e0e0',
-                },
-                '& .MuiTablePagination-root': {
-                  color: '#1a202c',
-                },
-                '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                  color: '#1a202c !important',
-                },
-                '& .MuiTablePagination-select': {
-                  color: '#1a202c !important',
-                },
-                '& .MuiTablePagination-actions .MuiButtonBase-root': {
-                  color: '#1a202c !important',
-                },
-                '& .MuiSvgIcon-root': {
-                  color: '#64748b',
-                },
-                '& .MuiDataGrid-overlay': {
-                  bgcolor: '#fff',
-                },
-                '& .MuiCircularProgress-root': {
-                  color: '#1976d2',
-                },
-              }}
-            />
-          )}
-        </Box>
-      )}
+      </Paper>
+
+      {/* Batches Table - Same style as SKUs */}
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>
+                <TableSortLabel
+                  active={orderBy === 'name'}
+                  direction={orderBy === 'name' ? order : 'asc'}
+                  onClick={() => handleSort('name')}
+                >
+                  Batch Name
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={orderBy === 'variety'}
+                  direction={orderBy === 'variety' ? order : 'asc'}
+                  onClick={() => handleSort('variety')}
+                >
+                  Variety
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>Product Type</TableCell>
+              <TableCell align="right">Units</TableCell>
+              <TableCell>End Type</TableCell>
+              <TableCell align="right">Projected Yield</TableCell>
+              <TableCell>Harvest Date</TableCell>
+              <TableCell>Cultivation Area</TableCell>
+              <TableCell>Current Stage</TableCell>
+              <TableCell align="center">Packaged</TableCell>
+              <TableCell align="center">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={11} align="center" sx={{ py: 4 }}><CircularProgress size={24} /></TableCell>
+              </TableRow>
+            ) : paginatedBatches.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
+                  <Typography color="text.secondary">
+                    {!selectedFacilityId ? 'Please select a facility to view batches' : 'No batches found'}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginatedBatches.map((batch) => {
+                const area = cultivationAreas.find(a => a.id === batch.cultivation_area_id);
+                const stage = area ? stages.find(s => s.id === area.current_stage_id) : null;
+                return (
+                  <TableRow key={batch.id} hover>
+                    <TableCell><Typography fontWeight="medium">{batch.name}</Typography></TableCell>
+                    <TableCell>{batch.variety || '-'}</TableCell>
+                    <TableCell>{batch.product_type || '-'}</TableCell>
+                    <TableCell align="right">{batch.current_units} {batch.units}</TableCell>
+                    <TableCell>{batch.end_type || '-'}</TableCell>
+                    <TableCell align="right">
+                      {batch.projected_yield != null ? `${batch.projected_yield} kg` : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      {batch.advance_to_harvesting_on 
+                        ? new Date(batch.advance_to_harvesting_on).toLocaleDateString() 
+                        : 'N/A'}
+                    </TableCell>
+                    <TableCell>{area?.name || '-'}</TableCell>
+                    <TableCell>{stage?.name || 'N/A'}</TableCell>
+                    <TableCell align="center">{batch.is_packaged ? 'Yes' : 'No'}</TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="View Details">
+                        <IconButton size="small" onClick={() => handleOpenBatchDetail(batch)}>
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Edit">
+                        <IconButton size="small" onClick={() => handleOpenBatchDialog(batch)} disabled={isFacilityOperator || batch.is_archived}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Split Batch">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleOpenSplitBatchDialog(batch)} 
+                          disabled={isFacilityOperator || batch.current_units <= 1 || batch.is_archived}
+                        >
+                          <CallSplitIcon fontSize="small" color="warning" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Process Batch">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleOpenProcessBatchDialog(batch)} 
+                          disabled={isFacilityOperator || batch.current_units <= 0 || batch.is_archived}
+                        >
+                          <TransformIcon fontSize="small" color="success" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Inventory Adjustment">
+                        <IconButton size="small" onClick={() => handleOpenAdjustmentDialog(batch)} disabled={isFacilityOperator || batch.is_archived}>
+                          <AddBoxIcon fontSize="small" color="success" />
+                        </IconButton>
+                      </Tooltip>
+                      {/* Archive/Restore Button */}
+                      {batch.is_archived ? (
+                        <Tooltip title="Restore Batch">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleRestoreBatch(batch)} 
+                            disabled={isFacilityOperator}
+                            sx={{ color: '#4CAF50' }}
+                          >
+                            <RestoreIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title="Archive Batch (preserves traceability)">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleOpenArchiveDialog(batch)} 
+                            disabled={isFacilityOperator}
+                            sx={{ color: '#ff9800' }}
+                          >
+                            <ArchiveIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      <Tooltip title="Delete (fails if has events/reports)">
+                        <IconButton size="small" color="error" onClick={() => handleDeleteBatchClick(batch)} disabled={isFacilityOperator}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+        <TablePagination
+          component="div"
+          count={totalCount}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+        />
+      </TableContainer>
+
       {/* --- Add/Edit Batch Dialog --- */}
       <Dialog open={openBatchDialog} onClose={handleCloseBatchDialog} maxWidth="sm" fullWidth
         PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2 } }}
@@ -2504,32 +3034,104 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         </DialogTitle>
         <form onSubmit={handleSaveBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
-            <TextField
-              autoFocus
-              margin="dense"
-              label="Batch Name"
-              type="text"
-              fullWidth
-              value={batchName}
-              onChange={e => {
-                const sanitized = sanitizeInput(e.target.value);
-                setBatchName(sanitized);
-                if (sanitized !== e.target.value) {
-                  showSnack(SNACK_MESSAGES.SECURITY_INPUT_SANITIZED, 'info');
-                }
-              }}
-              required
-              error={!!validationErrors.batchName}
-              helperText={validationErrors.batchName}
-              inputProps={{ maxLength: SECURITY_RULES.BATCH_NAME_MAX_LENGTH }}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
-              disabled={batchDialogLoading || isFacilityOperator}
-            />
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
+              <TextField
+                autoFocus
+                margin="dense"
+                label="Batch Name"
+                type="text"
+                fullWidth
+                value={batchName}
+                onChange={e => {
+                  const sanitized = sanitizeInput(e.target.value);
+                  setBatchName(sanitized);
+                  if (sanitized !== e.target.value) {
+                    showSnack(SNACK_MESSAGES.SECURITY_INPUT_SANITIZED, 'info');
+                  }
+                }}
+                required
+                error={!!validationErrors.batchName}
+                helperText={validationErrors.batchName || (!editingBatch ? 'Auto-generated. You can modify if needed.' : '')}
+                inputProps={{ maxLength: SECURITY_RULES.BATCH_NAME_MAX_LENGTH }}
+                InputLabelProps={{ shrink: true }}
+                disabled={batchDialogLoading || isFacilityOperator}
+              />
+              {!editingBatch && (
+                <Tooltip title="Generate new name">
+                  <IconButton 
+                    onClick={() => setBatchName(generateBatchName())}
+                    disabled={batchDialogLoading || isFacilityOperator}
+                    sx={{ mt: 1.5 }}
+                  >
+                    <RefreshIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+            
+            {/* Cultivation Area - FIRST to show available capacity */}
+            <FormControl fullWidth margin="dense" sx={{ mb: 1 }}>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Cultivation Area *</InputLabel>
+              <Select
+                value={batchCultivationAreaId}
+                onChange={e => setBatchCultivationAreaId(e.target.value)}
+                required
+                label="Cultivation Area *"
+                sx={{
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
+                }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
+                disabled={batchDialogLoading || isFacilityOperator}
+              >
+                <MenuItem value=""><em>Select Area</em></MenuItem>
+                {cultivationAreas.length === 0 ? (
+                  <MenuItem value="" disabled><em>No cultivation areas available in the selected facility</em></MenuItem>
+                ) : (
+                  cultivationAreas.map(area => {
+                    const capacity = getAreaAvailableCapacity(area.id);
+                    return (
+                      <MenuItem key={area.id} value={area.id}>
+                        {area.name} ({stages.find(s => s.id === area.current_stage_id)?.name || 'No Stage'})
+                        {capacity && ` - Available: ${capacity.available.toFixed(0)} ${capacity.unit}`}
+                      </MenuItem>
+                    );
+                  })
+                )}
+              </Select>
+            </FormControl>
+            
+            {/* Show capacity info when area is selected */}
+            {batchCultivationAreaId && (() => {
+              const capacity = getAreaAvailableCapacity(batchCultivationAreaId);
+              if (capacity) {
+                return (
+                  <Box sx={{ 
+                    mb: 2, 
+                    p: 1.5, 
+                    bgcolor: capacity.available > 0 ? '#e8f5e9' : '#ffebee', 
+                    borderRadius: 1,
+                    border: `1px solid ${capacity.available > 0 ? '#4CAF50' : '#f44336'}`
+                  }}>
+                    <Typography variant="body2" sx={{ color: '#1a202c', fontWeight: 500 }}>
+                      📊 Area Capacity: {capacity.total.toFixed(0)} {capacity.unit}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      Used: {capacity.used.toFixed(0)} {capacity.unit} | 
+                      <strong style={{ color: capacity.available > 0 ? '#2e7d32' : '#d32f2f' }}> Available: {capacity.available.toFixed(0)} {capacity.unit}</strong>
+                    </Typography>
+                  </Box>
+                );
+              }
+              return null;
+            })()}
+            
+            {/* Current Units - After area selection so user knows the limit */}
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
               <TextField
                 margin="dense"
-                label="Current Units"
+                label="Initial Units"
                 type="number"
                 fullWidth
                 value={batchCurrentUnits}
@@ -2539,16 +3141,25 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                   if (!validation.isValid) {
                     setValidationErrors(prev => ({ ...prev, batchCurrentUnits: validation.error }));
                   } else {
-                    setValidationErrors(prev => ({ ...prev, batchCurrentUnits: undefined }));
+                    // Also validate against available capacity
+                    const capacity = getAreaAvailableCapacity(batchCultivationAreaId);
+                    if (capacity && parseFloat(e.target.value) > capacity.available) {
+                      setValidationErrors(prev => ({ 
+                        ...prev, 
+                        batchCurrentUnits: `Exceeds available capacity (${capacity.available.toFixed(0)} ${capacity.unit})` 
+                      }));
+                    } else {
+                      setValidationErrors(prev => ({ ...prev, batchCurrentUnits: undefined }));
+                    }
                   }
                 }}
                 required
                 error={!!validationErrors.batchCurrentUnits}
-                helperText={validationErrors.batchCurrentUnits}
+                helperText={validationErrors.batchCurrentUnits || (batchCultivationAreaId ? `Max: ${getAreaAvailableCapacity(batchCultivationAreaId)?.available.toFixed(0) || '∞'} units` : 'Select area first')}
                 inputProps={{ 
                   step: "any",
                   min: SECURITY_RULES.MIN_QUANTITY,
-                  max: SECURITY_RULES.MAX_QUANTITY
+                  max: batchCultivationAreaId ? getAreaAvailableCapacity(batchCultivationAreaId)?.available : SECURITY_RULES.MAX_QUANTITY
                 }}
                 InputLabelProps={{ shrink: true }}
                 sx={{ '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
@@ -2592,25 +3203,32 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 <MenuItem value="Fresh">Fresh</MenuItem>
               </Select>
             </FormControl>
-            <TextField
-              label="Variety"
-              value={batchVariety}
-              onChange={e => {
-                const sanitized = sanitizeInput(e.target.value);
-                setBatchVariety(sanitized);
-                if (sanitized !== e.target.value) {
-                  showSnack(SNACK_MESSAGES.SECURITY_INPUT_SANITIZED, 'info');
-                }
-              }}
-              fullWidth
-              required
-              error={!!validationErrors.batchVariety}
-              helperText={validationErrors.batchVariety}
-              inputProps={{ maxLength: SECURITY_RULES.VARIETY_MAX_LENGTH }}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
-              disabled={batchDialogLoading || isFacilityOperator}
-            />
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }} error={!!validationErrors.batchVariety}>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Variety *</InputLabel>
+              <Select
+                value={batchVariety}
+                label="Variety *"
+                onChange={e => setBatchVariety(e.target.value)}
+                required
+                sx={{
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
+                }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
+                disabled={batchDialogLoading || isFacilityOperator}
+              >
+                <MenuItem value=""><em>Select Variety</em></MenuItem>
+                {varieties.map((variety) => (
+                  <MenuItem key={variety.id} value={variety.name}>{variety.name}</MenuItem>
+                ))}
+              </Select>
+              {validationErrors.batchVariety && (
+                <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.5 }}>
+                  {validationErrors.batchVariety}
+                </Typography>
+              )}
+            </FormControl>
             <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
               <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Product Type</InputLabel>
               <Select
@@ -2687,29 +3305,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
               disabled={batchDialogLoading || isFacilityOperator}
             />
-            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Cultivation Area</InputLabel>
-              <Select
-                value={batchCultivationAreaId}
-                onChange={e => setBatchCultivationAreaId(e.target.value)}
-                required
-                sx={{
-                  color: '#1a202c',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
-                  '.MuiSvgIcon-root': { color: '#1a202c' }
-                }}
-                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
-                disabled={batchDialogLoading || isFacilityOperator}
-              >
-                <MenuItem value=""><em>Select Area</em></MenuItem>
-                {cultivationAreas.length === 0 ? (
-                  <MenuItem value="" disabled><em>No cultivation areas available in the selected facility</em></MenuItem>
-                ) : (
-                  cultivationAreas.map(area => <MenuItem key={area.id} value={area.id}>{area.name} ({stages.find(s => s.id === area.current_stage_id)?.name || 'No Stage'})</MenuItem>)
-                )}
-              </Select>
-            </FormControl>
-            {/* NEW: Campo para sub_location */}
+            {/* Sub-location field */}
             <TextField
               margin="dense"
               label="Sub-location"
@@ -2762,121 +3358,97 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       <Dialog open={openBatchDetailDialog} onClose={handleCloseBatchDetailDialog} maxWidth="lg" fullWidth
         PaperProps={{ sx: { bgcolor: '#fff', color: '#1a202c', borderRadius: 2, minHeight: '80vh' } }}
       >
-        <DialogTitle sx={{
-          bgcolor: '#f8fafc',
-          color: '#1a202c',
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          pb: { xs: 2, sm: 1 },
-          pt: { xs: 2, sm: 1 },
-          px: { xs: 2, sm: 3 },
-          gap: { xs: 2, sm: 1 },
-          flexWrap: 'wrap',
+        <DialogTitle sx={{ bgcolor: '#fff', color: '#1a202c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
+          {DIALOG_TITLES.BATCH_DETAIL} {currentBatchDetail?.name}
+          <IconButton onClick={handleCloseBatchDetailDialog} sx={{ color: '#64748b' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        
+        {/* Action Buttons Toolbar - Consistent style */}
+        <Box sx={{ 
+          px: 3, 
+          py: 1.5, 
+          bgcolor: '#fafafa',
+          borderBottom: '1px solid #e0e0e0',
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a202c', mr: 1 }}>
-              {DIALOG_TITLES.BATCH_DETAIL} {currentBatchDetail?.name}
-            </Typography>
-            <IconButton onClick={handleCloseBatchDetailDialog} sx={{ color: '#1a202c', ml: 'auto' }}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-          <Box sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 1,
-            alignItems: 'center',
-            flexGrow: 1,
-            justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-          }}>
+          <Typography variant="subtitle2" sx={{ color: '#666', mb: 1, fontWeight: 500 }}>
+            Register Event:
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             <Button
-              variant="contained"
+              variant="outlined"
+              size="small"
               startIcon={<TrendingUpIcon />}
               onClick={() => handleOpenRegisterEventDialog('movement', currentBatchDetail.id)}
-              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ textTransform: 'none', borderColor: '#1976d2', color: '#1976d2', '&:hover': { bgcolor: '#e3f2fd', borderColor: '#1565c0' } }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              Register Movement
+              Movement
             </Button>
             <Button
-              variant="contained"
+              variant="outlined"
+              size="small"
               startIcon={<EcoIcon />}
               onClick={() => handleOpenRegisterEventDialog('cultivation', currentBatchDetail.id)}
-              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ textTransform: 'none', borderColor: '#1976d2', color: '#1976d2', '&:hover': { bgcolor: '#e3f2fd', borderColor: '#1565c0' } }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              Register Cultivation Event
+              Cultivation
             </Button>
             <Button
-              variant="contained"
+              variant="outlined"
+              size="small"
               startIcon={<HarvestIcon />}
               onClick={() => handleOpenRegisterEventDialog('harvest', currentBatchDetail.id)}
-              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ textTransform: 'none', borderColor: '#1976d2', color: '#1976d2', '&:hover': { bgcolor: '#e3f2fd', borderColor: '#1565c0' } }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              Register Harvest
+              Harvest
             </Button>
             <Button
-              variant="contained"
+              variant="outlined"
+              size="small"
               startIcon={<ScienceIcon />}
               onClick={() => handleOpenRegisterEventDialog('sampling', currentBatchDetail.id)}
-              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ textTransform: 'none', borderColor: '#1976d2', color: '#1976d2', '&:hover': { bgcolor: '#e3f2fd', borderColor: '#1565c0' } }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              Register Sampling
+              Sampling
             </Button>
             <Button
-              variant="contained"
+              variant="outlined"
+              size="small"
               startIcon={<DeleteForeverIcon />}
               onClick={() => handleOpenRegisterEventDialog('destruction', currentBatchDetail.id)}
-              sx={{ bgcolor: '#1976d2', color: '#1a202c', '&:hover': { bgcolor: '#1565c0' }, borderRadius: 1, textTransform: 'none', py: '6px', px: '10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              sx={{ textTransform: 'none', borderColor: '#ef6c00', color: '#ef6c00', '&:hover': { bgcolor: '#fff3e0', borderColor: '#e65100' } }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              Register Destruction
+              Destruction
             </Button>
             <Button
-              variant="contained"
+              variant="outlined"
+              size="small"
               startIcon={<RemoveCircleOutlineIcon />}
               onClick={() => handleOpenRegisterEventDialog('loss_theft', currentBatchDetail.id)}
-              sx={{
-                bgcolor: '#d32f2f',
-                color: '#1a202c',
-                '&:hover': { bgcolor: '#b71c1c' },
-                borderRadius: 1,
-                textTransform: 'none',
-                py: '6px',
-                px: '10px',
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap',
-              }}
+              sx={{ textTransform: 'none', borderColor: '#d32f2f', color: '#d32f2f', '&:hover': { bgcolor: '#ffebee', borderColor: '#b71c1c' } }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              Register Loss/Theft
+              Loss/Theft
             </Button>
-            {/* NEW: Botón para ajuste de inventario en el detalle del lote */}
             <Button
-              variant="contained"
+              variant="outlined"
+              size="small"
               startIcon={<AddBoxIcon />}
               onClick={() => handleOpenAdjustmentDialog(currentBatchDetail)}
-              sx={{
-                bgcolor: '#4CAF50',
-                color: '#1a202c',
-                '&:hover': { bgcolor: '#43A047' },
-                borderRadius: 1,
-                textTransform: 'none',
-                py: '6px',
-                px: '10px',
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap',
-              }}
+              sx={{ textTransform: 'none', borderColor: '#4CAF50', color: '#4CAF50', '&:hover': { bgcolor: '#e8f5e9', borderColor: '#388E3C' } }}
               disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
             >
-              Inventory Adjustment
+              Adjustment
             </Button>
           </Box>
-        </DialogTitle>
+        </Box>
+        
         <DialogContent sx={{
           pt: '20px !important',
           display: 'flex',
@@ -2962,35 +3534,150 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 {currentBatchDetail && <MenuItem value={currentBatchDetail.id}>{currentBatchDetail.name}</MenuItem>}
               </Select>
             </FormControl>
-            <Box sx={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, mb: 2 }}>
-              <List disablePadding>
-                <ListItem sx={{ bgcolor: '#f8fafc', py: 1, borderBottom: '1px solid #e0e0e0' }}>
-                  <Grid container spacing={1}>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Date/Time</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Event Type</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Batch</Typography></Grid>
-                    <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Details</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="caption" sx={{ fontWeight: 600, color: '#1a202c' }}>Performed By</Typography></Grid>
-                  </Grid>
-                </ListItem>
-                {traceabilityEvents.length > 0 ? (
-                  traceabilityEvents.map(event => (
-                    <ListItem key={event.id} sx={{ py: 1,  '&:last-child': { borderBottom: 'none' } }}>
-                      <Grid container spacing={1}>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#1a202c', fontSize: 12 }}>{new Date(event.created_at).toLocaleDateString()} {new Date(event.created_at).toLocaleTimeString()}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#1a202c', fontSize: 12 }}>{event.event_type}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#1a202c', fontSize: 12 }}>{event.batch_name || event.batch_id}</Typography></Grid>
-                        <Grid item xs={4}><Typography variant="body2" sx={{ color: '#64748b', fontSize: 12 }}>{event.description || event.method || event.reason || 'N/A'}</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2" sx={{ color: '#64748b', fontSize: 12 }}>{event.user_name || event.user_id}</Typography></Grid>
-                      </Grid>
-                    </ListItem>
-                  ))
-                ) : (
-                  <ListItem>
-                    <ListItemText primary="No traceability events registered for this batch." primaryTypographyProps={{ sx: { color: '#64748b', textAlign: 'center', py: 2 } }} />
-                  </ListItem>
-                )}
-              </List>
+            
+            {/* Audit Log / Timeline Style */}
+            <Box sx={{ 
+              maxHeight: '350px', 
+              overflowY: 'auto', 
+              bgcolor: '#f8fafc',
+              borderRadius: 2,
+              border: '1px solid #e2e8f0',
+              p: 0
+            }}>
+              {traceabilityEvents.length > 0 ? (
+                <Box sx={{ position: 'relative' }}>
+                  {traceabilityEvents.map((event, index) => {
+                    // Determine event color based on type
+                    const getEventColor = (type) => {
+                      const colors = {
+                        'archive': '#f97316',
+                        'restore': '#22c55e',
+                        'loss_theft': '#ef4444',
+                        'adjustment': '#3b82f6',
+                        'adjustment_loss': '#ef4444',
+                        'split': '#8b5cf6',
+                        'process': '#06b6d4',
+                        'movement': '#6366f1',
+                        'harvest': '#84cc16',
+                        'sampling': '#f59e0b',
+                        'destruction': '#dc2626',
+                      };
+                      return colors[type] || '#64748b';
+                    };
+                    
+                    const eventColor = getEventColor(event.event_type);
+                    
+                    return (
+                      <Box 
+                        key={event.id} 
+                        sx={{ 
+                          display: 'flex',
+                          borderBottom: index < traceabilityEvents.length - 1 ? '1px solid #e2e8f0' : 'none',
+                          '&:hover': { bgcolor: '#f1f5f9' },
+                          transition: 'background-color 0.15s'
+                        }}
+                      >
+                        {/* Timeline indicator */}
+                        <Box sx={{ 
+                          width: 50, 
+                          flexShrink: 0, 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          alignItems: 'center',
+                          pt: 2,
+                          position: 'relative'
+                        }}>
+                          <Box sx={{ 
+                            width: 10, 
+                            height: 10, 
+                            borderRadius: '50%', 
+                            bgcolor: eventColor,
+                            boxShadow: `0 0 0 3px ${eventColor}22`,
+                            zIndex: 1
+                          }} />
+                          {index < traceabilityEvents.length - 1 && (
+                            <Box sx={{ 
+                              width: 2, 
+                              flexGrow: 1, 
+                              bgcolor: '#e2e8f0',
+                              mt: 0.5
+                            }} />
+                          )}
+                        </Box>
+                        
+                        {/* Event content */}
+                        <Box sx={{ flex: 1, py: 1.5, pr: 2 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip 
+                                label={event.event_type.replace('_', ' ').toUpperCase()} 
+                                size="small"
+                                sx={{ 
+                                  bgcolor: `${eventColor}15`,
+                                  color: eventColor,
+                                  fontWeight: 600,
+                                  fontSize: '0.65rem',
+                                  height: 20,
+                                  '& .MuiChip-label': { px: 1 }
+                                }}
+                              />
+                              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                {event.batch_name || `Batch #${event.batch_id}`}
+                              </Typography>
+                            </Box>
+                            <Tooltip title="Delete event">
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleDeleteTraceabilityEvent(event)}
+                                disabled={isFacilityOperator || !hasPermission('register-traceability-events')}
+                                sx={{ 
+                                  color: '#94a3b8', 
+                                  p: 0.5,
+                                  '&:hover': { color: '#ef4444', bgcolor: '#fef2f2' } 
+                                }}
+                              >
+                                <DeleteIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                          
+                          <Typography variant="body2" sx={{ color: '#334155', mb: 0.5, lineHeight: 1.4 }}>
+                            {event.description || event.method || event.reason || 'No description'}
+                          </Typography>
+                          
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Typography variant="caption" sx={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Box component="span" sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#cbd5e1' }} />
+                              {new Date(event.created_at).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                              by <Box component="span" sx={{ color: '#64748b', fontWeight: 500 }}>{event.user_name || `User #${event.user_id}`}</Box>
+                            </Typography>
+                            {event.quantity && (
+                              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 500 }}>
+                                {event.quantity} {event.unit || 'units'}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ) : (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <HistoryIcon sx={{ fontSize: 40, color: '#cbd5e1', mb: 1 }} />
+                  <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                    No traceability events registered for this batch.
+                  </Typography>
+                </Box>
+              )}
             </Box>
           </Box>
         </DialogContent>
@@ -3213,16 +3900,28 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         </DialogTitle>
         <form onSubmit={handleSaveExternalBatch}>
           <DialogContent sx={{ pt: '20px !important' }}>
-            <TextField
-              label="External Batch Name"
-              value={externalBatchName}
-              onChange={e => setExternalBatchName(e.target.value)}
-              fullWidth
-              required
-              InputLabelProps={{ shrink: true }}
-              sx={{ mt: 1, mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
-              disabled={externalBatchDialogLoading || isFacilityOperator}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
+              <TextField
+                label="External Batch Name"
+                value={externalBatchName}
+                onChange={e => setExternalBatchName(e.target.value)}
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+                sx={{ mt: 1, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
+                disabled={externalBatchDialogLoading || isFacilityOperator}
+                helperText="Auto-generated. You can modify if needed."
+              />
+              <Tooltip title="Generate new name">
+                <IconButton 
+                  onClick={() => setExternalBatchName(generateExternalBatchName())} 
+                  sx={{ mt: 1.5 }}
+                  disabled={externalBatchDialogLoading || isFacilityOperator}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
               <TextField
                 label="Units Received"
@@ -3275,16 +3974,27 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 ))}
               </Select>
             </FormControl>
-            <TextField
-              label="Variety"
-              value={externalBatchVariety}
-              onChange={e => setExternalBatchVariety(e.target.value)}
-              fullWidth
-              required
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, '& .MuiInputBase-input': { color: '#1a202c' }, '& .MuiInputLabel-root': { color: 'rgba(0,0,0,0.6)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' } }}
-              disabled={externalBatchDialogLoading || isFacilityOperator}
-            />
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel sx={{ color: 'rgba(0,0,0,0.6)' }}>Variety *</InputLabel>
+              <Select
+                value={externalBatchVariety}
+                label="Variety *"
+                onChange={e => setExternalBatchVariety(e.target.value)}
+                required
+                sx={{
+                  color: '#1a202c',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.23)' },
+                  '.MuiSvgIcon-root': { color: '#1a202c' }
+                }}
+                MenuProps={{ PaperProps: { sx: { bgcolor: '#fff', color: '#1a202c' } } }}
+                disabled={externalBatchDialogLoading || isFacilityOperator}
+              >
+                <MenuItem value=""><em>Select Variety</em></MenuItem>
+                {varieties.map((variety) => (
+                  <MenuItem key={variety.id} value={variety.name}>{variety.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               label={getExternalOriginDetailsLabel().label}
               placeholder={getExternalOriginDetailsLabel().placeholder}
@@ -3443,6 +4153,167 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
             }}
           >
             {adjustmentDialogLoading ? <CircularProgress size={24} /> : BUTTON_LABELS.REGISTER_ADJUSTMENT}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Archive Batch Dialog */}
+      <Dialog
+        open={archiveDialogOpen}
+        onClose={handleCloseArchiveDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: '#fff',
+            color: '#1a202c',
+            borderRadius: 3,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          borderBottom: '1px solid #e2e8f0',
+          pb: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ 
+              bgcolor: '#fff7ed', 
+              p: 1, 
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <ArchiveIcon sx={{ color: '#ea580c', fontSize: 28 }} />
+            </Box>
+            <Typography variant="h6" fontWeight={600}>Archive Batch</Typography>
+          </Box>
+          <IconButton onClick={handleCloseArchiveDialog} size="small" sx={{ color: '#64748b' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Alert 
+            severity="info" 
+            sx={{ 
+              mb: 3, 
+              bgcolor: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              '& .MuiAlert-icon': { color: '#2563eb' },
+              borderRadius: 2
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#1e40af' }}>
+              <strong>Health Canada Compliance:</strong> Archiving preserves all traceability data while removing the batch from active view. 
+              This is the recommended approach for batches that cannot be deleted due to associated reports or events.
+            </Typography>
+          </Alert>
+          
+          {batchToArchive && (
+            <Paper 
+              elevation={0} 
+              sx={{ 
+                p: 2, 
+                mb: 3, 
+                bgcolor: '#f8fafc', 
+                borderRadius: 2,
+                border: '1px solid #e2e8f0'
+              }}
+            >
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Batch Name
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600} sx={{ color: '#1e293b' }}>
+                    {batchToArchive.name}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Current Units
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600} sx={{ color: '#1e293b' }}>
+                    {batchToArchive.current_units} {batchToArchive.units}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Product Type
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#1e293b' }}>
+                    {batchToArchive.product_type || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Variety
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#1e293b' }}>
+                    {batchToArchive.variety || 'N/A'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+          
+          <TextField
+            fullWidth
+            label="Reason for Archiving"
+            required
+            multiline
+            rows={4}
+            value={archiveReason}
+            onChange={(e) => setArchiveReason(e.target.value)}
+            placeholder="Explain why this batch is being archived (e.g., 'Batch completed lifecycle', 'Administrative closure', 'Product sold out', etc.)"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: '#fff',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#f97316',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#ea580c',
+                },
+              },
+              '& .MuiInputLabel-root.Mui-focused': {
+                color: '#ea580c',
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, borderTop: '1px solid #e2e8f0', gap: 1 }}>
+          <Button 
+            onClick={handleCloseArchiveDialog} 
+            variant="outlined"
+            sx={{ 
+              color: '#64748b', 
+              borderColor: '#cbd5e1',
+              '&:hover': { 
+                bgcolor: '#f1f5f9',
+                borderColor: '#94a3b8'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleArchiveBatch}
+            variant="contained"
+            disabled={!archiveReason.trim() || loading}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ArchiveIcon />}
+            sx={{ 
+              bgcolor: '#ea580c', 
+              '&:hover': { bgcolor: '#c2410c' },
+              '&:disabled': { bgcolor: '#fed7aa', color: '#9a3412' },
+              px: 3
+            }}
+          >
+            Archive Batch
           </Button>
         </DialogActions>
       </Dialog>

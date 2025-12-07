@@ -409,7 +409,7 @@ CultivationAreaItem.propTypes = {
 };
 
 // --- Component: StageView ---
-const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultivationAreas, handleDeleteStage, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, selectedFacilityId, facilities, isFacilityOperator, isGlobalAdmin, /* userFacilityId, */ currentUserId }) => {
+const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultivationAreas, handleDeleteStage, setParentSnack, setParentConfirmDialog, setParentConfirmDialogOpen, selectedFacilityId, facilities, isFacilityOperator, isGlobalAdmin, /* userFacilityId, */ currentUserId, inlineEditingStageId, inlineEditingStageName, inlineEditLoading, onStartInlineEdit, onCancelInlineEdit, onSaveInlineEdit, onInlineEditChange, onInlineEditKeyDown }) => {
   const [openAddAreaDialog, setOpenAddAreaDialog] = useState(false);
   const [areaName, setAreaName] = useState('');
   const [areaDescription, setAreaDescription] = useState(''); 
@@ -602,6 +602,23 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
           setParentSnack('You must select a batch to register the event.', 'warning');
           return;
       }
+
+      // Validation for destruction: cannot destroy more than available units
+      if (currentEventType === 'destruction' && eventBatchId) {
+        const selectedBatch = batchesInCurrentArea.find(b => b.id === parseInt(eventBatchId));
+        if (selectedBatch) {
+          const availableUnits = parseFloat(selectedBatch.current_units) || 0;
+          const destroyQuantity = parseFloat(eventWeight) || 0;
+          if (destroyQuantity > availableUnits) {
+            setParentSnack(`Cannot destroy ${destroyQuantity} units. Only ${availableUnits} units available in this batch.`, 'error');
+            return;
+          }
+          if (destroyQuantity <= 0) {
+            setParentSnack('Destroyed quantity must be greater than 0.', 'warning');
+            return;
+          }
+        }
+      }
       
       // Validate required fields
       if (!selectedFacilityId) {
@@ -721,7 +738,7 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
         
         setParentSnack(errorMessage, 'error');
       }
-    }, [currentAreaDetail, currentEventType, currentUserId, eventBatchId, eventDescription, eventQuantity, eventWeight, eventUnit, eventFromLocation, eventToLocation, eventMethod, eventReason, isGlobalAdmin, selectedFacilityId, setParentSnack, tenantId, fetchBatchesForArea, handleCloseRegisterEventDialog]);
+    }, [currentAreaDetail, currentEventType, currentUserId, eventBatchId, eventDescription, eventQuantity, eventWeight, eventUnit, eventFromLocation, eventToLocation, eventMethod, eventReason, isGlobalAdmin, selectedFacilityId, setParentSnack, tenantId, fetchBatchesForArea, handleCloseRegisterEventDialog, batchesInCurrentArea]);
 
 
   // Renders the specific form for each event type
@@ -788,7 +805,47 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
 
         {currentEventType === 'destruction' && (
           <>
-            <TextField label="Destroyed Quantity (Weight/Units)" type="number" value={eventWeight} onChange={(e) => setEventWeight(e.target.value)} fullWidth required sx={{ mb: 2 }} />
+            {/* Show available units from selected batch */}
+            {eventBatchId && (() => {
+              const selectedBatch = batchesInCurrentArea.find(b => b.id === parseInt(eventBatchId));
+              const availableUnits = selectedBatch ? (parseFloat(selectedBatch.current_units) || 0) : 0;
+              const destroyQty = parseFloat(eventWeight) || 0;
+              const isOverLimit = destroyQty > availableUnits;
+              return (
+                <Box sx={{ 
+                  mb: 2, 
+                  p: 2, 
+                  bgcolor: isOverLimit ? '#fef2f2' : '#f0fdf4', 
+                  borderRadius: 1, 
+                  border: `1px solid ${isOverLimit ? '#fca5a5' : '#86efac'}` 
+                }}>
+                  <Typography variant="body2" sx={{ color: isOverLimit ? '#dc2626' : '#16a34a', fontWeight: 'medium' }}>
+                    Available in batch: {availableUnits} {selectedBatch?.units || 'units'}
+                  </Typography>
+                  {isOverLimit && (
+                    <Typography variant="caption" sx={{ color: '#dc2626' }}>
+                      ⚠️ Cannot destroy more than available units
+                    </Typography>
+                  )}
+                </Box>
+              );
+            })()}
+            <TextField 
+              label="Destroyed Quantity (Weight/Units)" 
+              type="number" 
+              value={eventWeight} 
+              onChange={(e) => setEventWeight(e.target.value)} 
+              fullWidth 
+              required 
+              sx={{ mb: 2 }} 
+              inputProps={{ 
+                min: 0.01,
+                max: eventBatchId ? (batchesInCurrentArea.find(b => b.id === parseInt(eventBatchId))?.current_units || undefined) : undefined,
+                step: "any"
+              }}
+              error={eventBatchId && parseFloat(eventWeight) > (batchesInCurrentArea.find(b => b.id === parseInt(eventBatchId))?.current_units || Infinity)}
+              helperText={eventBatchId && parseFloat(eventWeight) > (batchesInCurrentArea.find(b => b.id === parseInt(eventBatchId))?.current_units || Infinity) ? 'Exceeds available units' : ''}
+            />
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>Destruction Unit</InputLabel>
               <Select value={eventUnit} onChange={(e) => setEventUnit(e.target.value)} required label="Destruction Unit"
@@ -1313,11 +1370,47 @@ const StageView = React.memo(({ stage, cultivationAreas, tenantId, refreshCultiv
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
           <Box sx={{ width: 8, height: 24, bgcolor: stageColor, borderRadius: 1 }} />
-          <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', flexGrow: 1 }}>
-            {stage.name}
-          </Typography>
+          {inlineEditingStageId === stage.id ? (
+            <TextField
+              value={inlineEditingStageName}
+              onChange={(e) => onInlineEditChange(e.target.value)}
+              onBlur={onSaveInlineEdit}
+              onKeyDown={onInlineEditKeyDown}
+              autoFocus
+              size="small"
+              disabled={inlineEditLoading}
+              inputProps={{ maxLength: 100 }}
+              sx={{
+                flexGrow: 1,
+                '& .MuiInputBase-input': {
+                  fontWeight: 600,
+                  fontSize: '1.25rem',
+                  padding: '4px 8px',
+                },
+              }}
+            />
+          ) : (
+            <Typography
+              variant="h6"
+              onClick={() => onStartInlineEdit(stage)}
+              sx={{
+                fontWeight: 600,
+                color: 'text.primary',
+                flexGrow: 1,
+                cursor: isFacilityOperator ? 'default' : 'pointer',
+                '&:hover': !isFacilityOperator ? {
+                  backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                  borderRadius: 1,
+                } : {},
+                padding: '2px 4px',
+                marginLeft: '-4px',
+              }}
+            >
+              {stage.name}
+            </Typography>
+          )}
         </Box>
         <IconButton
           size="small"
@@ -2001,6 +2094,11 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmDialogData, setConfirmDialogData] = useState({ title: '', message: '', onConfirm: () => {} });
   
+  // States for inline stage name editing
+  const [inlineEditingStageId, setInlineEditingStageId] = useState(null);
+  const [inlineEditingStageName, setInlineEditingStageName] = useState('');
+  const [inlineEditLoading, setInlineEditLoading] = useState(false);
+  
   // Dnd-Kit State: activeDraggableId must be in the parent component (CultivationPage)
   const [activeDraggableId, setActiveDraggableId] = useState(null);
 
@@ -2283,6 +2381,98 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
       setStageDialogLoading(false);
     }
   };
+
+  // Handle inline stage name editing
+  const handleStartInlineEdit = useCallback((stage) => {
+    if (isFacilityOperator) return; // Operators cannot edit
+    setInlineEditingStageId(stage.id);
+    setInlineEditingStageName(stage.name);
+  }, [isFacilityOperator]);
+
+  const handleCancelInlineEdit = useCallback(() => {
+    setInlineEditingStageId(null);
+    setInlineEditingStageName('');
+  }, []);
+
+  const handleSaveInlineEdit = useCallback(async () => {
+    if (!inlineEditingStageName.trim()) {
+      showSnack(SNACK_MESSAGES.STAGE_NAME_REQUIRED, 'warning');
+      return;
+    }
+    if (inlineEditingStageName.length > 100) {
+      showSnack(SNACK_MESSAGES.STAGE_NAME_LENGTH_EXCEEDED, 'warning');
+      return;
+    }
+    if (/[<>{}]/.test(inlineEditingStageName)) {
+      showSnack(SNACK_MESSAGES.STAGE_NAME_INVALID_CHARS, 'warning');
+      return;
+    }
+
+    setInlineEditLoading(true);
+    const headers = {};
+    const stageData = { name: inlineEditingStageName };
+    let effectiveTenantId = null;
+
+    if (isGlobalAdmin) {
+      if (selectedFacilityId) {
+        const selectedFac = facilities.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+          stageData.tenant_id = parseInt(effectiveTenantId, 10);
+        } else {
+          showSnack('Error: As Super Admin, the selected facility does not have a valid tenant to edit stages.', 'error');
+          setInlineEditLoading(false);
+          return;
+        }
+      } else {
+        showSnack('Error: As Super Admin, you must select a facility to edit stages.', 'error');
+        setInlineEditLoading(false);
+        return;
+      }
+    } else if (tenantId) {
+      effectiveTenantId = String(tenantId);
+      stageData.tenant_id = parseInt(effectiveTenantId, 10);
+    } else {
+      showSnack('Error: Could not determine Tenant ID to edit stages.', 'error');
+      setInlineEditLoading(false);
+      return;
+    }
+
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+
+    try {
+      await api.put(`/stages/${inlineEditingStageId}`, stageData, { headers });
+      showSnack(SNACK_MESSAGES.STAGE_UPDATED, 'success');
+      await fetchStages();
+      setInlineEditingStageId(null);
+      setInlineEditingStageName('');
+    } catch (err) {
+      console.error('CultivationPage: Error saving stage inline:', err);
+      const errorMessage = err.response?.data?.message || err.message;
+      if (err.response?.status === 422) {
+        const errors = err.response?.data?.details;
+        const firstError = errors ? Object.values(errors)[0][0] : errorMessage;
+        showSnack(`${SNACK_MESSAGES.VALIDATION_ERROR} ${firstError}`, 'error');
+      } else if (err.response?.status === 403) {
+        showSnack(SNACK_MESSAGES.PERMISSION_DENIED, 'error');
+      } else {
+        showSnack(`${SNACK_MESSAGES.GENERAL_ERROR_SAVING_STAGE} ${errorMessage}`, 'error');
+      }
+    } finally {
+      setInlineEditLoading(false);
+    }
+  }, [inlineEditingStageId, inlineEditingStageName, isGlobalAdmin, selectedFacilityId, facilities, tenantId, showSnack, fetchStages]);
+
+  const handleInlineEditKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveInlineEdit();
+    } else if (e.key === 'Escape') {
+      handleCancelInlineEdit();
+    }
+  }, [handleSaveInlineEdit, handleCancelInlineEdit]);
 
   const handleDeleteStageConfirm = useCallback(async (stageToDelete) => {
     setLoading(true); // Activate loading while deleting
@@ -2783,6 +2973,15 @@ const CultivationPage = ({ tenantId, isAppReady, userFacilityId, currentUserId, 
                   isGlobalAdmin={isGlobalAdmin}
                   userFacilityId={userFacilityId} // Pass userFacilityId to StageView
                   currentUserId={currentUserId} // Pass currentUserId to StageView
+                  // Inline editing props
+                  inlineEditingStageId={inlineEditingStageId}
+                  inlineEditingStageName={inlineEditingStageName}
+                  inlineEditLoading={inlineEditLoading}
+                  onStartInlineEdit={handleStartInlineEdit}
+                  onCancelInlineEdit={handleCancelInlineEdit}
+                  onSaveInlineEdit={handleSaveInlineEdit}
+                  onInlineEditChange={setInlineEditingStageName}
+                  onInlineEditKeyDown={handleInlineEditKeyDown}
                 />
               ))
             )}

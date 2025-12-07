@@ -204,19 +204,39 @@ class BatchController extends Controller
         }
 
         try {
-            // TODO: Implement logic to check traceability events
-            // If the batch has associated events, do not allow deletion.
-            // Example:
-            // if ($batch->traceabilityEvents()->count() > 0) {
-            //     return response()->json(['message' => 'Cannot delete batch: It has associated traceability events.'], 409);
-            // }
+            // Check if batch has associated traceability events
+            $eventsCount = $batch->traceabilityEvents()->count();
+            if ($eventsCount > 0) {
+                return response()->json([
+                    'error' => 'Cannot delete batch.',
+                    'message' => "This batch has {$eventsCount} associated traceability event(s). Please delete the events first or archive the batch instead."
+                ], 409);
+            }
+            
+            // Check if batch has child batches (from splits)
+            $childCount = $batch->childBatches()->count();
+            if ($childCount > 0) {
+                return response()->json([
+                    'error' => 'Cannot delete batch.',
+                    'message' => "This batch has {$childCount} child batch(es) from splits. Please delete the child batches first."
+                ], 409);
+            }
+            
+            // Check if batch has loss/theft reports
+            $lossTheftCount = $batch->lossTheftReports()->count();
+            if ($lossTheftCount > 0) {
+                return response()->json([
+                    'error' => 'Cannot delete batch.',
+                    'message' => "This batch has {$lossTheftCount} loss/theft report(s). Please delete the reports first or archive the batch instead."
+                ], 409);
+            }
 
             $batch->delete();
             Log::info('Batch deleted successfully.', ['batch_id' => $batch->id, 'tenant_id' => $tenantId]);
             return response()->noContent();
         } catch (\Throwable $e) {
             Log::error('Error deleting batch', ['batch_id' => $batch->id, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            return response()->json(['error' => 'Failed to delete batch.'], 500);
+            return response()->json(['error' => 'Failed to delete batch.', 'message' => $e->getMessage()], 500);
         }
     }
 
@@ -453,6 +473,132 @@ class BatchController extends Controller
             DB::rollBack();
             Log::error('Unexpected error during batch processing', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'batch_id' => $batch->id]);
             return response()->json(['error' => 'An unexpected error occurred during batch processing.', 'details' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Archive a batch (soft delete for Health Canada compliance).
+     * This preserves all traceability data while removing the batch from active view.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Batch  $batch
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function archive(Request $request, Batch $batch)
+    {
+        $tenantId = $request->header('X-Tenant-ID');
+        if ($batch->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to archive this Batch: Tenant mismatch.');
+        }
+
+        try {
+            $validated = $request->validate([
+                'reason' => 'required|string|max:1000',
+            ]);
+
+            if ($batch->is_archived) {
+                return response()->json([
+                    'error' => 'Batch is already archived.',
+                    'message' => 'This batch has already been archived on ' . $batch->archived_at->format('Y-m-d H:i:s'),
+                ], 409);
+            }
+
+            $batch->update([
+                'is_archived' => true,
+                'archived_at' => now(),
+                'archive_reason' => $validated['reason'],
+            ]);
+
+            // Create traceability event for the archive action
+            TraceabilityEvent::create([
+                'batch_id' => $batch->id,
+                'event_type' => 'archive',
+                'description' => "Batch archived. Reason: {$validated['reason']}",
+                'area_id' => $batch->cultivation_area_id,
+                'facility_id' => $batch->facility_id,
+                'user_id' => auth()->id(),
+                'quantity' => $batch->current_units,
+                'unit' => $batch->units,
+                'tenant_id' => $tenantId,
+                'from_location' => $batch->cultivationArea->name ?? 'Unknown',
+            ]);
+
+            Log::info('Batch archived successfully.', [
+                'batch_id' => $batch->id,
+                'tenant_id' => $tenantId,
+                'reason' => $validated['reason'],
+                'archived_by' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Batch archived successfully. All traceability data has been preserved.',
+                'batch' => $batch->load('cultivationArea.currentStage'),
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error archiving batch', ['batch_id' => $batch->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to archive batch.', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Restore an archived batch.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Batch  $batch
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function restore(Request $request, Batch $batch)
+    {
+        $tenantId = $request->header('X-Tenant-ID');
+        if ($batch->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to restore this Batch: Tenant mismatch.');
+        }
+
+        try {
+            if (!$batch->is_archived) {
+                return response()->json([
+                    'error' => 'Batch is not archived.',
+                    'message' => 'This batch is not archived and cannot be restored.',
+                ], 409);
+            }
+
+            $previousReason = $batch->archive_reason;
+
+            $batch->update([
+                'is_archived' => false,
+                'archived_at' => null,
+                'archive_reason' => null,
+            ]);
+
+            // Create traceability event for the restore action
+            TraceabilityEvent::create([
+                'batch_id' => $batch->id,
+                'event_type' => 'restore',
+                'description' => "Batch restored from archive. Previous archive reason: {$previousReason}",
+                'area_id' => $batch->cultivation_area_id,
+                'facility_id' => $batch->facility_id,
+                'user_id' => auth()->id(),
+                'quantity' => $batch->current_units,
+                'unit' => $batch->units,
+                'tenant_id' => $tenantId,
+                'to_location' => $batch->cultivationArea->name ?? 'Unknown',
+            ]);
+
+            Log::info('Batch restored successfully.', [
+                'batch_id' => $batch->id,
+                'tenant_id' => $tenantId,
+                'restored_by' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Batch restored successfully.',
+                'batch' => $batch->load('cultivationArea.currentStage'),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error restoring batch', ['batch_id' => $batch->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to restore batch.', 'message' => $e->getMessage()], 500);
         }
     }
 }
