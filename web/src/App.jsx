@@ -24,6 +24,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import LocalFloristIcon from '@mui/icons-material/LocalFlorist'; // Icono para Cultivo
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload'; // Icono para Informes Regulatorios
+import CloseIcon from '@mui/icons-material/Close'; // Icono para cerrar diálogos
 
 // NUEVOS Iconos para el submenú de cultivo
 import GrassIcon from '@mui/icons-material/Grass'; // Para Áreas de Cultivo
@@ -371,64 +372,169 @@ function App() {
         </AppBar>
         <LandingPage setLoginDialogOpen={setLoginDialogOpen} />
 
-        <Dialog open={loginDialogOpen} onClose={() => setLoginDialogOpen(false)} maxWidth="xs" fullWidth disableEscapeKeyDown PaperProps={{ sx: { bgcolor: '#2d3748', color: '#e2e8f0', borderRadius: 2 } }}>
-          <DialogTitle sx={{ bgcolor: '#3a506b', color: '#fff', textAlign: 'center' }}>Sign In</DialogTitle>
+        <Dialog 
+          open={loginDialogOpen} 
+          onClose={() => setLoginDialogOpen(false)} 
+          maxWidth="xs" 
+          fullWidth 
+          disableEscapeKeyDown 
+          PaperProps={{ 
+            sx: { 
+              borderRadius: 3,
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+              overflow: 'hidden',
+            } 
+          }}
+        >
+          {/* Header con gradiente sutil */}
+          <Box sx={{ 
+            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+            pt: 4,
+            pb: 3,
+            px: 3,
+            textAlign: 'center',
+            borderBottom: '1px solid #dee2e6',
+          }}>
+            <Box sx={{ 
+              width: 72, 
+              height: 72, 
+              background: 'linear-gradient(135deg, #2e7d32 0%, #4caf50 100%)',
+              borderRadius: '50%', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              mx: 'auto',
+              mb: 2,
+              boxShadow: '0 8px 24px rgba(46, 125, 50, 0.3)',
+            }}>
+              <Typography sx={{ fontSize: '2rem' }}>🌿</Typography>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#1a1a1a', mb: 0.5 }}>
+              Welcome Back
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#6c757d' }}>
+              Sign in to your Cannaprime account
+            </Typography>
+            <IconButton 
+              aria-label="close" 
+              onClick={() => setLoginDialogOpen(false)} 
+              sx={{ 
+                position: 'absolute', 
+                right: 12, 
+                top: 12,
+                bgcolor: 'rgba(0,0,0,0.04)',
+                '&:hover': { bgcolor: 'rgba(0,0,0,0.08)' }
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+
           <form onSubmit={handleLogin}>
-            <DialogContent sx={{ pt: '20px !important' }}>
+            <DialogContent sx={{ pt: 4, pb: 2, px: 3 }}>
               <TextField
                 autoFocus
-                margin="dense"
-                label="Email"
+                label="Email Address"
                 type="email"
                 fullWidth
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                sx={{
-                  mb: 2,
-                  '& .MuiInputBase-input': { color: '#fff' },
-                  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+                variant="outlined"
+                sx={{ 
+                  mb: 2.5,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#4caf50',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#2e7d32',
+                    },
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#2e7d32',
+                  },
                 }}
                 disabled={loginLoading}
+                InputProps={{
+                  sx: { py: 0.5 }
+                }}
               />
               <TextField
-                margin="dense"
                 label="Password"
                 type="password"
                 fullWidth
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                sx={{
-                  mb: 2,
-                  '& .MuiInputBase-input': { color: '#fff' },
-                  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.8)' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+                variant="outlined"
+                sx={{ 
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#4caf50',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#2e7d32',
+                    },
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: '#2e7d32',
+                  },
                 }}
-                helperText={user ? "Leave empty to not change the password." : "Required for new users."}
                 autoComplete="new-password"
                 required={!user && loginPassword.trim() === ""}
                 disabled={loginLoading}
+                InputProps={{
+                  sx: { py: 0.5 }
+                }}
               />
               {loginError && (
-                <Alert severity="error" sx={{ mb: 2 }}>{loginError}</Alert>
+                <Alert 
+                  severity="error" 
+                  sx={{ 
+                    mt: 2.5, 
+                    borderRadius: 2,
+                    '& .MuiAlert-icon': { alignItems: 'center' }
+                  }}
+                >
+                  {loginError}
+                </Alert>
               )}
             </DialogContent>
-            <DialogActions sx={{ bgcolor: '#3a506b' }}>
-              <Button onClick={() => setLoginDialogOpen(false)} disabled={loginLoading} sx={{ color: '#a0aec0' }}>Cancel</Button>
+            <DialogActions sx={{ px: 3, pb: 3, pt: 1, flexDirection: 'column', gap: 1.5 }}>
               <Button
                 type="submit"
                 variant="contained"
+                fullWidth
+                size="large"
                 disabled={loginLoading}
-                sx={{
-                  bgcolor: '#4CAF50',
-                  '&:hover': { bgcolor: '#43A047' }
+                sx={{ 
+                  py: 1.5,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #2e7d32 0%, #4caf50 100%)',
+                  fontWeight: 600,
+                  fontSize: '1rem',
+                  textTransform: 'none',
+                  boxShadow: '0 4px 14px rgba(46, 125, 50, 0.35)',
+                  '&:hover': { 
+                    background: 'linear-gradient(135deg, #1b5e20 0%, #43a047 100%)',
+                    boxShadow: '0 6px 20px rgba(46, 125, 50, 0.45)',
+                  },
                 }}
               >
-                {loginLoading ? <CircularProgress size={24} /> : "Sign In"}
+                {loginLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : "Sign In"}
+              </Button>
+              <Button 
+                onClick={() => setLoginDialogOpen(false)} 
+                disabled={loginLoading}
+                fullWidth
+                sx={{ 
+                  color: '#6c757d',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' }
+                }}
+              >
+                Cancel
               </Button>
             </DialogActions>
           </form>

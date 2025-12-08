@@ -21,6 +21,9 @@ use App\Http\Controllers\DiscrepancyReasonController; // ¡IMPORTANTE: Añadir e
 use App\Http\Controllers\LossTheftReportController; // ¡NUEVO: Para reportes de pérdidas/robos!
 use App\Http\Controllers\CrmAccountController; // CRM Module
 use App\Http\Controllers\CrmOrderController; // CRM Orders
+use App\Http\Controllers\CrmOrderItemController; // Order Items
+use App\Http\Controllers\ShipmentController; // Shipments
+use App\Http\Controllers\PaymentController; // Payments
 use App\Http\Controllers\VarietyController; // Production Module
 use App\Http\Controllers\SkuController; // SKUs
 
@@ -118,7 +121,7 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
     // Batches CRUD (Rutas base para lotes: /api/batches, /api/batches/{id}, etc.)
     Route::apiResource('batches', BatchController::class);
 
-    // Rutas de acciones específicas para lotes (split, process, archive, restore)
+    // Rutas de acciones específicas para lotes (split, process, archive, restore, recall)
     Route::prefix('batches')->group(function () {
         // NUEVA RUTA PARA DIVIDIR LOTES
         Route::post('/{batch}/split', [BatchController::class, 'split']);
@@ -129,6 +132,14 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
         // RUTAS PARA ARCHIVAR Y RESTAURAR LOTES (Health Canada compliance)
         Route::post('/{batch}/archive', [BatchController::class, 'archive']);
         Route::post('/{batch}/restore', [BatchController::class, 'restore']);
+        
+        // RUTAS PARA RECALL DE LOTES (Health Canada compliance)
+        Route::post('/{batch}/recall', [BatchController::class, 'recall']);
+        Route::post('/{batch}/remove-recall', [BatchController::class, 'removeRecall']);
+        
+        // RUTAS PARA CAMBIO DE ESTADO DE LOTES (Health Canada compliance)
+        Route::get('/statuses', [BatchController::class, 'getStatuses']);
+        Route::post('/{batch}/change-status', [BatchController::class, 'changeStatus']);
     });
 
     // Rutas para Eventos de Trazabilidad
@@ -170,6 +181,28 @@ Route::middleware(['auth:sanctum', 'identify.tenant'])->group(function () {
         Route::post('/orders/{order}/approve', [CrmOrderController::class, 'approve']);
         Route::patch('/orders/{order}/shipping-status', [CrmOrderController::class, 'updateShippingStatus']);
         Route::apiResource('orders', CrmOrderController::class);
+        
+        // Order Items (nested under orders)
+        Route::get('/orders/{order}/items', [CrmOrderItemController::class, 'index']);
+        Route::post('/orders/{order}/items', [CrmOrderItemController::class, 'store']);
+        Route::put('/orders/{order}/items/{item}', [CrmOrderItemController::class, 'update']);
+        Route::delete('/orders/{order}/items/{item}', [CrmOrderItemController::class, 'destroy']);
+        Route::post('/orders/{order}/items/{item}/fulfill', [CrmOrderItemController::class, 'fulfill']);
+        Route::get('/batches-available', [CrmOrderItemController::class, 'availableBatches']);
+        
+        // Shipments
+        Route::get('/shipments/statuses', [ShipmentController::class, 'statuses']);
+        Route::post('/shipments/{shipment}/ship', [ShipmentController::class, 'ship']);
+        Route::post('/shipments/{shipment}/deliver', [ShipmentController::class, 'deliver']);
+        Route::apiResource('shipments', ShipmentController::class);
+        
+        // Payments
+        Route::get('/payments/methods', [PaymentController::class, 'methods']);
+        Route::get('/payments/order-summary/{order}', [PaymentController::class, 'orderSummary']);
+        Route::post('/payments/{payment}/complete', [PaymentController::class, 'complete']);
+        Route::post('/payments/{payment}/cancel', [PaymentController::class, 'cancel']);
+        Route::post('/payments/{payment}/refund', [PaymentController::class, 'refund']);
+        Route::apiResource('payments', PaymentController::class);
     });
 
     // --- PRODUCTION MODULE ---

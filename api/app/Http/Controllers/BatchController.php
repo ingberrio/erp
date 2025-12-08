@@ -601,4 +601,265 @@ class BatchController extends Controller
             return response()->json(['error' => 'Failed to restore batch.', 'message' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Mark a batch as recalled (Health Canada compliance).
+     * Recalled batches should not be included in orders or shipped to customers.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Batch  $batch
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function recall(Request $request, Batch $batch)
+    {
+        $tenantId = $request->header('X-Tenant-ID');
+        if ($batch->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to recall this Batch: Tenant mismatch.');
+        }
+
+        try {
+            $validated = $request->validate([
+                'reason' => 'required|string|max:2000',
+            ]);
+
+            if ($batch->is_recalled) {
+                return response()->json([
+                    'error' => 'Batch is already recalled.',
+                    'message' => 'This batch has already been marked as recalled on ' . $batch->recalled_at->format('Y-m-d H:i:s'),
+                ], 409);
+            }
+
+            $batch->update([
+                'is_recalled' => true,
+                'recalled_at' => now(),
+                'recall_reason' => $validated['reason'],
+                'recalled_by_user_id' => auth()->id(),
+            ]);
+
+            // Create traceability event for the recall action
+            TraceabilityEvent::create([
+                'batch_id' => $batch->id,
+                'event_type' => 'recall',
+                'description' => "⚠️ BATCH RECALLED: {$validated['reason']}",
+                'area_id' => $batch->cultivation_area_id,
+                'facility_id' => $batch->facility_id,
+                'user_id' => auth()->id(),
+                'quantity' => $batch->current_units,
+                'unit' => $batch->units,
+                'tenant_id' => $tenantId,
+                'from_location' => $batch->cultivationArea->name ?? 'Unknown',
+            ]);
+
+            Log::warning('Batch RECALLED.', [
+                'batch_id' => $batch->id,
+                'batch_name' => $batch->name,
+                'tenant_id' => $tenantId,
+                'reason' => $validated['reason'],
+                'recalled_by' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Batch recalled successfully. This batch will not be available for orders.',
+                'batch' => $batch->load('cultivationArea.currentStage', 'recalledBy'),
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json(['error' => 'Validation failed.', 'details' => $e->errors()], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error recalling batch', ['batch_id' => $batch->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to recall batch.', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Remove recall flag from a batch.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Batch  $batch
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function removeRecall(Request $request, Batch $batch)
+    {
+        $tenantId = $request->header('X-Tenant-ID');
+        if ($batch->tenant_id != $tenantId) {
+            abort(403, 'Unauthorized to remove recall from this Batch: Tenant mismatch.');
+        }
+
+        try {
+            if (!$batch->is_recalled) {
+                return response()->json([
+                    'error' => 'Batch is not recalled.',
+                    'message' => 'This batch does not have a recall flag.',
+                ], 409);
+            }
+
+            $previousReason = $batch->recall_reason;
+
+            $batch->update([
+                'is_recalled' => false,
+                'recalled_at' => null,
+                'recall_reason' => null,
+                'recalled_by_user_id' => null,
+            ]);
+
+            // Create traceability event for the recall removal
+            TraceabilityEvent::create([
+                'batch_id' => $batch->id,
+                'event_type' => 'recall_removed',
+                'description' => "Recall flag removed. Previous recall reason: {$previousReason}",
+                'area_id' => $batch->cultivation_area_id,
+                'facility_id' => $batch->facility_id,
+                'user_id' => auth()->id(),
+                'quantity' => $batch->current_units,
+                'unit' => $batch->units,
+                'tenant_id' => $tenantId,
+                'to_location' => $batch->cultivationArea->name ?? 'Unknown',
+            ]);
+
+            Log::info('Batch recall removed.', [
+                'batch_id' => $batch->id,
+                'batch_name' => $batch->name,
+                'tenant_id' => $tenantId,
+                'removed_by' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Recall flag removed successfully. Batch is now available for orders.',
+                'batch' => $batch->load('cultivationArea.currentStage'),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error removing recall from batch', ['batch_id' => $batch->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to remove recall flag.', 'message' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Get available batch statuses
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getStatuses()
+    {
+        return response()->json([
+            'statuses' => Batch::STATUSES,
+            'colors' => Batch::STATUS_COLORS,
+        ]);
+    }
+    
+    /**
+     * Change the status of a batch
+     * Health Canada compliant status tracking with full audit trail
+     * 
+     * @param Request $request
+     * @param Batch $batch
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function changeStatus(Request $request, Batch $batch)
+    {
+        $validated = $request->validate([
+            'status' => 'required|string|in:' . implode(',', array_keys(Batch::STATUSES)),
+            'reason' => 'required|string|min:10|max:1000',
+        ]);
+        
+        $tenantId = $batch->tenant_id ?? ($request->user()->tenant_id ?? 1);
+        $previousStatus = $batch->status;
+        $newStatus = $validated['status'];
+        
+        // Check if status change is allowed
+        if (!$batch->canChangeStatusTo($newStatus)) {
+            return response()->json([
+                'error' => 'Status change not allowed',
+                'message' => "Cannot change status from '{$previousStatus}' to '{$newStatus}'. Batches with status 'destroyed' or 'sold' cannot be modified.",
+            ], 422);
+        }
+        
+        try {
+            // Update the batch status
+            $batch->update([
+                'status' => $newStatus,
+                'status_changed_at' => now(),
+                'status_change_reason' => $validated['reason'],
+                'status_changed_by_user_id' => auth()->id(),
+            ]);
+            
+            // Sync with is_archived flag if status is 'archived'
+            if ($newStatus === 'archived' && !$batch->is_archived) {
+                $batch->update([
+                    'is_archived' => true,
+                    'archived_at' => now(),
+                    'archive_reason' => $validated['reason'],
+                ]);
+            } elseif ($previousStatus === 'archived' && $newStatus !== 'archived') {
+                $batch->update([
+                    'is_archived' => false,
+                    'archived_at' => null,
+                    'archive_reason' => null,
+                ]);
+            }
+            
+            // Sync with is_recalled flag if status is 'quarantine'
+            if ($newStatus === 'quarantine' && !$batch->is_recalled) {
+                $batch->update([
+                    'is_recalled' => true,
+                    'recalled_at' => now(),
+                    'recall_reason' => $validated['reason'],
+                    'recalled_by_user_id' => auth()->id(),
+                ]);
+            } elseif ($previousStatus === 'quarantine' && $newStatus !== 'quarantine' && $batch->is_recalled) {
+                $batch->update([
+                    'is_recalled' => false,
+                    'recalled_at' => null,
+                    'recall_reason' => null,
+                    'recalled_by_user_id' => null,
+                ]);
+            }
+            
+            // Determine event type and emoji based on status
+            $statusEmojis = [
+                'active' => '✅',
+                'on_hold' => '⏸️',
+                'quarantine' => '⚠️',
+                'released' => '🚀',
+                'in_transit' => '🚚',
+                'destroyed' => '🗑️',
+                'sold' => '💰',
+                'archived' => '📦',
+            ];
+            
+            $emoji = $statusEmojis[$newStatus] ?? '📋';
+            $statusLabel = Batch::STATUSES[$newStatus] ?? ucfirst($newStatus);
+            $previousLabel = Batch::STATUSES[$previousStatus] ?? ucfirst($previousStatus);
+            
+            // Create traceability event for the status change
+            TraceabilityEvent::create([
+                'batch_id' => $batch->id,
+                'event_type' => 'status_change',
+                'description' => "{$emoji} STATUS CHANGED: {$previousLabel} → {$statusLabel}. Reason: {$validated['reason']}",
+                'area_id' => $batch->cultivation_area_id,
+                'facility_id' => $batch->facility_id,
+                'user_id' => auth()->id(),
+                'quantity' => $batch->current_units,
+                'unit' => $batch->units,
+                'tenant_id' => $tenantId,
+                'to_location' => $batch->cultivationArea->name ?? 'Unknown',
+            ]);
+
+            Log::info('Batch status changed.', [
+                'batch_id' => $batch->id,
+                'batch_name' => $batch->name,
+                'previous_status' => $previousStatus,
+                'new_status' => $newStatus,
+                'reason' => $validated['reason'],
+                'tenant_id' => $tenantId,
+                'changed_by' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'message' => "Batch status changed from '{$previousLabel}' to '{$statusLabel}' successfully.",
+                'batch' => $batch->fresh()->load('cultivationArea.currentStage'),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error changing batch status', ['batch_id' => $batch->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to change batch status.', 'message' => $e->getMessage()], 500);
+        }
+    }
 }

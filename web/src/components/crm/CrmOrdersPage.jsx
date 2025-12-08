@@ -21,6 +21,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import OrderDetailDrawer from './OrderDetailDrawer';
 
 // Constants
 const ORDER_STATUSES = [
@@ -146,6 +148,20 @@ const CrmOrdersPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
   // Tenants for Global Admin
   const [tenants, setTenants] = useState([]);
   const [selectedTenantId, setSelectedTenantId] = useState('');
+  
+  // Order Detail Drawer
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+
+  const handleOpenDrawer = (orderId) => {
+    setSelectedOrderId(orderId);
+    setDrawerOpen(true);
+  };
+
+  const handleCloseDrawer = () => {
+    setDrawerOpen(false);
+    setSelectedOrderId(null);
+  };
 
   const showSnack = useCallback((message, severity = 'success') => {
     if (setParentSnack) {
@@ -464,19 +480,25 @@ const CrmOrdersPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
   };
 
   const renderOrderRow = (o, isGrouped) => (
-    <TableRow key={o.id} hover sx={isGrouped ? { bgcolor: '#fafafa' } : {}}>
+    <TableRow 
+      key={o.id} 
+      hover 
+      sx={{ 
+        ...(isGrouped ? { bgcolor: '#fafafa' } : {}),
+        cursor: 'pointer',
+        '&:hover': { bgcolor: '#e3f2fd' }
+      }}
+      onClick={() => handleOpenDrawer(o.id)}
+    >
       <TableCell>
         <Typography 
-          component="a" 
-          href="#" 
-          onClick={(e) => { e.preventDefault(); handleOpenDialog(o); }}
-          sx={{ color: 'primary.main', textDecoration: 'underline', cursor: 'pointer' }}
+          sx={{ color: 'primary.main', fontWeight: 'medium' }}
         >
-          {o.id}
+          {o.order_number || `#${o.id}`}
         </Typography>
       </TableCell>
       <TableCell>{o.account?.name || '-'}</TableCell>
-      <TableCell>
+      <TableCell onClick={(e) => e.stopPropagation()}>
         <Tooltip title={o.order_status === 'approved' ? 'Click to set pending' : 'Click to approve'}>
           <Switch
             checked={o.order_status === 'approved'}
@@ -494,10 +516,15 @@ const CrmOrdersPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
       <TableCell>{formatDate(o.received_date)}</TableCell>
       <TableCell>{formatDate(o.due_date)}</TableCell>
       <TableCell align="right">{formatCurrency(o.subtotal)}</TableCell>
-      <TableCell align="right">{formatCurrency(o.total)}</TableCell>
+      <TableCell align="right">{formatCurrency(o.grand_total || o.total)}</TableCell>
       <TableCell>{o.purchase_order || '-'}</TableCell>
-      <TableCell align="right">
+      <TableCell align="right" onClick={(e) => e.stopPropagation()}>
         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+          <Tooltip title="View Details">
+            <IconButton size="small" color="info" onClick={() => handleOpenDrawer(o.id)}>
+              <VisibilityIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Edit">
             <IconButton size="small" color="primary" onClick={() => handleOpenDialog(o)}>
               <EditIcon fontSize="small" />
@@ -848,6 +875,15 @@ const CrmOrdersPage = ({ tenantId, isAppReady, isGlobalAdmin, setParentSnack }) 
           </Alert>
         </Snackbar>
       )}
+
+      {/* Order Detail Drawer */}
+      <OrderDetailDrawer
+        open={drawerOpen}
+        onClose={handleCloseDrawer}
+        orderId={selectedOrderId}
+        onOrderUpdate={fetchOrders}
+        showSnack={showSnack}
+      />
     </Box>
   );
 };

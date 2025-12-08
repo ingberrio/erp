@@ -125,6 +125,64 @@ class CrmOrder extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function items()
+    {
+        return $this->hasMany(CrmOrderItem::class, 'order_id');
+    }
+
+    public function shipments()
+    {
+        return $this->hasMany(Shipment::class, 'order_id');
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'order_id');
+    }
+
+    /**
+     * Get total items count
+     */
+    public function getItemsCountAttribute(): int
+    {
+        return $this->items()->count();
+    }
+
+    /**
+     * Get total paid amount
+     */
+    public function getTotalPaidAttribute(): float
+    {
+        return $this->payments()->completed()->sum('amount');
+    }
+
+    /**
+     * Get balance due
+     */
+    public function getBalanceDueAttribute(): float
+    {
+        return $this->total - $this->total_paid;
+    }
+
+    /**
+     * Check if fully paid
+     */
+    public function getIsFullyPaidAttribute(): bool
+    {
+        return $this->balance_due <= 0;
+    }
+
+    /**
+     * Calculate totals from items
+     */
+    public function recalculateFromItems(): void
+    {
+        $this->subtotal = $this->items()->sum('line_total');
+        $this->tax_amount = $this->items()->sum('tax_amount');
+        $this->calculateTotals();
+        $this->save();
+    }
+
     /**
      * Calculate totals
      */

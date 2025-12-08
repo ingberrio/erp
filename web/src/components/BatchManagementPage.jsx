@@ -53,6 +53,9 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping'; // Icono para
 import AddBoxIcon from '@mui/icons-material/AddBox'; // Icono para ajuste de inventario
 import ArchiveIcon from '@mui/icons-material/Archive'; // Icono para archivar batch
 import RestoreIcon from '@mui/icons-material/Restore'; // Icono para restaurar batch archivado
+import ReportProblemIcon from '@mui/icons-material/ReportProblem'; // Icono para recall
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'; // Icono para remover recall
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz'; // Icono para cambio de status
 // Import DataGrid and individual components for the Toolbar as per documentation
 import {
   DataGrid,
@@ -1313,6 +1316,189 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     }
   }, [isGlobalAdmin, selectedFacilityId, tenantId, showSnack, fetchBatches]);
 
+  // --- State for Recall Dialog ---
+  const [recallDialogOpen, setRecallDialogOpen] = useState(false);
+  const [recallReason, setRecallReason] = useState('');
+  const [batchToRecall, setBatchToRecall] = useState(null);
+
+  // Handler to open recall dialog
+  const handleOpenRecallDialog = useCallback((batch) => {
+    setBatchToRecall(batch);
+    setRecallReason('');
+    setRecallDialogOpen(true);
+  }, []);
+
+  // Handler to close recall dialog
+  const handleCloseRecallDialog = useCallback(() => {
+    setRecallDialogOpen(false);
+    setBatchToRecall(null);
+    setRecallReason('');
+  }, []);
+
+  // Handler to recall a batch
+  const handleRecallBatch = useCallback(async () => {
+    if (!batchToRecall || !recallReason.trim()) {
+      showSnack('Please provide a reason for the recall.', 'error');
+      return;
+    }
+    
+    setLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    
+    if (isGlobalAdmin) {
+      if (selectedFacilityId) {
+        const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+        }
+      }
+    } else if (tenantId) {
+      effectiveTenantId = String(tenantId);
+    }
+    
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    
+    try {
+      await api.post(`/batches/${batchToRecall.id}/recall`, { reason: recallReason }, { headers });
+      showSnack('⚠️ Batch recalled successfully. It will not be available for orders.', 'warning');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
+      await fetchBatches(selectedFacilityId);
+      handleCloseRecallDialog();
+    } catch (err) {
+      console.error('Error recalling batch:', err.response?.data || err.message);
+      showSnack(`Error recalling batch: ${err.response?.data?.message || err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [batchToRecall, recallReason, isGlobalAdmin, selectedFacilityId, tenantId, showSnack, fetchBatches, handleCloseRecallDialog]);
+
+  // Handler to remove recall from a batch
+  const handleRemoveRecall = useCallback(async (batch) => {
+    setLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    
+    if (isGlobalAdmin) {
+      if (selectedFacilityId) {
+        const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+        }
+      }
+    } else if (tenantId) {
+      effectiveTenantId = String(tenantId);
+    }
+    
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    
+    try {
+      await api.post(`/batches/${batch.id}/remove-recall`, {}, { headers });
+      showSnack('Recall flag removed. Batch is now available for orders.', 'success');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
+      await fetchBatches(selectedFacilityId);
+    } catch (err) {
+      console.error('Error removing recall:', err.response?.data || err.message);
+      showSnack(`Error removing recall: ${err.response?.data?.message || err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [isGlobalAdmin, selectedFacilityId, tenantId, showSnack, fetchBatches]);
+
+  // --- State for Status Change Dialog ---
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusChangeReason, setStatusChangeReason] = useState('');
+  const [batchToChangeStatus, setBatchToChangeStatus] = useState(null);
+  const [selectedNewStatus, setSelectedNewStatus] = useState('');
+
+  // Batch status options with colors (matching backend)
+  const BATCH_STATUSES = {
+    active: { label: 'Active', color: '#4CAF50' },
+    on_hold: { label: 'On Hold', color: '#ff9800' },
+    quarantine: { label: 'Quarantine', color: '#f44336' },
+    released: { label: 'Released', color: '#2196F3' },
+    in_transit: { label: 'In Transit', color: '#9c27b0' },
+    destroyed: { label: 'Destroyed', color: '#616161' },
+    sold: { label: 'Sold', color: '#00bcd4' },
+    archived: { label: 'Archived', color: '#9e9e9e' },
+  };
+
+  // Handler to open status change dialog
+  const handleOpenStatusDialog = useCallback((batch) => {
+    setBatchToChangeStatus(batch);
+    setSelectedNewStatus(batch.status || 'active');
+    setStatusChangeReason('');
+    setStatusDialogOpen(true);
+  }, []);
+
+  // Handler to close status change dialog
+  const handleCloseStatusDialog = useCallback(() => {
+    setStatusDialogOpen(false);
+    setBatchToChangeStatus(null);
+    setSelectedNewStatus('');
+    setStatusChangeReason('');
+  }, []);
+
+  // Handler to change batch status
+  const handleChangeStatus = useCallback(async () => {
+    if (!batchToChangeStatus || !selectedNewStatus || !statusChangeReason.trim()) {
+      showSnack('Please select a status and provide a reason.', 'error');
+      return;
+    }
+    
+    if (selectedNewStatus === batchToChangeStatus.status) {
+      showSnack('Please select a different status.', 'warning');
+      return;
+    }
+    
+    setLoading(true);
+    const headers = {};
+    let effectiveTenantId = null;
+    
+    if (isGlobalAdmin) {
+      if (selectedFacilityId) {
+        const selectedFac = facilitiesRef.current.find(f => f.id === selectedFacilityId);
+        if (selectedFac && selectedFac.tenant_id) {
+          effectiveTenantId = String(selectedFac.tenant_id);
+        }
+      }
+    } else if (tenantId) {
+      effectiveTenantId = String(tenantId);
+    }
+    
+    if (effectiveTenantId) {
+      headers['X-Tenant-ID'] = effectiveTenantId;
+    }
+    
+    try {
+      const response = await api.post(`/batches/${batchToChangeStatus.id}/change-status`, { 
+        status: selectedNewStatus,
+        reason: statusChangeReason 
+      }, { headers });
+      
+      const statusLabel = BATCH_STATUSES[selectedNewStatus]?.label || selectedNewStatus;
+      showSnack(`✅ Batch status changed to "${statusLabel}" successfully.`, 'success');
+      
+      // Invalidate cache and refresh data
+      apiCacheRef.current.delete(`batches_${selectedFacilityId}`);
+      await fetchBatches(selectedFacilityId);
+      handleCloseStatusDialog();
+    } catch (err) {
+      console.error('Error changing batch status:', err.response?.data || err.message);
+      showSnack(`Error changing status: ${err.response?.data?.message || err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [batchToChangeStatus, selectedNewStatus, statusChangeReason, isGlobalAdmin, selectedFacilityId, tenantId, showSnack, fetchBatches, handleCloseStatusDialog]);
+
   // --- Handlers for Batch Details and Traceability ---
   const handleOpenBatchDetail = useCallback(async (batch) => {
     setCurrentBatchDetail(batch);
@@ -2537,17 +2723,32 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
     );
     
     return [
-      { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 150, renderCell: (params) => (
+      { field: 'name', headerName: 'Batch Name', flex: 1, minWidth: 200, renderCell: (params) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography 
             variant="body2" 
             sx={{ 
-              color: params.row.is_archived ? '#9ca3af' : '#1a202c',
+              color: params.row.is_recalled ? '#991b1b' : params.row.is_archived ? '#9ca3af' : '#1a202c',
               fontStyle: params.row.is_archived ? 'italic' : 'normal',
+              fontWeight: params.row.is_recalled ? 600 : 400,
             }}
           >
             {params.value}
           </Typography>
+          {params.row.is_recalled && (
+            <Chip 
+              label="RECALLED" 
+              size="small" 
+              sx={{ 
+                bgcolor: '#fecaca', 
+                color: '#991b1b', 
+                fontWeight: 600,
+                fontSize: '0.65rem',
+                height: 20,
+                '& .MuiChip-label': { px: 1 }
+              }} 
+            />
+          )}
           {params.row.is_archived && (
             <Chip 
               label="Archived" 
@@ -2574,6 +2775,39 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
       { field: 'end_type', headerName: 'End Type', width: 95, renderCell: (params) => (
         <Typography variant="body2" sx={{ color: '#1a202c' }}>{params.value}</Typography>
       )},
+      { 
+        field: 'status', 
+        headerName: 'Status', 
+        width: 120, 
+        renderCell: (params) => {
+          const status = params.value || 'active';
+          const statusConfig = {
+            active: { label: 'Active', color: '#4CAF50', bgcolor: '#e8f5e9' },
+            on_hold: { label: 'On Hold', color: '#ff9800', bgcolor: '#fff3e0' },
+            quarantine: { label: 'Quarantine', color: '#f44336', bgcolor: '#ffebee' },
+            released: { label: 'Released', color: '#2196F3', bgcolor: '#e3f2fd' },
+            in_transit: { label: 'In Transit', color: '#9c27b0', bgcolor: '#f3e5f5' },
+            destroyed: { label: 'Destroyed', color: '#616161', bgcolor: '#eeeeee' },
+            sold: { label: 'Sold', color: '#00bcd4', bgcolor: '#e0f7fa' },
+            archived: { label: 'Archived', color: '#9e9e9e', bgcolor: '#f5f5f5' },
+          };
+          const config = statusConfig[status] || statusConfig.active;
+          return (
+            <Chip 
+              label={config.label} 
+              size="small" 
+              sx={{ 
+                bgcolor: config.bgcolor, 
+                color: config.color, 
+                fontWeight: 600,
+                fontSize: '0.7rem',
+                height: 24,
+                '& .MuiChip-label': { px: 1 }
+              }} 
+            />
+          );
+        }
+      },
       {
         field: 'projected_yield',
         headerName: 'Projected Yield',
@@ -2669,30 +2903,30 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               color="primary"
               onClick={() => handleOpenBatchDialog(params.row)}
               aria-label={`Edit ${params.row.name}`}
-              disabled={isFacilityOperator || params.row.is_archived}
+              disabled={isFacilityOperator || params.row.is_archived || params.row.is_recalled}
               title="Edit Batch"
             >
-              <EditIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.is_archived ? '#666' : '#fff' }} />
+              <EditIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.is_archived || params.row.is_recalled ? '#666' : '#fff' }} />
             </IconButton>
             <IconButton
               size="small"
               color="secondary"
               onClick={() => handleOpenSplitBatchDialog(params.row)}
               aria-label={`Split ${params.row.name}`}
-              disabled={isFacilityOperator || params.row.current_units <= 1 || params.row.is_archived}
+              disabled={isFacilityOperator || params.row.current_units <= 1 || params.row.is_archived || params.row.is_recalled}
               title="Split Batch"
             >
-              <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 || params.row.is_archived ? '#666' : '#ffa726' }} />
+              <CallSplitIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 1 || params.row.is_archived || params.row.is_recalled ? '#666' : '#ffa726' }} />
             </IconButton>
             <IconButton
               size="small"
               color="success"
               onClick={() => handleOpenProcessBatchDialog(params.row)}
               aria-label={`Process ${params.row.name}`}
-              disabled={isFacilityOperator || params.row.current_units <= 0 || params.row.is_archived}
+              disabled={isFacilityOperator || params.row.current_units <= 0 || params.row.is_archived || params.row.is_recalled}
               title="Process Batch"
             >
-              <TransformIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 || params.row.is_archived ? '#666' : '#4CAF50' }} />
+              <TransformIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.current_units <= 0 || params.row.is_archived || params.row.is_recalled ? '#666' : '#4CAF50' }} />
             </IconButton>
             
             <IconButton
@@ -2700,11 +2934,48 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               color="primary"
               onClick={() => handleOpenAdjustmentDialog(params.row)}
               aria-label={`Inventory Adjustment for ${params.row.name}`}
-              disabled={isFacilityOperator || params.row.is_archived}
+              disabled={isFacilityOperator || params.row.is_archived || params.row.is_recalled}
               title="Inventory Adjustment"
             >
-              <AddBoxIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.is_archived ? '#666' : '#4CAF50' }} />
+              <AddBoxIcon sx={{ fontSize: 20, color: isFacilityOperator || params.row.is_archived || params.row.is_recalled ? '#666' : '#4CAF50' }} />
             </IconButton>
+            
+            {/* Change Status Button */}
+            <IconButton
+              size="small"
+              onClick={() => handleOpenStatusDialog(params.row)}
+              aria-label={`Change status of ${params.row.name}`}
+              disabled={isFacilityOperator || params.row.status === 'destroyed' || params.row.status === 'sold'}
+              title="Change Batch Status"
+              sx={{ color: '#2196F3' }}
+            >
+              <SwapHorizIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+            
+            {/* Recall/Remove Recall Button */}
+            {params.row.is_recalled ? (
+              <IconButton
+                size="small"
+                onClick={() => handleRemoveRecall(params.row)}
+                aria-label={`Remove Recall from ${params.row.name}`}
+                disabled={isFacilityOperator}
+                title="Remove Recall Flag"
+                sx={{ color: '#4CAF50' }}
+              >
+                <CheckCircleOutlineIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            ) : (
+              <IconButton
+                size="small"
+                onClick={() => handleOpenRecallDialog(params.row)}
+                aria-label={`Recall ${params.row.name}`}
+                disabled={isFacilityOperator || params.row.is_archived}
+                title="Mark as Recalled (blocks orders)"
+                sx={{ color: '#ef4444' }}
+              >
+                <ReportProblemIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            )}
             
             {/* Archive/Restore Button */}
             {params.row.is_archived ? (
@@ -2723,7 +2994,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 size="small"
                 onClick={() => handleOpenArchiveDialog(params.row)}
                 aria-label={`Archive ${params.row.name}`}
-                disabled={isFacilityOperator}
+                disabled={isFacilityOperator || params.row.is_recalled}
                 title="Archive Batch (preserves traceability)"
                 sx={{ color: '#ff9800' }}
               >
@@ -2745,7 +3016,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
         ),
       },
     ];
-  }, [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages, handleOpenAdjustmentDialog, handleOpenArchiveDialog, handleRestoreBatch]);
+  }, [handleOpenBatchDetail, handleOpenBatchDialog, handleDeleteBatchClick, handleOpenSplitBatchDialog, handleOpenProcessBatchDialog, isFacilityOperator, cultivationAreas, stages, handleOpenAdjustmentDialog, handleOpenArchiveDialog, handleRestoreBatch, handleOpenRecallDialog, handleRemoveRecall, handleOpenStatusDialog]);
   
   // Function to get dynamic label and placeholder for origin_details
   const getOriginDetailsLabel = useCallback(() => {
@@ -2898,6 +3169,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
               <TableCell>Product Type</TableCell>
               <TableCell align="right">Units</TableCell>
               <TableCell>End Type</TableCell>
+              <TableCell>Status</TableCell>
               <TableCell align="right">Projected Yield</TableCell>
               <TableCell>Harvest Date</TableCell>
               <TableCell>Cultivation Area</TableCell>
@@ -2909,11 +3181,11 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={11} align="center" sx={{ py: 4 }}><CircularProgress size={24} /></TableCell>
+                <TableCell colSpan={12} align="center" sx={{ py: 4 }}><CircularProgress size={24} /></TableCell>
               </TableRow>
             ) : paginatedBatches.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={12} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">
                     {!selectedFacilityId ? 'Please select a facility to view batches' : 'No batches found'}
                   </Typography>
@@ -2924,12 +3196,74 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                 const area = cultivationAreas.find(a => a.id === batch.cultivation_area_id);
                 const stage = area ? stages.find(s => s.id === area.current_stage_id) : null;
                 return (
-                  <TableRow key={batch.id} hover>
-                    <TableCell><Typography fontWeight="medium">{batch.name}</Typography></TableCell>
+                  <TableRow key={batch.id} hover sx={batch.is_recalled ? { bgcolor: '#fef2f2' } : batch.is_archived ? { bgcolor: '#f5f5f5' } : {}}>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography fontWeight="medium">{batch.name}</Typography>
+                        {batch.is_recalled && (
+                          <Chip 
+                            label="RECALLED" 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: '#fecaca', 
+                              color: '#991b1b', 
+                              fontWeight: 600, 
+                              fontSize: '0.65rem',
+                              height: 20,
+                              '& .MuiChip-label': { px: 1 }
+                            }} 
+                          />
+                        )}
+                        {batch.is_archived && (
+                          <Chip 
+                            label="ARCHIVED" 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: '#e0e0e0', 
+                              color: '#616161', 
+                              fontWeight: 600, 
+                              fontSize: '0.65rem',
+                              height: 20,
+                              '& .MuiChip-label': { px: 1 }
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell>{batch.variety || '-'}</TableCell>
                     <TableCell>{batch.product_type || '-'}</TableCell>
                     <TableCell align="right">{batch.current_units} {batch.units}</TableCell>
                     <TableCell>{batch.end_type || '-'}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const status = batch.status || 'active';
+                        const statusConfig = {
+                          active: { label: 'Active', color: '#4CAF50', bgcolor: '#e8f5e9' },
+                          on_hold: { label: 'On Hold', color: '#ff9800', bgcolor: '#fff3e0' },
+                          quarantine: { label: 'Quarantine', color: '#f44336', bgcolor: '#ffebee' },
+                          released: { label: 'Released', color: '#2196F3', bgcolor: '#e3f2fd' },
+                          in_transit: { label: 'In Transit', color: '#9c27b0', bgcolor: '#f3e5f5' },
+                          destroyed: { label: 'Destroyed', color: '#616161', bgcolor: '#eeeeee' },
+                          sold: { label: 'Sold', color: '#00bcd4', bgcolor: '#e0f7fa' },
+                          archived: { label: 'Archived', color: '#9e9e9e', bgcolor: '#f5f5f5' },
+                        };
+                        const config = statusConfig[status] || statusConfig.active;
+                        return (
+                          <Chip 
+                            label={config.label} 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: config.bgcolor, 
+                              color: config.color, 
+                              fontWeight: 600,
+                              fontSize: '0.7rem',
+                              height: 24,
+                              '& .MuiChip-label': { px: 1 }
+                            }} 
+                          />
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell align="right">
                       {batch.projected_yield != null ? `${batch.projected_yield} kg` : 'N/A'}
                     </TableCell>
@@ -2948,7 +3282,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Edit">
-                        <IconButton size="small" onClick={() => handleOpenBatchDialog(batch)} disabled={isFacilityOperator || batch.is_archived}>
+                        <IconButton size="small" onClick={() => handleOpenBatchDialog(batch)} disabled={isFacilityOperator || batch.is_archived || batch.is_recalled}>
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -2956,7 +3290,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                         <IconButton 
                           size="small" 
                           onClick={() => handleOpenSplitBatchDialog(batch)} 
-                          disabled={isFacilityOperator || batch.current_units <= 1 || batch.is_archived}
+                          disabled={isFacilityOperator || batch.current_units <= 1 || batch.is_archived || batch.is_recalled}
                         >
                           <CallSplitIcon fontSize="small" color="warning" />
                         </IconButton>
@@ -2965,16 +3299,51 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                         <IconButton 
                           size="small" 
                           onClick={() => handleOpenProcessBatchDialog(batch)} 
-                          disabled={isFacilityOperator || batch.current_units <= 0 || batch.is_archived}
+                          disabled={isFacilityOperator || batch.current_units <= 0 || batch.is_archived || batch.is_recalled}
                         >
                           <TransformIcon fontSize="small" color="success" />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Inventory Adjustment">
-                        <IconButton size="small" onClick={() => handleOpenAdjustmentDialog(batch)} disabled={isFacilityOperator || batch.is_archived}>
+                        <IconButton size="small" onClick={() => handleOpenAdjustmentDialog(batch)} disabled={isFacilityOperator || batch.is_archived || batch.is_recalled}>
                           <AddBoxIcon fontSize="small" color="success" />
                         </IconButton>
                       </Tooltip>
+                      {/* Change Status Button */}
+                      <Tooltip title="Change Batch Status">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleOpenStatusDialog(batch)} 
+                          disabled={isFacilityOperator || batch.status === 'destroyed' || batch.status === 'sold'}
+                          sx={{ color: '#2196F3' }}
+                        >
+                          <SwapHorizIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {/* Recall/Remove Recall Button */}
+                      {batch.is_recalled ? (
+                        <Tooltip title="Remove Recall Flag">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleRemoveRecall(batch)} 
+                            disabled={isFacilityOperator}
+                            sx={{ color: '#4CAF50' }}
+                          >
+                            <CheckCircleOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title="Mark as Recalled (blocks orders)">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleOpenRecallDialog(batch)} 
+                            disabled={isFacilityOperator || batch.is_archived}
+                            sx={{ color: '#ef4444' }}
+                          >
+                            <ReportProblemIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       {/* Archive/Restore Button */}
                       {batch.is_archived ? (
                         <Tooltip title="Restore Batch">
@@ -2992,7 +3361,7 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
                           <IconButton 
                             size="small" 
                             onClick={() => handleOpenArchiveDialog(batch)} 
-                            disabled={isFacilityOperator}
+                            disabled={isFacilityOperator || batch.is_recalled}
                             sx={{ color: '#ff9800' }}
                           >
                             <ArchiveIcon fontSize="small" />
@@ -4314,6 +4683,360 @@ const BatchManagementPage = React.memo(({ tenantId, isAppReady, userFacilityId, 
             }}
           >
             Archive Batch
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Recall Batch Dialog */}
+      <Dialog
+        open={recallDialogOpen}
+        onClose={handleCloseRecallDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: '#fff',
+            color: '#1a202c',
+            borderRadius: 3,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          borderBottom: '1px solid #e2e8f0',
+          pb: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ 
+              bgcolor: '#fef2f2', 
+              p: 1, 
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <ReportProblemIcon sx={{ color: '#dc2626', fontSize: 28 }} />
+            </Box>
+            <Typography variant="h6" fontWeight={600}>Recall Batch</Typography>
+          </Box>
+          <IconButton onClick={handleCloseRecallDialog} size="small" sx={{ color: '#64748b' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Alert 
+            severity="error" 
+            sx={{ 
+              mb: 3, 
+              bgcolor: '#fef2f2',
+              border: '1px solid #fecaca',
+              '& .MuiAlert-icon': { color: '#dc2626' },
+              borderRadius: 2
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#991b1b' }}>
+              <strong>⚠️ Health Canada Compliance:</strong> Marking a batch as recalled will prevent it from being included in orders or shipments. 
+              The recall will be registered in the batch's traceability log with timestamp and reason.
+            </Typography>
+          </Alert>
+          
+          {batchToRecall && (
+            <Paper 
+              elevation={0} 
+              sx={{ 
+                p: 2, 
+                mb: 3, 
+                bgcolor: '#fef2f2', 
+                borderRadius: 2,
+                border: '1px solid #fecaca'
+              }}
+            >
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Batch Name
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600} sx={{ color: '#1e293b' }}>
+                    {batchToRecall.name}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Current Units
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600} sx={{ color: '#1e293b' }}>
+                    {batchToRecall.current_units} {batchToRecall.units}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Product Type
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#1e293b' }}>
+                    {batchToRecall.product_type || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Variety
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#1e293b' }}>
+                    {batchToRecall.variety || 'N/A'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+          
+          <TextField
+            fullWidth
+            label="Reason for Recall"
+            required
+            multiline
+            rows={4}
+            value={recallReason}
+            onChange={(e) => setRecallReason(e.target.value)}
+            placeholder="Explain why this batch is being recalled (e.g., 'Quality control issue', 'Contamination detected', 'Customer complaint', 'Regulatory requirement', etc.)"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: '#fff',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#ef4444',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#dc2626',
+                },
+              },
+              '& .MuiInputLabel-root.Mui-focused': {
+                color: '#dc2626',
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, borderTop: '1px solid #e2e8f0', gap: 1 }}>
+          <Button 
+            onClick={handleCloseRecallDialog} 
+            variant="outlined"
+            sx={{ 
+              color: '#64748b', 
+              borderColor: '#cbd5e1',
+              '&:hover': { 
+                bgcolor: '#f1f5f9',
+                borderColor: '#94a3b8'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleRecallBatch}
+            variant="contained"
+            disabled={!recallReason.trim() || loading}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <ReportProblemIcon />}
+            sx={{ 
+              bgcolor: '#dc2626', 
+              '&:hover': { bgcolor: '#b91c1c' },
+              '&:disabled': { bgcolor: '#fecaca', color: '#991b1b' },
+              px: 3
+            }}
+          >
+            Recall Batch
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Change Status Dialog */}
+      <Dialog
+        open={statusDialogOpen}
+        onClose={handleCloseStatusDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: '#fff',
+            color: '#1a202c',
+            borderRadius: 3,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          borderBottom: '1px solid #e2e8f0',
+          pb: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ 
+              bgcolor: '#e3f2fd', 
+              p: 1, 
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <SwapHorizIcon sx={{ color: '#1976d2', fontSize: 28 }} />
+            </Box>
+            <Typography variant="h6" fontWeight={600}>Change Batch Status</Typography>
+          </Box>
+          <IconButton onClick={handleCloseStatusDialog} size="small" sx={{ color: '#64748b' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Alert 
+            severity="info" 
+            sx={{ 
+              mb: 3, 
+              bgcolor: '#e3f2fd',
+              border: '1px solid #90caf9',
+              '& .MuiAlert-icon': { color: '#1976d2' },
+              borderRadius: 2
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#0d47a1' }}>
+              <strong>Health Canada Compliance:</strong> All status changes are recorded in the batch's traceability log with timestamp, reason, and user information.
+            </Typography>
+          </Alert>
+          
+          {batchToChangeStatus && (
+            <Paper 
+              elevation={0} 
+              sx={{ 
+                p: 2, 
+                mb: 3, 
+                bgcolor: '#f8fafc', 
+                borderRadius: 2,
+                border: '1px solid #e2e8f0'
+              }}
+            >
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Batch Name
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600} sx={{ color: '#1e293b' }}>
+                    {batchToChangeStatus.name}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Current Status
+                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip 
+                      label={BATCH_STATUSES[batchToChangeStatus.status]?.label || 'Active'} 
+                      size="small"
+                      sx={{ 
+                        bgcolor: `${BATCH_STATUSES[batchToChangeStatus.status]?.color}20`,
+                        color: BATCH_STATUSES[batchToChangeStatus.status]?.color || '#4CAF50',
+                        fontWeight: 600,
+                      }} 
+                    />
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Current Units
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#1e293b' }}>
+                    {batchToChangeStatus.current_units} {batchToChangeStatus.units}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Variety
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#1e293b' }}>
+                    {batchToChangeStatus.variety || 'N/A'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+          
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel>New Status</InputLabel>
+            <Select
+              value={selectedNewStatus}
+              label="New Status"
+              onChange={(e) => setSelectedNewStatus(e.target.value)}
+            >
+              {Object.entries(BATCH_STATUSES).map(([value, { label, color }]) => (
+                <MenuItem 
+                  key={value} 
+                  value={value}
+                  disabled={batchToChangeStatus?.status === value || 
+                           (batchToChangeStatus?.status === 'destroyed') || 
+                           (batchToChangeStatus?.status === 'sold')}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: color }} />
+                    {label}
+                    {batchToChangeStatus?.status === value && ' (current)'}
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <TextField
+            fullWidth
+            label="Reason for Status Change"
+            required
+            multiline
+            rows={4}
+            value={statusChangeReason}
+            onChange={(e) => setStatusChangeReason(e.target.value)}
+            placeholder="Explain why you are changing the batch status (e.g., 'Passed lab testing', 'Pending quality review', 'Ready for distribution', etc.)"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: '#fff',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#2196F3',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#1976d2',
+                },
+              },
+              '& .MuiInputLabel-root.Mui-focused': {
+                color: '#1976d2',
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, borderTop: '1px solid #e2e8f0', gap: 1 }}>
+          <Button 
+            onClick={handleCloseStatusDialog} 
+            variant="outlined"
+            sx={{ 
+              color: '#64748b', 
+              borderColor: '#cbd5e1',
+              '&:hover': { 
+                bgcolor: '#f1f5f9',
+                borderColor: '#94a3b8'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleChangeStatus}
+            variant="contained"
+            disabled={!statusChangeReason.trim() || !selectedNewStatus || selectedNewStatus === batchToChangeStatus?.status || loading}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SwapHorizIcon />}
+            sx={{ 
+              bgcolor: '#1976d2', 
+              '&:hover': { bgcolor: '#1565c0' },
+              '&:disabled': { bgcolor: '#bbdefb', color: '#1565c0' },
+              px: 3
+            }}
+          >
+            Change Status
           </Button>
         </DialogActions>
       </Dialog>
